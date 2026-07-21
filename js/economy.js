@@ -131,11 +131,14 @@ function updateConstruction(delta){
           const def = BUILD_DEFS[b.type];
           if(def && def.popCap) state.population.cap += def.popCap;
           if(builder) builder.buildTaskId = null; // done — free to become a worker
-          if(def && def.needsWorker){
-            // the villager who built this gets first claim on working it
-            if(builder) assignVillagerToBuilding(builder, b);
-            autoAssignIdleVillagers(); // fills any OTHER open slots (e.g. a lumber camp with room for 3)
-          }
+          // a production building's own builder gets first claim on working it
+          if(def && def.needsWorker && builder) assignVillagerToBuilding(builder, b);
+          // ALWAYS re-dispatch afterward: the just-freed builder (and anyone
+          // else idle) should roll straight onto the next placed-but-unbuilt
+          // foundation. This is what lets a single builder chain down a whole
+          // wall line — walls aren't needsWorker, so gating this on needsWorker
+          // (as it was) left the builder standing idle after the first segment.
+          autoAssignIdleVillagers();
           if(scene && scene.add) floatResourceText(b.gx, b.gy, 'complete!', '#a8e6a1');
           updateHUD();
         }

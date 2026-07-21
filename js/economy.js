@@ -17,12 +17,48 @@ function setUnitHidden(u, hidden){
   if(hidden && u.hpBarBg){ u.hpBarBg.setVisible(false); u.hpBarFg.setVisible(false); }
 }
 
+// ---- tower garrison (enter/exit) ----
+// Defenders climb INSIDE the tower — hidden, safe from harm, and adding
+// damage — mirroring the Town Hall garrison the player already knows.
+function enterTower(u, b){
+  u.inTowerId = b.id;
+  u.moving = false; u.path = null; u.gatherWorking = false; u.playerOrder = false;
+  u.gx = b.gx; u.gy = b.gy; u.tx = b.gx; u.ty = b.gy; // logically ON the tower while inside
+  setUnitHidden(u, true);
+  if(state.selected && state.selected.ref===u) selectEntity(null, null);
+  if(scene && scene.add) floatResourceText(b.gx, b.gy, 'garrisoned!', '#9fc4ff');
+  updateHUD();
+}
+
+function exitTower(u){
+  const b = buildingById(u.inTowerId);
+  u.inTowerId = null; u.path = null;
+  const at = b ? {gx:b.gx, gy:b.gy} : {gx:Math.round(u.gx), gy:Math.round(u.gy)};
+  const spot = findFreeSpotNear(at.gx, at.gy, 3) || at;
+  u.gx = spot.gx; u.gy = spot.gy; u.tx = spot.gx; u.ty = spot.gy; u.moving = false;
+  setUnitHidden(u, false);
+  positionUnitVisuals(u, u.gx*TILE+TILE/2, u.gy*TILE+TILE/2);
+}
+
+function releaseTowerGarrison(tower){
+  let n = 0;
+  for(const u of [...state.units]){
+    if(u.inTowerId !== tower.id) continue;
+    if(u.type==='villager') unassignVillager(u); // exits the tower as part of unassigning
+    else { u.garrisonId = null; exitTower(u); }
+    n++;
+  }
+  if(n) flashWaveBanner(`${n} defender${n>1?'s':''} climb down from the tower.`);
+  updateHUD();
+}
+
 function garrisonVillagerInTC(u, quiet){
   if(u.inTC || u.enteringTC) return false;
   // NOTE: the worker KEEPS their job assignment — on release they simply
   // walk back to whatever they were doing before the recall
   u.enteringTC = true;
   u.gatherWorking = false;
+  u.path = null;
   const th = scene.townHallPos;
   const spot = findFreeSpotNear(th.gx, th.gy, 4) || {gx:th.gx+2, gy:th.gy};
   u.tx = spot.gx; u.ty = spot.gy; u.moving = true; u.playerOrder = true;
@@ -119,6 +155,21 @@ function builderPresent(u, b){
   return !!u && !u.moving && Math.round(u.gx)===b.gx && Math.round(u.gy)===b.gy;
 }
 
+// how far a builder who JUST finished something will roam to continue the
+// project (much looser than AUTO_ASSIGN_RADIUS, which governs pulling a
+// fresh villager onto a job in the first place)
+const BUILDER_CHAIN_RADIUS = 12;
+function nearestUnbuiltFoundation(u, radius){
+  let best = null, bd = Infinity;
+  for(const b of state.buildings){
+    if(!underConstruction(b) || b.hp<=0) continue;
+    if(assignedBuilder(b)) continue; // someone's already on it (or walking over)
+    const d = Phaser.Math.Distance.Between(u.gx, u.gy, b.gx, b.gy);
+    if(d <= radius && d < bd){ bd = d; best = b; }
+  }
+  return best;
+}
+
 function updateConstruction(delta){
   for(const b of state.buildings){
     if(underConstruction(b) && !b.awaitingBuilder){
@@ -131,15 +182,22 @@ function updateConstruction(delta){
           if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(1);
           const def = BUILD_DEFS[b.type];
           if(def && def.popCap) state.population.cap += def.popCap;
-          if(builder) builder.buildTaskId = null; // done — free to become a worker
+          if(builder){ builder.buildTaskId = null; builder.path = null; } // done — free to become a worker
           // a production building's own builder gets first claim on working it
           if(def && def.needsWorker && builder) assignVillagerToBuilding(builder, b);
-          // ALWAYS re-dispatch afterward: the just-freed builder (and anyone
-          // else idle) should roll straight onto the next placed-but-unbuilt
-          // foundation. This is what lets a single builder chain down a whole
-          // wall line — walls aren't needsWorker, so gating this on needsWorker
-          // (as it was) left the builder standing idle after the first segment.
-          autoAssignIdleVillagers();
+          // the just-freed builder rolls straight onto the NEAREST remaining
+          // foundation — with a generous project radius, NOT pickWorkerFor's
+          // tight auto-assign one. A builder already on the job keeps working
+          // the project (chaining down a wall line segment by segment); the
+          // 4-tile radius only governs pulling fresh villagers in.
+          if(builder && !builder.assignedBuildingId){
+            const next = nearestUnbuiltFoundation(builder, BUILDER_CHAIN_RADIUS);
+            if(next){
+              builder.buildTaskId = next.id;
+              builder.tx = next.gx; builder.ty = next.gy; builder.moving = true;
+            }
+          }
+          autoAssignIdleVillagers(); // and anyone else idle nearby fills remaining sites
           if(scene && scene.add) floatResourceText(b.gx, b.gy, 'complete!', '#a8e6a1');
           updateHUD();
         }
@@ -636,7 +694,13 @@ function removeBuilding(b){
   // a builder mid-construction (or still walking over) shouldn't stay
   // pinned to a foundation that no longer exists — free them up
   for(const builder of state.units.filter(u=> u.type==='villager' && u.buildTaskId===b.id)){
-    builder.buildTaskId = null;
+    builder.buildTaskId = null; builder.path = null;
+  }
+  // anyone still garrisoned inside (archers — villagers already popped out
+  // via unassignVillager above) climbs down before the tower vanishes
+  for(const g of state.units.filter(u=> u.inTowerId===b.id)){
+    if(g.type==='archer') g.garrisonId = null;
+    exitTower(g);
   }
   const bSize = b.size || 1;
   for(let dy=0; dy<bSize; dy++) for(let dx=0; dx<bSize; dx++){
@@ -687,14 +751,25 @@ function updateGatherer(u, delta){
   if(!def){ unassignVillager(u); return; } // never gather at a non-standard building
   const atHome = Math.round(u.gx)===b.gx && Math.round(u.gy)===b.gy;
 
-  // Garrison duty: a villager assigned to a tower mans it from the adjacent
-  // base (the tower blocks its own tile, so they can't stand on it). Being
-  // within one tile counts as posted — see towerGarrison. Garrisons do NOT
-  // retreat during raids — holding the tower IS their job.
+  // Garrison duty: a villager assigned to a tower walks to its base (pathing
+  // around walls — towers usually sit IN a wall line) and climbs inside:
+  // hidden, safe, adding damage, like the Town Hall garrison. Garrisons do
+  // NOT retreat during raids — holding the tower IS their job.
   if(b.type==='tower'){
-    const atPost = Math.max(Math.abs(Math.round(u.gx)-b.gx), Math.abs(Math.round(u.gy)-b.gy)) <= 1;
-    if(!atPost && !u.moving){ u.tx=b.gx; u.ty=b.gy; u.moving=true; } // walk to the base; blocked off the tile, settles adjacent
     u.gatherWorking = false;
+    if(u.inTowerId===b.id) return; // already inside (normally skipped in updateUnits)
+    if(u.moving) return;
+    const atPost = Math.max(Math.abs(Math.round(u.gx)-b.gx), Math.abs(Math.round(u.gy)-b.gy)) <= 1;
+    if(atPost){
+      if(towerGarrison(b).total < TOWER_GARRISON_CAP) enterTower(u, b);
+      // else: tower's full — wait at the base for a slot
+    } else if(!u.path || !u.path.length){
+      u.path = findPathToTowerPost(u, b);
+      if(!u.path || !u.path.length){
+        flashWaveBanner('The villager can\'t reach that tower — is it walled off?');
+        unassignVillager(u); // unreachable — stand down rather than twitch forever
+      }
+    }
     return;
   }
 
@@ -832,22 +907,20 @@ function findProductionBuildingFor(gx, gy){
   return null;
 }
 
-// Tower garrison. Defenders can't stand ON the tower (it blocks the tile),
-// so they man it from the ADJACENT base — anyone assigned/garrisoned to the
-// tower and within one tile counts. Up to 3 defenders; archers fire their
-// own bows (bigger bonus), villagers just help work it (a small bonus).
+// Tower garrison: only units that have actually climbed INSIDE count
+// (u.inTowerId — set by enterTower once they reach the base). Up to 3
+// defenders; archers fire their own bows (bigger bonus), villagers just
+// help work it (a small bonus). Entry is gated on the cap in the walk
+// code, so the clamps here are belt-and-braces.
 const TOWER_GARRISON_CAP = 3;
 const TOWER_GARRISON_DMG = { archer: 3, villager: 2 };
 function towerGarrison(tower){
   let archers = 0, villagers = 0;
   for(const u of state.units){
-    if(u.hp<=0) continue;
-    const atPost = Math.max(Math.abs(Math.round(u.gx)-tower.gx), Math.abs(Math.round(u.gy)-tower.gy)) <= 1;
-    if(!atPost) continue;
-    if(u.type==='archer' && u.garrisonId===tower.id) archers++;
-    else if(u.type==='villager' && u.assignedBuildingId===tower.id) villagers++;
+    if(u.hp<=0 || u.inTowerId!==tower.id) continue;
+    if(u.type==='archer') archers++;
+    else if(u.type==='villager') villagers++;
   }
-  // cap total defenders; archers claim slots first (they add more)
   archers = Math.min(archers, TOWER_GARRISON_CAP);
   villagers = Math.min(villagers, TOWER_GARRISON_CAP - archers);
   return { archers, villagers, total: archers + villagers };
@@ -882,16 +955,20 @@ function assignVillagerToBuilding(v, building){
   if(crew.length >= workerCapOf(building)){
     crew[0].assignedBuildingId = null;
   }
+  if(v.inTowerId && v.inTowerId !== building.id) exitTower(v); // new job elsewhere — climb down first
   v.assignedBuildingId = building.id;
   v.buildTaskId = null; // now actually working — any pending build task is abandoned
+  v.path = null;
   v.gatherWorking = false;
   v.gatherPhase = null; v.gatherTarget = null; // restart the haul loop fresh
   v.moving = false; // updateGatherer takes over from here
 }
 
 function unassignVillager(v){
+  if(v.inTowerId) exitTower(v); // no longer posted — climb down
   v.assignedBuildingId = null;
   v.buildTaskId = null; // an explicit new order always cancels a pending build task, human or swarm
+  v.path = null;
   v.gatherWorking = false;
   v.gatherPhase = null; v.gatherTarget = null; v.carrying = null;
   v.repairMs = 0; v._noWoodWarned = false;

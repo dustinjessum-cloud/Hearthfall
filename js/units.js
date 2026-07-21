@@ -354,6 +354,7 @@ function removeUnit(u){
 
 function commandUnitMove(u, gx, gy){
   if(!isTileFreeForUnit(gx, gy, u)) return;
+  u.path = null; // a direct order overrides any in-progress computed path
   u.tx = gx; u.ty = gy; u.moving = true;
   // a direct order suppresses the melee auto-charge until they arrive —
   // this was the hero bug: his charge instinct overwrote every move
@@ -449,13 +450,15 @@ function executeOrder(u, order){
   } else if(order.kind==='garrisonTower'){
     const b = buildingById(order.buildingId);
     if(!b || b.hp<=0 || b.type!=='tower') return;
-    u.garrisonId = b.id;
+    if(u.inTowerId && u.inTowerId!==b.id) exitTower(u); // switching towers — climb down first
+    u.garrisonId = b.id; u.path = null;
     u.tx = b.gx; u.ty = b.gy; u.moving = true;
     flashWaveBanner('Archer climbs the tower.');
   } else if(order.kind==='move'){
+    if(u.inTowerId) exitTower(u); // any move order pops them out of the tower
     if(u.type==='villager') unassignVillager(u);
     else if(u.type==='repairman') u.repairTargetId = null;
-    else if(u.type==='archer') u.garrisonId = null;
+    else if(u.type==='archer'){ u.garrisonId = null; u.path = null; }
     commandUnitMove(u, order.gx, order.gy);
   }
 }
@@ -618,6 +621,73 @@ function speedMultiplierAt(gx, gy){
   return tileAt(rx, ry)==='forest' ? 0.5 : 1;
 }
 
+// ---- friendly pathfinding ----
+// Straight-line walking stops dead at the first blocking tile — fine in the
+// open, useless once the town has walls (a villager sent to a tower embedded
+// in a wall line just twitched against the stones forever). BFS over the
+// tile grid, same idea as the enemies' repathEnemy, but with FRIENDLY rules:
+// gates are passable, stone is passable for villagers (goat paths), and the
+// walk may end ON a normally-blocking goal tile (a foundation the unit is
+// assigned to build). Only the automated work-walks (build sites, tower
+// posts) use this; plain right-click moves stay straight-line, same as ever.
+function friendlyBlocked(u, gx, gy, goalBuildingId){
+  if(!inBounds(gx, gy)) return true;
+  const t = tileAt(gx, gy);
+  if(t==='water') return true;
+  if(t==='stone_deposit' && u.type!=='villager') return true;
+  const b = occAt(gx, gy);
+  if(!b || b.id===goalBuildingId) return false;
+  const def = BUILD_DEFS[b.type];
+  return !!(def && def.blocksPath && !def.friendlyPassable);
+}
+
+// Returns waypoints from the unit's tile to (tx,ty) — excluding the start
+// tile — or null when unreachable.
+function findFriendlyPath(u, tx, ty, goalBuildingId){
+  const sx = Math.round(u.gx), sy = Math.round(u.gy);
+  if(sx===tx && sy===ty) return [];
+  const key = (x,y)=> y*MAP_W + x;
+  const prev = new Map();
+  prev.set(key(sx,sy), null);
+  const q = [[sx,sy]];
+  while(q.length){
+    const [x,y] = q.shift();
+    if(x===tx && y===ty){
+      const path = [];
+      let cur = [x,y];
+      while(cur){ path.push({gx:cur[0], gy:cur[1]}); cur = prev.get(key(cur[0], cur[1])); }
+      path.reverse();
+      path.shift(); // drop the start tile — the unit is already there
+      return path;
+    }
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx, ny=y+dy;
+      if(prev.has(key(nx,ny))) continue;
+      if(friendlyBlocked(u, nx, ny, goalBuildingId)) continue;
+      prev.set(key(nx,ny), [x,y]);
+      q.push([nx,ny]);
+    }
+  }
+  return null;
+}
+
+// Path to a tower's BASE (any tile within Chebyshev 1 of it). Usually the
+// path ends on the tower tile via the goal exception and we drop that last
+// step; if all four sides are walled, a diagonally-adjacent tile still
+// counts as the post, so fall back to trying the corners as explicit goals.
+function findPathToTowerPost(u, t){
+  let p = findFriendlyPath(u, t.gx, t.gy, t.id);
+  if(p){ if(p.length) p.pop(); return p; }
+  let best = null;
+  for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){
+    const gx=t.gx+dx, gy=t.gy+dy;
+    if(friendlyBlocked(u, gx, gy, t.id)) continue;
+    const q = findFriendlyPath(u, gx, gy, t.id);
+    if(q && (!best || q.length < best.length)) best = q;
+  }
+  return best;
+}
+
 function updateUnits(delta){
   const baseSpeed = 2.2; // tiles/sec
   for(const u of [...state.units]){
@@ -632,6 +702,13 @@ function updateUnits(delta){
       }
     }
     if(u.inTC) continue; // tucked away inside the Town Hall
+    if(u.inTowerId){
+      // tucked inside a tower — inert until released. If the tower fell out
+      // from under them some way removeBuilding didn't catch, self-heal.
+      const t = buildingById(u.inTowerId);
+      if(!t || t.hp<=0) exitTower(u);
+      else continue;
+    }
     if(u.enteringTC && !u.moving){
       const th = scene.townHallPos;
       const d = Phaser.Math.Distance.Between(u.gx, u.gy, th.gx+0.5, th.gy+0.5);
@@ -664,31 +741,53 @@ function updateUnits(delta){
       const targetBuilding = buildingById(u.buildTaskId);
       if(!targetBuilding || targetBuilding.hp<=0 || !underConstruction(targetBuilding)){
         // gone or already finished while this unit was en route/away — task's moot
-        u.buildTaskId = null;
-      } else if(targetBuilding.awaitingBuilder){
-        targetBuilding.awaitingBuilder = false;
-        if(targetBuilding.sprite && targetBuilding.sprite.setAlpha) targetBuilding.sprite.setAlpha(0.55);
-        if(scene && scene.add) floatResourceText(targetBuilding.gx, targetBuilding.gy, 'building started!', '#a8e6a1');
-        if(state.faction==='swarm'){
-          if(scene && scene.add) floatResourceText(Math.round(u.gx), Math.round(u.gy), 'morphing...', '#c9a0ff');
-          destroyUnitVisuals(u);
-          state.units = state.units.filter(x=>x!==u);
-          syncPopulationCount();
-          continue; // this unit is gone — nothing further to do with it this frame
+        u.buildTaskId = null; u.path = null;
+      } else if(Math.round(u.gx)===targetBuilding.gx && Math.round(u.gy)===targetBuilding.gy){
+        // ACTUALLY at the site — merely having stopped isn't enough. (The
+        // old check here fired whenever the builder stood still ANYWHERE,
+        // so one blocked by a wall "started" the construction remotely and
+        // the site then read as having a builder forever — the wall-chain
+        // stall.)
+        if(targetBuilding.awaitingBuilder){
+          targetBuilding.awaitingBuilder = false;
+          if(targetBuilding.sprite && targetBuilding.sprite.setAlpha) targetBuilding.sprite.setAlpha(0.55);
+          if(scene && scene.add) floatResourceText(targetBuilding.gx, targetBuilding.gy, 'building started!', '#a8e6a1');
+          if(state.faction==='swarm'){
+            if(scene && scene.add) floatResourceText(Math.round(u.gx), Math.round(u.gy), 'morphing...', '#c9a0ff');
+            destroyUnitVisuals(u);
+            state.units = state.units.filter(x=>x!==u);
+            syncPopulationCount();
+            continue; // this unit is gone — nothing further to do with it this frame
+          }
+        }
+      } else if(!u.path || !u.path.length){
+        // stopped short of the site (something blocked the straight walk) —
+        // path around the obstacles instead of twitching against them
+        u.path = findFriendlyPath(u, targetBuilding.gx, targetBuilding.gy, targetBuilding.id);
+        if(!u.path){
+          u.buildTaskId = null; // genuinely unreachable — free the builder so dispatch can try someone else
+          flashWaveBanner('A builder can\'t reach the site — is it walled off?');
         }
       }
-      // else: already started and this IS (or has returned as) the
-      // assigned builder, just standing here — nothing to do this frame
     }
     if(u.type==='villager' && u.assignedBuildingId && !u.enteringTC) updateGatherer(u, delta);
-    // garrisoning archers walk to their tower and hold it from the adjacent
-    // base (the tower blocks its own tile, so they can't stand on it)
+    // garrisoning archers walk to their tower and climb INSIDE it (hidden
+    // and safe, like the Town Hall garrison) — pathing around walls en route
     if(u.type==='archer' && u.garrisonId){
       const t = buildingById(u.garrisonId);
-      if(!t || t.hp<=0 || t.type!=='tower'){ u.garrisonId = null; }
-      else {
+      if(!t || t.hp<=0 || t.type!=='tower'){ u.garrisonId = null; u.path = null; }
+      else if(!u.moving){
         const atPost = Math.max(Math.abs(Math.round(u.gx)-t.gx), Math.abs(Math.round(u.gy)-t.gy)) <= 1;
-        if(!atPost && !u.moving){ u.tx = t.gx; u.ty = t.gy; u.moving = true; }
+        if(atPost){
+          if(towerGarrison(t).total < TOWER_GARRISON_CAP){ enterTower(u, t); continue; }
+          // tower full — wait at the base; a slot may open
+        } else if(!u.path || !u.path.length){
+          u.path = findPathToTowerPost(u, t);
+          if(!u.path || !u.path.length){
+            u.garrisonId = null; u.path = null; // unreachable — stand down
+            flashWaveBanner('The archer can\'t reach that tower — is it walled off?');
+          }
+        }
       }
     }
     // repairmen: patch the assigned wall/tower; auto-seek damage when idle
@@ -747,6 +846,13 @@ function updateUnits(delta){
         }
       }
     }
+    // follow a computed path (build-site / tower-post walks) one waypoint at
+    // a time — each leg is a plain straight walk to an adjacent tile the BFS
+    // already validated, so the normal movement code below just works
+    if(!u.moving && u.path && u.path.length){
+      const wp = u.path.shift();
+      u.tx = wp.gx; u.ty = wp.gy; u.moving = true;
+    }
     if(u.moving){
       // archers march 25% slower — longbows and quivers are heavy
       const typeSpeed = u.type==='archer' ? baseSpeed*0.75 : baseSpeed;
@@ -780,6 +886,7 @@ function updateUnits(delta){
         && nb !== curTile; // ...nor from leaving a blocking tile you're already standing on, for any reason
       if(nt==='water' || (u.type!=='villager' && nt==='stone_deposit') || wallBlocked){
         u.moving = false; u.playerOrder = false;
+        u.path = null; // the world changed under a computed path — recompute from wherever we stopped
       } else if(willArrive){
         u.gx = u.tx; u.gy = u.ty; u.moving = false; u.playerOrder = false;
       } else {

@@ -178,11 +178,11 @@ function restoreGame(snapshot){
     // snap to standing still at the saved tile; the normal per-tick logic
     // (job assignment kept via assignedBuildingId) resumes work within a
     // second or two on its own.
-    u.tx = u.gx; u.ty = u.gy; u.moving = false; u.buildTaskId = null;
+    u.tx = u.gx; u.ty = u.gy; u.moving = false; u.buildTaskId = null; u.path = null;
     if(su.type==='villager'){ u.gatherWorking = false; u.gatherPhase = null; u.gatherTarget = null; u.carrying = null; u.harvestMs = 0; }
     positionUnitVisuals(u, u.gx*TILE+TILE/2, u.gy*TILE+TILE/2);
     if(u.baseTint && u.sprite && u.sprite.setTint) u.sprite.setTint(u.baseTint);
-    setUnitHidden(u, !!u.inTC);
+    setUnitHidden(u, !!(u.inTC || u.inTowerId)); // tower garrisons stay tucked inside across a save/load
     restoreHpBar(u, TILE-10);
   }
   syncPopulationCount();

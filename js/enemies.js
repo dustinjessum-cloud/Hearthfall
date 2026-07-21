@@ -130,7 +130,7 @@ function findNearbyThreat(e){
     if(d<=ENEMY_AGGRO_RANGE && d<bestD){ bestD=d; best=b; }
   }
   for(const u of state.units){
-    if(u.hp<=0 || u.inTC) continue;
+    if(u.hp<=0 || u.inTC || u.inTowerId) continue; // sheltered garrisons can't be picked off
     // soldiers, heroes — and yes, unescorted villagers and repairmen too:
     // raiders will happily run down a farmer caught in the open
     const d = Phaser.Math.Distance.Between(e.gx,e.gy,u.gx,u.gy);
@@ -306,7 +306,7 @@ function updateEnemies(delta){
     if(!target && e.kind!=='ram'){
       // any unit standing in the enemy's way is a valid target — including
       // unescorted villagers out gathering (rams ignore people entirely)
-      target = state.units.find(u=> u.hp>0 && !u.inTC && Phaser.Math.Distance.Between(u.gx,u.gy,e.gx,e.gy) <= 1.6) || null;
+      target = state.units.find(u=> u.hp>0 && !u.inTC && !u.inTowerId && Phaser.Math.Distance.Between(u.gx,u.gy,e.gx,e.gy) <= 1.6) || null;
     }
     e.target = target;
     if(target && target.hp>0){
@@ -394,7 +394,7 @@ function updateCombat(delta, time){
     }
   }
   for(const u of state.units){
-    if(u.hp<=0) continue;
+    if(u.hp<=0 || u.inTowerId) continue; // garrisoned archers fire THROUGH the tower's bonus, not their own bow
     if(u.type==='archer') attackers.push({ent:u, atk:ARCHER_ATTACK, gx:u.gx, gy:u.gy, soldier:true});
     else if(u.type==='swordsman') attackers.push({ent:u, atk:SWORDSMAN_ATTACK, gx:u.gx, gy:u.gy, melee:true, soldier:true});
     // the Minotaur attacks only via his manual javelin (J) and slash (K)

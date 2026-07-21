@@ -388,7 +388,7 @@ function refreshInfoPanel(){
         <div id="infoBuild" style="margin-top:4px;color:#ffd76b;"></div>
         ${BUILD_DEFS[ref.type] && BUILD_DEFS[ref.type].needsWorker ? `<div id="infoWorkers" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='farm' ? `<div id="infoSoil" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
-        ${ref.type==='tower' ? `<div id="infoGarrison" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
+        ${ref.type==='tower' ? `<div id="infoGarrison" style="margin-top:4px;color:#d8c79a;"></div><button id="towerReleaseBtn">Release defenders</button>` : ''}
         ${ref.type==='wall' ? `<div id="infoWallRepair" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='mill' ? `<div style="margin-top:4px;color:#d8c79a;">Grinds up to ${MILLING.millCapacity} wheat/tick into flour. Needs a worker at the millstone — right-click here with a villager selected.</div>` : ''}
         ${ref.type==='bakery' ? `<div style="margin-top:4px;color:#d8c79a;">Bakes up to ${MILLING.bakeCapacity} flour/tick into food at 1.5x. Needs a worker at the oven — right-click here with a villager selected.</div>` : ''}
@@ -428,6 +428,10 @@ function refreshInfoPanel(){
       }
       if(ref.type==='mason'){
         document.getElementById('trainRepBtn').addEventListener('click', ()=> trainRepairman(ref));
+      }
+      if(ref.type==='tower'){
+        const rb = document.getElementById('towerReleaseBtn');
+        if(rb) rb.addEventListener('click', ()=> releaseTowerGarrison(ref));
       }
       if(!ref.isCore){
         const sb = document.getElementById('salvageBtn');
@@ -665,8 +669,10 @@ function refreshInfoPanel(){
       const g = towerGarrison(ref);
       const dmgNow = BUILD_DEFS.tower.attack.damageLow + g.archers*TOWER_GARRISON_DMG.archer + g.villagers*TOWER_GARRISON_DMG.villager;
       gEl.textContent = g.total > 0
-        ? `Garrison: ${g.total}/${TOWER_GARRISON_CAP} (${g.archers} archer${g.archers!==1?'s':''}, ${g.villagers} villager${g.villagers!==1?'s':''}) — ${dmgNow} damage${g.total<TOWER_GARRISON_CAP ? ' (more defenders = more damage)' : ' (full crew)'}`
-        : `No garrison — ${BUILD_DEFS.tower.attack.damageLow} damage only. Right-click here with villagers or archers (up to ${TOWER_GARRISON_CAP}).`;
+        ? `Garrison: ${g.total}/${TOWER_GARRISON_CAP} inside (${g.archers} archer${g.archers!==1?'s':''}, ${g.villagers} villager${g.villagers!==1?'s':''}) — ${dmgNow} damage${g.total<TOWER_GARRISON_CAP ? '' : ' (full)'}`
+        : `No garrison — ${BUILD_DEFS.tower.attack.damageLow} damage only. Right-click here with villagers or archers (up to ${TOWER_GARRISON_CAP}); they climb inside, safe from harm.`;
+      const rb = document.getElementById('towerReleaseBtn');
+      if(rb) rb.disabled = g.total === 0;
     }
   }
   if(type==='building' && STORAGE_LEVELS[ref.type]){

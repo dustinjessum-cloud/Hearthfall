@@ -123,6 +123,51 @@ function refreshRallyMarkers(){
   }
 }
 
+// Where a queued order's destination actually is, for drawing its marker.
+// null means "nothing to draw there" (a stale build/repair/garrison target
+// that's since vanished) — executeOrder() re-validates independently when
+// the order actually fires, this is purely cosmetic.
+function orderPosition(order){
+  if(order.kind==='move') return {gx: order.gx, gy: order.gy};
+  if(order.kind==='garrisonTC'){ const th = townHall(); return th ? {gx: th.gx, gy: th.gy} : null; }
+  const b = order.buildingId!=null ? buildingById(order.buildingId) : null;
+  return b ? {gx: b.gx, gy: b.gy} : null;
+}
+
+// Small numbered markers at each of a unit's queued destinations. Like
+// rally flags, the markers themselves persist on the unit (rebuilt
+// whenever the queue changes) but only ever SHOW while that unit is
+// selected — updateQueueMarkerVisibility() toggles that.
+function refreshQueueMarkers(u){
+  if(u.queueMarkers) for(const m of u.queueMarkers) m.destroy();
+  u.queueMarkers = [];
+  if(!scene || !scene.add || !u.orderQueue) return;
+  const shown = isUnitSelected(u);
+  u.orderQueue.forEach((order, i)=>{
+    const pos = orderPosition(order);
+    if(!pos) return;
+    const cx = pos.gx*TILE+TILE/2, cy = pos.gy*TILE+TILE/2;
+    const dot = scene.add.circle(cx, cy, 7, 0xffe08a, 0.9).setStrokeStyle(1, 0x2a1c10, 1).setDepth(15).setVisible(shown);
+    const label = scene.add.text(cx, cy, String(i+1), {fontSize:'10px', color:'#2a1c10', fontStyle:'bold'}).setOrigin(0.5).setDepth(16).setVisible(shown);
+    u.queueMarkers.push(dot, label);
+  });
+}
+
+function isUnitSelected(u){
+  return !!((state.selected && state.selected.type==='unit' && state.selected.ref===u)
+    || (state.selectedGroup && state.selectedGroup.includes(u)));
+}
+
+// only ever called for units that HAVE queue markers already built —
+// selection changes just toggle visibility, they don't rebuild anything
+function updateQueueMarkerVisibility(){
+  for(const u of state.units){
+    if(!u.queueMarkers || !u.queueMarkers.length) continue;
+    const shown = isUnitSelected(u);
+    for(const m of u.queueMarkers) m.setVisible(shown);
+  }
+}
+
 function sendToRally(unit, b){
   if(!b || !b.rallyPoint || !unit) return;
   const spot = findFreeSpotNear(b.rallyPoint.gx, b.rallyPoint.gy, 3) || b.rallyPoint;
@@ -297,6 +342,7 @@ function selectEntity(type, ref){
   state.selected = type ? {type, ref} : null;
   if(type==='unit') ref.sprite.setTint(0xffe08a);
   refreshRallyMarkers();
+  updateQueueMarkerVisibility();
   refreshInfoPanel();
 }
 

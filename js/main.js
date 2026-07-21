@@ -248,8 +248,13 @@ class MainScene extends Phaser.Scene {
 
     if(p.rightButtonDown()){
       if(state.buildMode){ this.cancelBuildMode(); return; }
+      // shift held: queue the order behind whatever's already happening
+      // instead of interrupting it. Same for drones — they're villagers
+      // under the hood, so resolveOrder/queueOrder need no swarm-specific code.
+      const queueing = !!(p.event && p.event.shiftKey);
       if(state.selectedGroup && state.selectedGroup.length > 1){
-        commandGroupMove(state.selectedGroup, gx, gy);
+        if(queueing) queueGroupMove(state.selectedGroup, gx, gy);
+        else commandGroupMove(state.selectedGroup, gx, gy);
         return;
       }
       if(state.selected && state.selected.type==='building' && canRally(state.selected.ref)){
@@ -258,59 +263,9 @@ class MainScene extends Phaser.Scene {
       }
       if(state.selected && state.selected.type==='unit'){
         const u = state.selected.ref;
-        if(u.type==='villager'){
-          // right-click the Town Hall: take shelter inside (garrison)
-          const bAt = occAt(gx, gy);
-          if(bAt && bAt.isCore){ garrisonVillagerInTC(u); return; }
-          // right-click an unfinished building: send this villager to build
-          // (or resume building) it, no matter how far — an explicit order
-          // always ignores the auto-assign radius, same as manually staffing
-          // a finished building. Works whether it's untouched (awaitingBuilder,
-          // both factions) or — humans only — mid-construction and lost its
-          // builder (they died, or the player pulled them off it); the
-          // swarm's drone dissolves into the structure on arrival, so there's
-          // no "resume" case for it once that's already happened.
-          if(bAt && bAt.hp>0 && underConstruction(bAt) && (bAt.awaitingBuilder || state.faction!=='swarm')){
-            const prevBuilder = state.units.find(x=> x.type==='villager' && x.hp>0 && x.buildTaskId===bAt.id && x!==u);
-            if(prevBuilder) prevBuilder.buildTaskId = null;
-            unassignVillager(u);
-            u.buildTaskId = bAt.id;
-            u.tx = bAt.gx; u.ty = bAt.gy; u.moving = true; u.playerOrder = true;
-            flashWaveBanner(`Villager sent to build the ${BUILD_DEFS[bAt.type].name}.`);
-            return;
-          }
-          const targetBuilding = findProductionBuildingFor(gx, gy);
-          if(targetBuilding){
-            assignVillagerToBuilding(u, targetBuilding);
-            flashWaveBanner(`Villager assigned to ${BUILD_DEFS[targetBuilding.type].name}.`);
-          } else if(isTileFreeForUnit(gx, gy, u)){
-            unassignVillager(u);
-            commandUnitMove(u, gx, gy);
-          }
-        } else if(u.type==='repairman'){
-          // repairmen take work orders on damaged walls & towers
-          const b = occAt(gx, gy);
-          if(b && (b.type==='wall' || b.type==='tower') && b.hp < b.maxHp){
-            u.repairTargetId = b.id;
-            flashWaveBanner('Repairman heads to the damage.');
-          } else {
-            u.repairTargetId = null;
-            commandUnitMove(u, gx, gy);
-          }
-        } else if(u.type==='archer'){
-          // archers can garrison towers: right-click the tower to man it
-          const b = occAt(gx, gy);
-          if(b && b.type==='tower' && b.hp>0){
-            u.garrisonId = b.id;
-            u.tx = b.gx; u.ty = b.gy; u.moving = true;
-            flashWaveBanner('Archer climbs the tower.');
-          } else {
-            u.garrisonId = null; // any other order ends the garrison duty
-            commandUnitMove(u, gx, gy);
-          }
-        } else {
-          commandUnitMove(u, gx, gy);
-        }
+        const order = resolveOrder(u, gx, gy);
+        if(queueing) queueOrder(u, order);
+        else executeOrder(u, order);
         return;
       }
       return;

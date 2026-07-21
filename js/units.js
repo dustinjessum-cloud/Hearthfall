@@ -165,6 +165,7 @@ function createArcher(gx, gy){
   const u = {
     id: unitIdCounter++, type:'archer', gx, gy, tx:gx, ty:gy,
     hp: ARCHER_HP, maxHp: ARCHER_HP, lastAttackAt: 0, moving:false,
+    orderQueue: [],
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   // A colored ring under the unit's feet so it's easy to spot against the
@@ -182,7 +183,7 @@ function createCaptain(gx, gy){
   const u = {
     id: unitIdCounter++, type:'captain', gx, gy, tx:gx, ty:gy,
     hp: heroMaxHp(), maxHp: heroMaxHp(), lastAttackAt: 0, moving:false,
-    javCd: 0, slashCd: 0,
+    javCd: 0, slashCd: 0, orderQueue: [],
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   // gold ring + gold-tinted sprite: unmistakably the hero
@@ -222,7 +223,7 @@ function createSwordsman(gx, gy){
   const hp = swarm ? SWARM.zergling.hp : SWORDSMAN_HP; // zerglings: frailer, but birthed in pairs
   const u = {
     id: unitIdCounter++, type:'swordsman', gx, gy, tx:gx, ty:gy,
-    hp, maxHp: hp, lastAttackAt: 0, moving:false,
+    hp, maxHp: hp, lastAttackAt: 0, moving:false, orderQueue: [],
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   u.marker = scene.add.ellipse(cx, cy+9, 20, 9, 0x22848a, 0.55).setStrokeStyle(1, 0x9fe8e0, 0.9).setDepth(3);
@@ -239,7 +240,7 @@ function createRepairman(gx, gy){
   const u = {
     id: unitIdCounter++, type:'repairman', gx, gy, tx:gx, ty:gy,
     hp: REPAIRMAN.hp, maxHp: REPAIRMAN.hp, lastAttackAt: 0, moving:false,
-    repairTargetId: null, repMs: 0,
+    repairTargetId: null, repMs: 0, orderQueue: [],
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   // dedicated sprite: overalls, apron, hammer, hard hat
@@ -285,6 +286,7 @@ function createVillager(gx, gy){
     // the walk-out -> harvest -> walk-home loop
     carrying: null, gatherPhase: null, gatherTarget: null, harvestMs: 0,
     recallSpot: null, // where they shelter (near the TC) while recalled
+    orderQueue: [],
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   u.marker = scene.add.ellipse(cx, cy+9, 18, 8, 0x3a7a3a, 0.5).setStrokeStyle(1, 0xa8e6a1, 0.85).setDepth(3);
@@ -321,6 +323,7 @@ function destroyUnitVisuals(u){
   if(u.marker) u.marker.destroy();
   if(u.hpBarBg) u.hpBarBg.destroy();
   if(u.hpBarFg) u.hpBarFg.destroy();
+  if(u.queueMarkers) for(const m of u.queueMarkers) m.destroy();
 }
 
 function removeUnit(u){
@@ -344,6 +347,139 @@ function commandUnitMove(u, gx, gy){
   u.playerOrder = true;
 }
 
+// ---------------------------------------------------------------------
+// Order queue (shift-click)
+// Right-click gives an order immediately, same as always. Shift+right-click
+// instead appends the SAME order to a small queue (ORDER_QUEUE_MAX deep)
+// that fires automatically once the unit goes fully idle — one order
+// resolver/executor pair backs both paths, so "queued" and "immediate"
+// can never drift apart. Works identically for drones: they're just
+// villagers under the swarm skin, so nothing swarm-specific is needed here.
+//
+// Two of the six order kinds (work, garrisonTower) put a unit into an
+// OPEN-ENDED state with no natural "done" moment — gathering and manning a
+// tower both run forever until something else ends them. A queue entry
+// behind one of those simply won't fire until that happens; that's a
+// property of the job, not a bug in the queue.
+// ---------------------------------------------------------------------
+
+// Figure out what right-clicking (gx,gy) with unit u WOULD do, without
+// doing it — used for both the immediate-order path and shift-queueing.
+// Returns null if there's nothing valid to do there (matches the old
+// silent-no-op behavior for e.g. right-clicking an occupied/blocked tile).
+function resolveOrder(u, gx, gy){
+  const bAt = occAt(gx, gy);
+  if(u.type==='villager'){
+    if(bAt && bAt.isCore) return {kind:'garrisonTC'};
+    if(bAt && bAt.hp>0 && underConstruction(bAt) && (bAt.awaitingBuilder || state.faction!=='swarm')){
+      return {kind:'build', buildingId: bAt.id};
+    }
+    const targetBuilding = findProductionBuildingFor(gx, gy);
+    if(targetBuilding) return {kind:'work', buildingId: targetBuilding.id};
+    if(isTileFreeForUnit(gx, gy, u)) return {kind:'move', gx, gy};
+    return null;
+  }
+  if(u.type==='repairman'){
+    if(bAt && (bAt.type==='wall' || bAt.type==='tower') && bAt.hp < bAt.maxHp) return {kind:'repair', buildingId: bAt.id};
+    return {kind:'move', gx, gy};
+  }
+  if(u.type==='archer'){
+    if(bAt && bAt.type==='tower' && bAt.hp>0) return {kind:'garrisonTower', buildingId: bAt.id};
+    return {kind:'move', gx, gy};
+  }
+  return {kind:'move', gx, gy};
+}
+
+// Actually carry out a resolved order. Building/tile references are
+// re-checked here (not trusted from resolve time) because a QUEUED order
+// can sit for a while before it fires — the target may have finished,
+// been destroyed, or already been fully repaired by then.
+function executeOrder(u, order){
+  if(!order || u.hp<=0) return;
+  if(order.kind==='garrisonTC'){
+    garrisonVillagerInTC(u);
+  } else if(order.kind==='build'){
+    const b = buildingById(order.buildingId);
+    if(!b || b.hp<=0 || !underConstruction(b)) return;
+    const prevBuilder = state.units.find(x=> x.type==='villager' && x.hp>0 && x.buildTaskId===b.id && x!==u);
+    if(prevBuilder) prevBuilder.buildTaskId = null;
+    unassignVillager(u);
+    u.buildTaskId = b.id;
+    u.tx = b.gx; u.ty = b.gy; u.moving = true; u.playerOrder = true;
+    flashWaveBanner(`Villager sent to build the ${BUILD_DEFS[b.type].name}.`);
+  } else if(order.kind==='work'){
+    const b = buildingById(order.buildingId);
+    if(!b || b.hp<=0) return;
+    assignVillagerToBuilding(u, b);
+    flashWaveBanner(`Villager assigned to ${BUILD_DEFS[b.type].name}.`);
+  } else if(order.kind==='repair'){
+    const b = buildingById(order.buildingId);
+    if(!b || b.hp<=0 || b.hp>=b.maxHp) return;
+    u.repairTargetId = b.id;
+    flashWaveBanner('Repairman heads to the damage.');
+  } else if(order.kind==='garrisonTower'){
+    const b = buildingById(order.buildingId);
+    if(!b || b.hp<=0 || b.type!=='tower') return;
+    u.garrisonId = b.id;
+    u.tx = b.gx; u.ty = b.gy; u.moving = true;
+    flashWaveBanner('Archer climbs the tower.');
+  } else if(order.kind==='move'){
+    if(u.type==='villager') unassignVillager(u);
+    else if(u.type==='repairman') u.repairTargetId = null;
+    else if(u.type==='archer') u.garrisonId = null;
+    commandUnitMove(u, order.gx, order.gy);
+  }
+}
+
+function describeOrder(order){
+  if(order.kind==='move') return 'move';
+  if(order.kind==='garrisonTC') return 'shelter in the Town Hall';
+  if(order.kind==='garrisonTower') return 'garrison the tower';
+  if(order.kind==='repair') return 'repair';
+  if(order.kind==='build') return 'build';
+  if(order.kind==='work') return 'work';
+  return 'order';
+}
+
+// Appends to the queue (shift-click). Full queues reject new orders rather
+// than silently dropping an old one — the player should notice and either
+// wait for it to drain or right-click (no shift) to clear-and-replace.
+function queueOrder(u, order){
+  if(!order) return false;
+  u.orderQueue = u.orderQueue || [];
+  if(u.orderQueue.length >= ORDER_QUEUE_MAX){
+    flashWaveBanner(`Order queue full (${ORDER_QUEUE_MAX}/${ORDER_QUEUE_MAX}) — right-click without shift to clear it.`);
+    return false;
+  }
+  u.orderQueue.push(order);
+  flashWaveBanner(`Queued (${u.orderQueue.length}/${ORDER_QUEUE_MAX}): ${describeOrder(order)}.`);
+  refreshQueueMarkers(u);
+  return true;
+}
+
+// Called once a unit goes fully idle with something waiting. Pulled from
+// the front (FIFO — orders happen in the sequence they were queued).
+function advanceOrderQueue(u){
+  if(!u.orderQueue || !u.orderQueue.length) return;
+  const next = u.orderQueue.shift();
+  executeOrder(u, next);
+  refreshQueueMarkers(u);
+}
+
+function clearOrderQueue(u){
+  if(u.orderQueue && u.orderQueue.length){ u.orderQueue = []; refreshQueueMarkers(u); }
+}
+
+// A unit is only truly "idle" — eligible to pop its next queued order —
+// once every busy-indicator is clear. Checking it this way (rather than
+// hooking every individual completion site) means any new busy-state added
+// later gets queue support for free, and it self-heals if a queued target
+// goes stale (executeOrder's checks just no-op and the NEXT frame moves on).
+function isUnitIdle(u){
+  return !u.moving && !u.assignedBuildingId && !u.buildTaskId && !u.garrisonId
+    && !u.repairTargetId && !u.inTC && !u.enteringTC;
+}
+
 // ---- multi-unit selection ----
 function clearGroupSelection(){
   for(const u of (state.selectedGroup||[])){
@@ -353,6 +489,7 @@ function clearGroupSelection(){
     }
   }
   state.selectedGroup = [];
+  updateQueueMarkerVisibility();
 }
 
 function setGroupSelection(units){
@@ -361,11 +498,13 @@ function setGroupSelection(units){
   if(units.length === 1){ selectEntity('unit', units[0]); return; }
   state.selectedGroup = units;
   for(const u of units) if(u.sprite) u.sprite.setTint(0xffe08a);
+  updateQueueMarkerVisibility();
   refreshInfoPanel();
 }
 
-function commandGroupMove(units, gx, gy){
-  // spread the group over free tiles ring by ring around the target
+// spread a group over free tiles ring by ring around the target — shared by
+// the immediate and queued group-move paths so they can never drift apart
+function computeGroupTargets(units, gx, gy){
   const targets = [];
   if(isTileFreeForUnit(gx, gy)) targets.push({gx, gy});
   let r = 1;
@@ -379,6 +518,11 @@ function commandGroupMove(units, gx, gy){
     }
     r++;
   }
+  return targets;
+}
+
+function commandGroupMove(units, gx, gy){
+  const targets = computeGroupTargets(units, gx, gy);
   units.forEach((u, i)=>{
     if(u.hp<=0) return;
     const t = targets.length ? targets[i % targets.length] : {gx, gy};
@@ -386,6 +530,17 @@ function commandGroupMove(units, gx, gy){
     if(u.type==='archer') u.garrisonId = null;
     if(u.type==='repairman') u.repairTargetId = null;
     u.tx = t.gx; u.ty = t.gy; u.moving = true; u.playerOrder = true;
+  });
+}
+
+// shift-click on a group: same spread, but queued behind whatever each
+// unit is currently doing instead of interrupting it
+function queueGroupMove(units, gx, gy){
+  const targets = computeGroupTargets(units, gx, gy);
+  units.forEach((u, i)=>{
+    if(u.hp<=0) return;
+    const t = targets.length ? targets[i % targets.length] : {gx, gy};
+    queueOrder(u, {kind:'move', gx:t.gx, gy:t.gy});
   });
 }
 
@@ -572,6 +727,11 @@ function updateUnits(delta){
       u.bobPhase += delta;
       u.sprite.y = u.gy*TILE + TILE/2 + Math.sin(u.bobPhase/180)*3;
     }
+    // fully idle with something queued? pop the next order. Placed once
+    // per unit per frame rather than at each individual completion site —
+    // whatever JUST freed them up (a plain move, a finished build, a
+    // completed repair...) is already reflected in isUnitIdle() by now.
+    if(u.orderQueue && u.orderQueue.length && isUnitIdle(u)) advanceOrderQueue(u);
   }
 }
 

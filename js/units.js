@@ -544,9 +544,17 @@ function updateUnits(delta){
       const nrx = Math.round(nx), nry = Math.round(ny);
       const nt = tileAt(nrx, nry);
       const nb = occAt(nrx, nry);
+      // A tiny first step barely moves gx/gy, so it can round right back to
+      // the tile the unit is ALREADY standing on. Without this, a builder
+      // who just finished a tower (they have to stand exactly on its tile
+      // to build it) gets treated as walking INTO the tower the instant
+      // they try to leave — wallBlocked fires on frame one, every frame,
+      // forever, and they're stuck there permanently.
+      const curTile = occAt(Math.round(u.gx), Math.round(u.gy));
       const wallBlocked = nb && BUILD_DEFS[nb.type] && BUILD_DEFS[nb.type].blocksPath
         && !BUILD_DEFS[nb.type].friendlyPassable
-        && u.buildTaskId !== nb.id; // never blocked from reaching the very site you're walking over to build
+        && u.buildTaskId !== nb.id // never blocked from reaching the very site you're walking over to build
+        && nb !== curTile; // ...nor from leaving a blocking tile you're already standing on, for any reason
       if(nt==='water' || (u.type!=='villager' && nt==='stone_deposit') || wallBlocked){
         u.moving = false; u.playerOrder = false;
       } else if(willArrive){

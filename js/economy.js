@@ -103,26 +103,42 @@ const REPAIRMAN = {
   hp: 30, hpPerSec: 15, woodPerHp: 0.1, autoSeekRadius: 8,
 };
 
+// Humans: construction only advances while the assigned builder is
+// physically standing at the site — pull them away (or they die) and
+// progress simply pauses until someone (them again, or a freshly
+// dispatched replacement — see autoAssignIdleVillagers) is back on-site.
+// The swarm has no such requirement: its "builder" is a drone that
+// dissolves into the structure the moment it arrives, so there's no unit
+// left to check the presence of — construction just runs on its own once
+// started, same as it always has.
+function assignedBuilder(b){
+  return state.units.find(u=> u.type==='villager' && u.hp>0 && u.buildTaskId===b.id) || null;
+}
+function builderPresent(u, b){
+  return !!u && !u.moving && Math.round(u.gx)===b.gx && Math.round(u.gy)===b.gy;
+}
+
 function updateConstruction(delta){
   for(const b of state.buildings){
     if(underConstruction(b) && !b.awaitingBuilder){
-      b.buildMs -= delta;
-      if(b.buildMs <= 0){
-        b.buildMs = 0;
-        if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(1);
-        const def = BUILD_DEFS[b.type];
-        if(def && def.popCap) state.population.cap += def.popCap;
-        if(def && def.needsWorker){
-          // the villager who built this gets first claim on working it —
-          // grab them by their reservation before the general auto-assign
-          // pass runs (which fills any OTHER open slots, e.g. a lumber
-          // camp/quarry with room for more than one worker)
-          const builder = state.units.find(u=> u.type==='villager' && u.hp>0 && u.reservedBuildingId===b.id);
-          if(builder) assignVillagerToBuilding(builder, b);
-          autoAssignIdleVillagers();
+      const builder = state.faction==='swarm' ? null : assignedBuilder(b);
+      const ready = state.faction==='swarm' || builderPresent(builder, b);
+      if(ready){
+        b.buildMs -= delta;
+        if(b.buildMs <= 0){
+          b.buildMs = 0;
+          if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(1);
+          const def = BUILD_DEFS[b.type];
+          if(def && def.popCap) state.population.cap += def.popCap;
+          if(builder) builder.buildTaskId = null; // done — free to become a worker
+          if(def && def.needsWorker){
+            // the villager who built this gets first claim on working it
+            if(builder) assignVillagerToBuilding(builder, b);
+            autoAssignIdleVillagers(); // fills any OTHER open slots (e.g. a lumber camp with room for 3)
+          }
+          if(scene && scene.add) floatResourceText(b.gx, b.gy, 'complete!', '#a8e6a1');
+          updateHUD();
         }
-        if(scene && scene.add) floatResourceText(b.gx, b.gy, 'complete!', '#a8e6a1');
-        updateHUD();
       }
     }
     if(b.upgradeMs > 0){
@@ -135,12 +151,12 @@ function updateConstruction(delta){
   }
 }
 
-// ---- salvage ----
-// Tear a building down for scraps: costs 3 gold in labor, returns 15% of
-// the original build cost.
+// ---- salvage / cancel ----
+// Tear a FINISHED building down for scraps: costs 3 gold in labor, returns
+// 15% of the original build cost.
 const SALVAGE = { goldCost: 3, refund: 0.15 };
 function salvageBuilding(b){
-  if(!b || b.isCore || b.hp<=0) return false;
+  if(!b || b.isCore || b.hp<=0 || underConstruction(b)) return false;
   if(state.faction!=='swarm'){ // the swarm reabsorbs its growths free of charge
     if(state.resources.gold < SALVAGE.goldCost) return false;
     state.resources.gold -= SALVAGE.goldCost;
@@ -155,6 +171,26 @@ function salvageBuilding(b){
   }
   removeBuilding(b);
   flashWaveBanner('Salvaged' + (parts.length ? ' — recovered ' + parts.join(', ') : ' — nothing worth keeping') + '.');
+  updateHUD();
+  return true;
+}
+
+// Cancel an UNBUILT/in-progress foundation: full refund, no gold fee —
+// this is calling off an order before it's delivered, not demolishing a
+// finished building (that's Salvage, and stays lossy on purpose).
+// Whoever was assigned to build it is freed automatically (removeBuilding
+// clears their buildTaskId).
+function cancelBuilding(b){
+  if(!b || b.isCore || !underConstruction(b)) return false;
+  const def = BUILD_DEFS[b.type];
+  const parts = [];
+  if(def && def.cost){
+    for(const k in def.cost){
+      if(def.cost[k] > 0){ addResource(k, def.cost[k]); parts.push(def.cost[k] + ' ' + k); }
+    }
+  }
+  removeBuilding(b);
+  flashWaveBanner('Cancelled' + (parts.length ? ' — refunded ' + parts.join(', ') : '') + '.');
   updateHUD();
   return true;
 }
@@ -580,10 +616,10 @@ function removeBuilding(b){
   for(const worker of state.units.filter(u=> u.type==='villager' && u.assignedBuildingId===b.id)){
     unassignVillager(worker);
   }
-  // a builder who was reserved to work this foundation shouldn't stay
-  // reserved for a building that no longer exists — free them up
-  for(const waiting of state.units.filter(u=> u.type==='villager' && u.reservedBuildingId===b.id)){
-    waiting.reservedBuildingId = null;
+  // a builder mid-construction (or still walking over) shouldn't stay
+  // pinned to a foundation that no longer exists — free them up
+  for(const builder of state.units.filter(u=> u.type==='villager' && u.buildTaskId===b.id)){
+    builder.buildTaskId = null;
   }
   const bSize = b.size || 1;
   for(let dy=0; dy<bSize; dy++) for(let dx=0; dx<bSize; dx++){
@@ -814,7 +850,7 @@ function assignVillagerToBuilding(v, building){
     crew[0].assignedBuildingId = null;
   }
   v.assignedBuildingId = building.id;
-  v.reservedBuildingId = null; // now actually working — any pending reservation is moot
+  v.buildTaskId = null; // now actually working — any pending build task is abandoned
   v.gatherWorking = false;
   v.gatherPhase = null; v.gatherTarget = null; // restart the haul loop fresh
   v.moving = false; // updateGatherer takes over from here
@@ -822,7 +858,7 @@ function assignVillagerToBuilding(v, building){
 
 function unassignVillager(v){
   v.assignedBuildingId = null;
-  v.reservedBuildingId = null; // an explicit new order always cancels a pending "go work what I built" reservation
+  v.buildTaskId = null; // an explicit new order always cancels a pending build task, human or swarm
   v.gatherWorking = false;
   v.gatherPhase = null; v.gatherTarget = null; v.carrying = null;
   v.repairMs = 0; v._noWoodWarned = false;
@@ -846,7 +882,7 @@ function unassignVillager(v){
 // longer selected.
 function pickWorkerFor(location){
   const sel = (state.selected && state.selected.type==='unit') ? state.selected.ref : null;
-  const selectedIsFree = sel && sel.type==='villager' && sel.hp>0 && !sel.assignedBuildingId && !sel.buildTaskId && !sel.reservedBuildingId && !sel.inTC && !sel.enteringTC;
+  const selectedIsFree = sel && sel.type==='villager' && sel.hp>0 && !sel.assignedBuildingId && !sel.buildTaskId && !sel.inTC && !sel.enteringTC;
   if(selectedIsFree) return sel;
 
   // beyond a selected unit, auto-dispatch only reaches AUTO_ASSIGN_RADIUS
@@ -856,7 +892,7 @@ function pickWorkerFor(location){
   // handler in main.js) bypasses this entirely, same as it always has.
   let best = null, bestD = Infinity;
   for(const u of state.units){
-    if(u.type!=='villager' || u.hp<=0 || u.assignedBuildingId || u.buildTaskId || u.reservedBuildingId || u.inTC || u.enteringTC || u===sel) continue;
+    if(u.type!=='villager' || u.hp<=0 || u.assignedBuildingId || u.buildTaskId || u.inTC || u.enteringTC || u===sel) continue;
     const d = Phaser.Math.Distance.Between(u.gx, u.gy, location.gx, location.gy);
     if(d > AUTO_ASSIGN_RADIUS) continue;
     if(d < bestD){ bestD = d; best = u; }
@@ -865,14 +901,21 @@ function pickWorkerFor(location){
 }
 
 function autoAssignIdleVillagers(){
-  // priority 1: unstarted foundations need a builder before anything else
-  // can happen there. "Already en route" is checked by a LIVING unit's own
-  // buildTaskId, not a flag on the building — so if that builder dies
-  // mid-walk, the foundation naturally becomes dispatchable again next call.
-  const unbuilt = state.buildings.filter(b=> b.awaitingBuilder && b.hp>0);
+  // priority 1: any foundation without a LIVING assigned builder needs one
+  // dispatched — whether it never had one (awaitingBuilder), or had one who
+  // died or got manually reassigned partway through (buildMs>0, nobody's
+  // buildTaskId points at it anymore). Checked live against units, not a
+  // flag on the building, so this self-heals on the next call regardless
+  // of why the previous builder is gone.
+  // Swarm is simpler: its drone dissolves into the structure the instant
+  // it arrives, so "no living builder" is the NORMAL state mid-construction
+  // — only truly-unstarted (awaitingBuilder) growths need a fresh drone.
+  const unbuilt = state.buildings.filter(b=>{
+    if(!underConstruction(b) || b.hp<=0) return false;
+    if(state.faction==='swarm') return b.awaitingBuilder;
+    return !assignedBuilder(b);
+  });
   for(const b of unbuilt){
-    const alreadyEnRoute = state.units.some(u=> u.buildTaskId===b.id && u.hp>0);
-    if(alreadyEnRoute) continue;
     const builder = pickWorkerFor(b);
     if(!builder) continue; // no one free right now — try again next call
     builder.buildTaskId = b.id;

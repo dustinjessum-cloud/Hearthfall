@@ -385,7 +385,10 @@ function refreshInfoPanel(){
       }
       if(!ref.isCore){
         const sb = document.getElementById('salvageBtn');
-        if(sb) sb.addEventListener('click', ()=> salvageBuilding(ref));
+        // checked at CLICK time, not bind time — the panel can stay open
+        // across a construction finishing, and Cancel vs Salvage needs to
+        // reflect whatever's true right now
+        if(sb) sb.addEventListener('click', ()=> underConstruction(ref) ? cancelBuilding(ref) : salvageBuilding(ref));
       }
       if(ref.type==='market'){
         document.getElementById('tr_wood_stone').addEventListener('click', ()=> tradeAtMarket('wood','stone'));
@@ -435,18 +438,26 @@ function refreshInfoPanel(){
       const sb = document.getElementById('salvageBtn');
       if(sb){
         const defC = BUILD_DEFS[ref.type];
-        const parts = [];
-        if(defC && defC.cost) for(const k in defC.cost){ const r = Math.floor(defC.cost[k]*SALVAGE.refund); if(r>0) parts.push(r+k[0].toUpperCase()); }
-        if(state.faction==='swarm'){
-          // the swarm reabsorbs its own growths — no gold, no gate. This
-          // branch was missing before: salvageBuilding() itself already
-          // waived the gold cost, but this button never got the memo, so
-          // it sat permanently disabled (gold is always 0 for the swarm).
+        if(underConstruction(ref)){
+          // canceling an order in progress — full refund, no gold fee, no gate
+          const parts = [];
+          if(defC && defC.cost) for(const k in defC.cost){ if(defC.cost[k]>0) parts.push(defC.cost[k]+k[0].toUpperCase()); }
           sb.disabled = false;
-          sb.textContent = `Reabsorb (free → ${parts.length?parts.join(' '):'nothing'})`;
+          sb.textContent = `Cancel (refund ${parts.length?parts.join(' '):'nothing'})`;
         } else {
-          sb.disabled = state.resources.gold < SALVAGE.goldCost;
-          sb.textContent = `Salvage (${SALVAGE.goldCost}G → ${parts.length?parts.join(' '):'scrap'})`;
+          const parts = [];
+          if(defC && defC.cost) for(const k in defC.cost){ const r = Math.floor(defC.cost[k]*SALVAGE.refund); if(r>0) parts.push(r+k[0].toUpperCase()); }
+          if(state.faction==='swarm'){
+            // the swarm reabsorbs its own growths — no gold, no gate. This
+            // branch was missing before: salvageBuilding() itself already
+            // waived the gold cost, but this button never got the memo, so
+            // it sat permanently disabled (gold is always 0 for the swarm).
+            sb.disabled = false;
+            sb.textContent = `Reabsorb (free → ${parts.length?parts.join(' '):'nothing'})`;
+          } else {
+            sb.disabled = state.resources.gold < SALVAGE.goldCost;
+            sb.textContent = `Salvage (${SALVAGE.goldCost}G → ${parts.length?parts.join(' '):'scrap'})`;
+          }
         }
       }
     }

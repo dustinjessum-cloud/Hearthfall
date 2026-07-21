@@ -262,10 +262,17 @@ class MainScene extends Phaser.Scene {
           // right-click the Town Hall: take shelter inside (garrison)
           const bAt = occAt(gx, gy);
           if(bAt && bAt.isCore){ garrisonVillagerInTC(u); return; }
-          // right-click an unbuilt foundation: send this villager to build
-          // it, no matter how far — an explicit order always ignores the
-          // auto-assign radius, same as manually staffing a finished building
-          if(bAt && bAt.awaitingBuilder && bAt.hp>0){
+          // right-click an unfinished building: send this villager to build
+          // (or resume building) it, no matter how far — an explicit order
+          // always ignores the auto-assign radius, same as manually staffing
+          // a finished building. Works whether it's untouched (awaitingBuilder,
+          // both factions) or — humans only — mid-construction and lost its
+          // builder (they died, or the player pulled them off it); the
+          // swarm's drone dissolves into the structure on arrival, so there's
+          // no "resume" case for it once that's already happened.
+          if(bAt && bAt.hp>0 && underConstruction(bAt) && (bAt.awaitingBuilder || state.faction!=='swarm')){
+            const prevBuilder = state.units.find(x=> x.type==='villager' && x.hp>0 && x.buildTaskId===bAt.id && x!==u);
+            if(prevBuilder) prevBuilder.buildTaskId = null;
             unassignVillager(u);
             u.buildTaskId = bAt.id;
             u.tx = bAt.gx; u.ty = bAt.gy; u.moving = true; u.playerOrder = true;

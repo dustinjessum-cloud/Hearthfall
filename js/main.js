@@ -262,6 +262,16 @@ class MainScene extends Phaser.Scene {
           // right-click the Town Hall: take shelter inside (garrison)
           const bAt = occAt(gx, gy);
           if(bAt && bAt.isCore){ garrisonVillagerInTC(u); return; }
+          // right-click an unbuilt foundation: send this villager to build
+          // it, no matter how far — an explicit order always ignores the
+          // auto-assign radius, same as manually staffing a finished building
+          if(bAt && bAt.awaitingBuilder && bAt.hp>0){
+            unassignVillager(u);
+            u.buildTaskId = bAt.id;
+            u.tx = bAt.gx; u.ty = bAt.gy; u.moving = true; u.playerOrder = true;
+            flashWaveBanner(`Villager sent to build the ${BUILD_DEFS[bAt.type].name}.`);
+            return;
+          }
           const targetBuilding = findProductionBuildingFor(gx, gy);
           if(targetBuilding){
             assignVillagerToBuilding(u, targetBuilding);

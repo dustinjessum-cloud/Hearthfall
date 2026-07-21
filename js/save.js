@@ -197,6 +197,11 @@ function restoreGame(snapshot){
     restoreHpBar(e, TILE-8);
   }
 
+  // any foundation that was mid-walk-to (buildTaskId reset above) or any
+  // building short a worker needs a fresh dispatch pass now that the world
+  // is actually rebuilt.
+  autoAssignIdleVillagers();
+
   updateHUD();
   buildBuildBar();
   refreshBuildBar();

@@ -112,7 +112,15 @@ function updateConstruction(delta){
         if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(1);
         const def = BUILD_DEFS[b.type];
         if(def && def.popCap) state.population.cap += def.popCap;
-        if(def && def.needsWorker) autoAssignIdleVillagers();
+        if(def && def.needsWorker){
+          // the villager who built this gets first claim on working it —
+          // grab them by their reservation before the general auto-assign
+          // pass runs (which fills any OTHER open slots, e.g. a lumber
+          // camp/quarry with room for more than one worker)
+          const builder = state.units.find(u=> u.type==='villager' && u.hp>0 && u.reservedBuildingId===b.id);
+          if(builder) assignVillagerToBuilding(builder, b);
+          autoAssignIdleVillagers();
+        }
         if(scene && scene.add) floatResourceText(b.gx, b.gy, 'complete!', '#a8e6a1');
         updateHUD();
       }
@@ -572,6 +580,11 @@ function removeBuilding(b){
   for(const worker of state.units.filter(u=> u.type==='villager' && u.assignedBuildingId===b.id)){
     unassignVillager(worker);
   }
+  // a builder who was reserved to work this foundation shouldn't stay
+  // reserved for a building that no longer exists — free them up
+  for(const waiting of state.units.filter(u=> u.type==='villager' && u.reservedBuildingId===b.id)){
+    waiting.reservedBuildingId = null;
+  }
   const bSize = b.size || 1;
   for(let dy=0; dy<bSize; dy++) for(let dx=0; dx<bSize; dx++){
     if(inBounds(b.gx+dx, b.gy+dy) && state.occupied[b.gy+dy][b.gx+dx]===b) state.occupied[b.gy+dy][b.gx+dx] = null;
@@ -759,7 +772,7 @@ function updateGatherer(u, delta){
 // ---------------------------------------------------------------------
 function findProductionBuildingFor(gx, gy){
   const b = occAt(gx, gy);
-  if(b && BUILD_DEFS[b.type] && (BUILD_DEFS[b.type].needsWorker || BUILD_DEFS[b.type].garrison)) return b;
+  if(b && !underConstruction(b) && BUILD_DEFS[b.type] && (BUILD_DEFS[b.type].needsWorker || BUILD_DEFS[b.type].garrison)) return b;
   // (wall repair is the Repairman's job now — villagers don't take it)
   return null;
 }
@@ -801,6 +814,7 @@ function assignVillagerToBuilding(v, building){
     crew[0].assignedBuildingId = null;
   }
   v.assignedBuildingId = building.id;
+  v.reservedBuildingId = null; // now actually working — any pending reservation is moot
   v.gatherWorking = false;
   v.gatherPhase = null; v.gatherTarget = null; // restart the haul loop fresh
   v.moving = false; // updateGatherer takes over from here
@@ -808,6 +822,7 @@ function assignVillagerToBuilding(v, building){
 
 function unassignVillager(v){
   v.assignedBuildingId = null;
+  v.reservedBuildingId = null; // an explicit new order always cancels a pending "go work what I built" reservation
   v.gatherWorking = false;
   v.gatherPhase = null; v.gatherTarget = null; v.carrying = null;
   v.repairMs = 0; v._noWoodWarned = false;
@@ -831,13 +846,19 @@ function unassignVillager(v){
 // longer selected.
 function pickWorkerFor(location){
   const sel = (state.selected && state.selected.type==='unit') ? state.selected.ref : null;
-  const selectedIsFree = sel && sel.type==='villager' && sel.hp>0 && !sel.assignedBuildingId && !sel.buildTaskId && !sel.inTC && !sel.enteringTC;
+  const selectedIsFree = sel && sel.type==='villager' && sel.hp>0 && !sel.assignedBuildingId && !sel.buildTaskId && !sel.reservedBuildingId && !sel.inTC && !sel.enteringTC;
   if(selectedIsFree) return sel;
 
+  // beyond a selected unit, auto-dispatch only reaches AUTO_ASSIGN_RADIUS
+  // tiles — far enough to catch a villager standing right outside a camp,
+  // not far enough to send one sprinting across the whole map. An explicit
+  // right-click order (assignVillagerToBuilding / the build-a-foundation
+  // handler in main.js) bypasses this entirely, same as it always has.
   let best = null, bestD = Infinity;
   for(const u of state.units){
-    if(u.type!=='villager' || u.hp<=0 || u.assignedBuildingId || u.buildTaskId || u.inTC || u.enteringTC || u===sel) continue;
+    if(u.type!=='villager' || u.hp<=0 || u.assignedBuildingId || u.buildTaskId || u.reservedBuildingId || u.inTC || u.enteringTC || u===sel) continue;
     const d = Phaser.Math.Distance.Between(u.gx, u.gy, location.gx, location.gy);
+    if(d > AUTO_ASSIGN_RADIUS) continue;
     if(d < bestD){ bestD = d; best = u; }
   }
   return best;

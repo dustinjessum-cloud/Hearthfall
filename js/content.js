@@ -197,6 +197,7 @@ const CARRY = {                         // what one villager hauls home per trip
 };
 const FARM_SOIL_WEAR = 0.008;           // fertility lost per harvest tick
 const FARM_MIN_FERTILITY = 0.25;
+const AUTO_ASSIGN_RADIUS = 4;           // how far pickWorkerFor() will look for an idle villager on its own — an explicit player order (right-click) always ignores this
 
 function fmtCost(cost){
   const label = (k)=> k==='wildstone' ? 'Wild' : k[0].toUpperCase(); // "wood" and "wildstone" both start with W

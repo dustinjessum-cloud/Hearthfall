@@ -256,7 +256,7 @@ function trainRepairman(mason){
   if(state.starving){ flashWaveBanner('No one apprentices in a starving town!'); return false; }
   if(queueFull(mason) || underConstruction(mason)) return false;
   for(const k in REPAIRMAN.cost) if(state.resources[k] < REPAIRMAN.cost[k]) return false;
-  const villager = state.units.find(u=>u.type==='villager' && u.hp>0 && !u.assignedBuildingId && !u.inTC && !u.enteringTC)
+  const villager = state.units.find(u=>u.type==='villager' && u.hp>0 && !u.assignedBuildingId && !u.reservedBuildingId && !u.inTC && !u.enteringTC)
                  || state.units.find(u=>u.type==='villager' && u.hp>0 && !u.inTC && !u.enteringTC);
   if(!villager) return false;
   for(const k in REPAIRMAN.cost) state.resources[k] -= REPAIRMAN.cost[k];
@@ -435,9 +435,11 @@ function updateUnits(delta){
     }
     // arrived at a build site: construction can finally begin. Swarm
     // drones dissolve into the growth right here (delayed from placement
-    // to this exact moment); human villagers just kick off the timer and
-    // are freed — autoAssignIdleVillagers may pick them up as a worker
-    // once the building actually completes.
+    // to this exact moment); a human builder stays RESERVED for this
+    // specific building (reservedBuildingId) rather than going fully idle —
+    // otherwise the global auto-assign pass could poach them into some
+    // other job before the thing they're standing next to even finishes.
+    // updateConstruction() hands them the job the instant it completes.
     if(u.type==='villager' && u.buildTaskId && !u.moving){
       const targetBuilding = buildingById(u.buildTaskId);
       u.buildTaskId = null;
@@ -451,6 +453,8 @@ function updateUnits(delta){
           state.units = state.units.filter(x=>x!==u);
           syncPopulationCount();
           continue; // this unit is gone — nothing further to do with it this frame
+        } else if(BUILD_DEFS[targetBuilding.type] && BUILD_DEFS[targetBuilding.type].needsWorker){
+          u.reservedBuildingId = targetBuilding.id;
         }
       }
     }

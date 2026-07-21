@@ -722,6 +722,7 @@ function trainSoldier(barracks, kind){
 
 function endGame(won){
   state.gameOver = true;
+  clearSavedGame(); // a finished run should never offer "Continue" back into it
   const overlay = document.getElementById('overlay');
   overlay.style.display = 'flex';
   overlay.innerHTML = `<h1>${won ? 'Victory' : 'Your Town Has Fallen'}</h1>

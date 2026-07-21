@@ -2,6 +2,7 @@
 // Phaser scene
 // ---------------------------------------------------------------------
 let scene;
+let pendingRestoreSnapshot = null; // set just before Phaser.Game boots when "Continue" was clicked
 
 class MainScene extends Phaser.Scene {
   constructor(){ super('main'); }
@@ -58,37 +59,46 @@ class MainScene extends Phaser.Scene {
     this.selectionBox = null;
     this.unitMoveTargets = new Map();
 
-    const {cx, cy} = generateMap();
-    this.townHallPos = {gx:cx, gy:cy};
+    let cx, cy;
+    if(pendingRestoreSnapshot){
+      const snap = pendingRestoreSnapshot;
+      pendingRestoreSnapshot = null;
+      restoreGame(snap);
+      cx = snap.townHallPos.gx; cy = snap.townHallPos.gy;
+    } else {
+      const gen = generateMap();
+      cx = gen.cx; cy = gen.cy;
+      this.townHallPos = {gx:cx, gy:cy};
 
-    this.drawMap();
+      this.drawMap();
 
-    // place the starting core — Town Hall for humans, the Hive for the swarm
-    const swarm = state.faction === 'swarm';
-    const th = createBuilding('town_hall_core', cx, cy,
-      swarm ? {name:'Hive', hp:500, frame:'town_hall', size:2, tint:0xb478ff}
-            : {name:'Town Hall', hp:500, frame:'town_hall', size:2});
-    th.isCore = true;
-    th.level = 1;
+      // place the starting core — Town Hall for humans, the Hive for the swarm
+      const swarm = state.faction === 'swarm';
+      const th = createBuilding('town_hall_core', cx, cy,
+        swarm ? {name:'Hive', hp:500, frame:'town_hall', size:2, tint:0xb478ff}
+              : {name:'Town Hall', hp:500, frame:'town_hall', size:2});
+      th.isCore = true;
+      th.level = 1;
 
-    // the swarm wakes on a bed of creep
-    initCreep();
-    if(swarm){
-      for(let dy=-SWARM.creep.seedRadius; dy<=SWARM.creep.seedRadius; dy++){
-        for(let dx=-SWARM.creep.seedRadius; dx<=SWARM.creep.seedRadius; dx++){
-          if(Math.hypot(dx, dy) <= SWARM.creep.seedRadius) claimCreepTile(cx+dx, cy+dy);
+      // the swarm wakes on a bed of creep
+      initCreep();
+      if(swarm){
+        for(let dy=-SWARM.creep.seedRadius; dy<=SWARM.creep.seedRadius; dy++){
+          for(let dx=-SWARM.creep.seedRadius; dx<=SWARM.creep.seedRadius; dx++){
+            if(Math.hypot(dx, dy) <= SWARM.creep.seedRadius) claimCreepTile(cx+dx, cy+dy);
+          }
         }
       }
-    }
 
-    // starting workers — idle until you build somewhere for them to work
-    for(let i=0;i<3;i++){
-      const spot = findFreeSpotNear(cx, cy, 4) || {gx:cx, gy:cy};
-      createVillager(spot.gx, spot.gy);
-    }
+      // starting workers — idle until you build somewhere for them to work
+      for(let i=0;i<3;i++){
+        const spot = findFreeSpotNear(cx, cy, 4) || {gx:cx, gy:cy};
+        createVillager(spot.gx, spot.gy);
+      }
 
-    // bandit camps take root on the frontier from day one
-    spawnBanditCamps();
+      // bandit camps take root on the frontier from day one
+      spawnBanditCamps();
+    }
 
     this.cameras.main.setBounds(0,0, MAP_W*TILE, MAP_H*TILE);
     this.cameras.main.centerOn(cx*TILE, cy*TILE);
@@ -317,6 +327,13 @@ class MainScene extends Phaser.Scene {
       economyTick();
     }
 
+    // silent autosave
+    this.lastSaveAt = (this.lastSaveAt || 0) + delta;
+    if(this.lastSaveAt >= SAVE_INTERVAL_MS){
+      this.lastSaveAt = 0;
+      saveGame();
+    }
+
     // the creep breathes: one growth pulse per interval (swarm only)
     if(state.faction === 'swarm'){
       this.lastCreepAt = (this.lastCreepAt || 0) + delta;
@@ -429,12 +446,13 @@ window.addEventListener('DOMContentLoaded', ()=>{
     console.error('Icon draw failed (non-fatal):', err);
   }
 
-  const bootGame = (faction)=>{
+  const bootGame = (faction, snapshot)=>{
     try {
       if(typeof Phaser === 'undefined'){
         throw new Error('The Phaser game engine failed to load from the CDN (cdnjs.cloudflare.com). Check your internet connection, then reload this page.');
       }
       applyFaction(faction); // must run before the world builds — it rewrites the def tables
+      pendingRestoreSnapshot = snapshot || null;
       document.getElementById('overlay').style.display = 'none';
       const config = {
         type: Phaser.AUTO,
@@ -446,12 +464,23 @@ window.addEventListener('DOMContentLoaded', ()=>{
         scene: [MainScene],
       };
       new Phaser.Game(config);
+      window.addEventListener('beforeunload', saveGame);
     } catch(err){
       showFatalError(err.message || String(err));
     }
   };
-  document.getElementById('startBtn').addEventListener('click', ()=> bootGame('human'));
-  document.getElementById('startSwarmBtn').addEventListener('click', ()=> bootGame('swarm'));
+  document.getElementById('startBtn').addEventListener('click', ()=> { clearSavedGame(); bootGame('human'); });
+  document.getElementById('startSwarmBtn').addEventListener('click', ()=> { clearSavedGame(); bootGame('swarm'); });
+
+  const continueBtn = document.getElementById('continueBtn');
+  if(hasSavedGame()){
+    continueBtn.style.display = '';
+    continueBtn.addEventListener('click', ()=>{
+      const snapshot = loadSavedGame();
+      if(!snapshot){ continueBtn.style.display = 'none'; return; } // corrupt/unreadable — fall back to the faction picker
+      bootGame(snapshot.faction, snapshot);
+    });
+  }
 
   document.getElementById('raidBtn').addEventListener('click', callRaidNow);
   document.getElementById('recallBtn').addEventListener('click', toggleRecall);

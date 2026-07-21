@@ -153,11 +153,17 @@ function isTileFreeForUnit(gx, gy, mover){
 }
 
 function positionUnitVisuals(u, cx, cy){
+  // small-bodied units (zerglings) pull their ring & HP bar in proportionally
+  // so the UI hugs the tiny sprite instead of floating full-size around it.
+  const s = u.visualScale || 1;
   u.sprite.setPosition(cx, cy);
-  if(u.marker) u.marker.setPosition(cx, cy+9);
+  if(u.marker) u.marker.setPosition(cx, cy+9*s);
   if(u.hpBarBg){
-    u.hpBarBg.setPosition(cx, cy-18);
-    u.hpBarFg.setPosition(cx-(TILE-10)/2, cy-18);
+    u.hpBarBg.setPosition(cx, cy-18*s);
+    // hpBarFg is left-anchored (origin x=0); offset by its SCALED half-width
+    // so the bar stays centered under the body (its .width is still set to
+    // the full TILE-10 fraction elsewhere — setScale shrinks the render)
+    u.hpBarFg.setPosition(cx-(TILE-10)*s/2, cy-18*s);
   }
 }
 
@@ -224,6 +230,9 @@ function createSwordsman(gx, gy){
   const u = {
     id: unitIdCounter++, type:'swordsman', gx, gy, tx:gx, ty:gy,
     hp, maxHp: hp, lastAttackAt: 0, moving:false, orderQueue: [],
+    // zerglings are little swarmy things — scale the whole visual (body +
+    // ring + HP bar) down. Humans keep full size (visualScale 1).
+    visualScale: swarm ? (SWARM.zergling.scale || 1) : 1,
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   u.marker = scene.add.ellipse(cx, cy+9, 20, 9, 0x22848a, 0.55).setStrokeStyle(1, 0x9fe8e0, 0.9).setDepth(3);
@@ -232,6 +241,11 @@ function createSwordsman(gx, gy){
   u.sprite = scene.add.image(cx, cy, 'tiles', swarm ? FRAME.zergling_quad : FRAME.enemy_swordsman).setDepth(4).setTint(u.baseTint);
   u.hpBarBg = scene.add.rectangle(cx, cy-18, TILE-10, 4, 0x2a1c10).setDepth(5).setVisible(false);
   u.hpBarFg = scene.add.rectangle(cx-(TILE-10)/2, cy-18, TILE-10, 4, 0x6bbf59).setOrigin(0,0.5).setDepth(6).setVisible(false);
+  if(u.visualScale !== 1){
+    const s = u.visualScale;
+    u.sprite.setScale(s); u.marker.setScale(s); u.hpBarBg.setScale(s); u.hpBarFg.setScale(s);
+    positionUnitVisuals(u, cx, cy); // reflow ring/HP-bar offsets to the smaller body
+  }
   state.units.push(u);
   return u;
 }

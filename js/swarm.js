@@ -26,7 +26,7 @@ const SWARM = {
   corpseBiomass: 6,             // a dead human dissolves into this much
   outpostLoot: 130,             // biomass windfall for razing a human outpost
   upkeepPerBuildingPerTick: 0.02, // the hive feeds its growths (biomass)
-  zergling: { hp: 45, cost: {food:20}, pair: true }, // weaker, cheaper, comes in twos
+  zergling: { hp: 45, cost: {food:20}, pair: true, scale: 0.35 }, // weaker, cheaper, comes in twos — and small, swarmy things (0.35x body)
   drone: { cost: 10 }, // cheap and disposable — every structure consumes one on
                         // top of its own biomass cost, so drones must stay
                         // far cheaper than the human villager they're reskinned from

@@ -570,7 +570,9 @@ function tryPlaceBuilding(type, gx, gy){
   // swarm structures MORPH from a drone — the drone dissolves into the growth
   let morphDrone = null;
   if(state.faction === 'swarm' && !def.isRoad){
-    morphDrone = pickWorkerFor({gx, gy});
+    // a selected drone (busy harvesting included) is the deliberate morpher;
+    // otherwise fall back to the nearest idle one
+    morphDrone = explicitlySelectedWorker({gx, gy}) || pickWorkerFor({gx, gy});
     if(!morphDrone){
       flashWaveBanner('No drone free to morph — birth more at the Hive!');
       return;
@@ -593,11 +595,22 @@ function tryPlaceBuilding(type, gx, gy){
   newBuilding.awaitingBuilder = true; // nothing happens until a builder arrives
   if(newBuilding.sprite && newBuilding.sprite.setAlpha) newBuilding.sprite.setAlpha(0.3); // fainter than the "actively building" 0.55 — a bare foundation
   if(morphDrone){
+    unassignVillager(morphDrone); // fully drop any harvest job before morphing
     morphDrone.buildTaskId = newBuilding.id;
     morphDrone.tx = gx; morphDrone.ty = gy; morphDrone.moving = true;
-    morphDrone.assignedBuildingId = null; morphDrone.gatherWorking = false; morphDrone.gatherPhase = null;
   } else {
-    autoAssignIdleVillagers(); // humans: dispatch an idle villager right now if one's free
+    // humans: an explicitly SELECTED villager is the deliberate builder —
+    // pull them off whatever they're doing (harvesting included) and send
+    // them. Only with nothing eligible selected do we auto-dispatch the
+    // nearest idle villager instead.
+    const selBuilder = explicitlySelectedWorker({gx, gy});
+    if(selBuilder){
+      unassignVillager(selBuilder);
+      selBuilder.buildTaskId = newBuilding.id;
+      selBuilder.tx = gx; selBuilder.ty = gy; selBuilder.moving = true; selBuilder.playerOrder = true;
+    } else {
+      autoAssignIdleVillagers(); // dispatch an idle villager right now if one's free
+    }
   }
   updateHUD();
   refreshBuildBar();
@@ -898,6 +911,29 @@ function pickWorkerFor(location){
     if(d < bestD){ bestD = d; best = u; }
   }
   return best;
+}
+
+// An EXPLICITLY selected villager/drone is a deliberate choice of who should
+// act — so unlike pickWorkerFor (which only auto-grabs an IDLE unit near the
+// job), this returns the selection even when it's busy HARVESTING, so placing
+// a building pulls that worker off gathering to build it (the standard RTS
+// "the worker I selected builds what I place"). It still won't grab one that's
+// already building something — that's what stops a chain of placed walls from
+// yanking the same builder off each segment. With a group selected, the
+// nearest eligible member to the job wins.
+function explicitlySelectedWorker(location){
+  const eligible = (u)=> u && u.type==='villager' && u.hp>0 && !u.buildTaskId && !u.inTC && !u.enteringTC;
+  if(state.selectedGroup && state.selectedGroup.length){
+    let best=null, bd=Infinity;
+    for(const u of state.selectedGroup){
+      if(!eligible(u)) continue;
+      const d = Phaser.Math.Distance.Between(u.gx, u.gy, location.gx, location.gy);
+      if(d<bd){ bd=d; best=u; }
+    }
+    return best;
+  }
+  const sel = (state.selected && state.selected.type==='unit') ? state.selected.ref : null;
+  return eligible(sel) ? sel : null;
 }
 
 function autoAssignIdleVillagers(){

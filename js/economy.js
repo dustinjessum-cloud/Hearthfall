@@ -90,7 +90,7 @@ const BUILD_TIME = {
   house:8000, farm:6000, lumber_camp:8000, quarry:8000,
   granary:10000, warehouse:10000, mill:12000, bakery:12000, market:12000,
   mason:10000, apothecary:10000, well:5000, tavern:10000,
-  wall:3000, tower:15000, barracks:15000,
+  wall:3000, gate:3000, tower:15000, barracks:15000,
 };
 function underConstruction(b){ return (b.buildMs||0) > 0; }
 

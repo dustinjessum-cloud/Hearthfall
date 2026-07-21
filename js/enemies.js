@@ -368,14 +368,13 @@ function updateCombat(delta, time){
     const def = BUILD_DEFS[b.type];
     if(underConstruction(b)) continue;
     if(def && def.attack){
-      // an unmanned tower still loses arrows over the wall, but weakly —
-      // garrison a villager on it for full damage
+      // an unmanned tower still looses arrows over the wall, but weakly.
+      // garrisoning defenders at its base add damage: archers fire their
+      // own bows (+3 each), villagers just help work it (+2 each), up to 3.
       let dmg = def.attack.damage;
       if(b.type==='tower' && def.attack.damageLow!==undefined){
-        const crew = towerGarrisonCount(b);
-        let bonus = 0;
-        for(let ci=1; ci<crew; ci++) bonus += TOWER_EXTRA_DMG[ci-1] || 0;
-        dmg = crew > 0 ? def.attack.damage + bonus : def.attack.damageLow;
+        const g = towerGarrison(b);
+        dmg = def.attack.damageLow + g.archers*TOWER_GARRISON_DMG.archer + g.villagers*TOWER_GARRISON_DMG.villager;
       }
       attackers.push({ent:b, atk:{range:def.attack.range, damage:dmg, cooldownMs:def.attack.cooldownMs}, gx:b.gx, gy:b.gy});
     }

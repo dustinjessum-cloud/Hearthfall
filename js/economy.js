@@ -39,6 +39,7 @@ function recallAllWorkers(){
   let n = 0;
   for(const u of state.units){
     if(!isWorker(u) || u.hp<=0 || u.inTC || u.enteringTC) continue;
+    if(onTowerDuty(u)) continue; // tower defenders hold their post through a recall
     if(garrisonVillagerInTC(u, true)) n++;
   }
   if(n) flashWaveBanner(`${n} worker${n>1?'s':''} run for the Town Hall!`);
@@ -686,11 +687,13 @@ function updateGatherer(u, delta){
   if(!def){ unassignVillager(u); return; } // never gather at a non-standard building
   const atHome = Math.round(u.gx)===b.gx && Math.round(u.gy)===b.gy;
 
-  // Garrison duty: a villager assigned to a tower just mans it (the tower
-  // shoots at full strength while they're up there — see updateCombat).
-  // Garrisons do NOT retreat during raids — holding the tower IS their job.
+  // Garrison duty: a villager assigned to a tower mans it from the adjacent
+  // base (the tower blocks its own tile, so they can't stand on it). Being
+  // within one tile counts as posted — see towerGarrison. Garrisons do NOT
+  // retreat during raids — holding the tower IS their job.
   if(b.type==='tower'){
-    if(!u.moving && !atHome){ u.tx=b.gx; u.ty=b.gy; u.moving=true; }
+    const atPost = Math.max(Math.abs(Math.round(u.gx)-b.gx), Math.abs(Math.round(u.gy)-b.gy)) <= 1;
+    if(!atPost && !u.moving){ u.tx=b.gx; u.ty=b.gy; u.moving=true; } // walk to the base; blocked off the tile, settles adjacent
     u.gatherWorking = false;
     return;
   }
@@ -829,22 +832,36 @@ function findProductionBuildingFor(gx, gy){
   return null;
 }
 
-// How many defenders are physically standing on the tower right now
-// (assigned villagers + garrisoning archers, capped at 3). The first
-// mans the murder holes properly; the second and third just add a little.
-const TOWER_EXTRA_DMG = [2, 1]; // 2nd defender +2, 3rd only +1
-function towerGarrisonCount(tower){
-  let n = 0;
+// Tower garrison. Defenders can't stand ON the tower (it blocks the tile),
+// so they man it from the ADJACENT base — anyone assigned/garrisoned to the
+// tower and within one tile counts. Up to 3 defenders; archers fire their
+// own bows (bigger bonus), villagers just help work it (a small bonus).
+const TOWER_GARRISON_CAP = 3;
+const TOWER_GARRISON_DMG = { archer: 3, villager: 2 };
+function towerGarrison(tower){
+  let archers = 0, villagers = 0;
   for(const u of state.units){
     if(u.hp<=0) continue;
-    const onIt = Math.round(u.gx)===tower.gx && Math.round(u.gy)===tower.gy;
-    if(!onIt) continue;
-    if(u.type==='villager' && u.assignedBuildingId===tower.id) n++;
-    else if(u.type==='archer' && u.garrisonId===tower.id) n++;
+    const atPost = Math.max(Math.abs(Math.round(u.gx)-tower.gx), Math.abs(Math.round(u.gy)-tower.gy)) <= 1;
+    if(!atPost) continue;
+    if(u.type==='archer' && u.garrisonId===tower.id) archers++;
+    else if(u.type==='villager' && u.assignedBuildingId===tower.id) villagers++;
   }
-  return Math.min(n, 3);
+  // cap total defenders; archers claim slots first (they add more)
+  archers = Math.min(archers, TOWER_GARRISON_CAP);
+  villagers = Math.min(villagers, TOWER_GARRISON_CAP - archers);
+  return { archers, villagers, total: archers + villagers };
 }
+function towerGarrisonCount(tower){ return towerGarrison(tower).total; }
 function isGarrisoned(tower){ return towerGarrisonCount(tower) > 0; }
+
+// A villager posted to a tower is on defensive duty — exempt from the
+// Recall Workers sweep (see recallAllWorkers) and from gathering.
+function onTowerDuty(u){
+  if(u.type!=='villager' || u.assignedBuildingId==null) return false;
+  const b = buildingById(u.assignedBuildingId);
+  return !!(b && b.type==='tower' && b.hp>0);
+}
 
 function assignedWorkerOf(building){
   return state.units.find(u=> u.type==='villager' && u.hp>0 && u.assignedBuildingId===building.id) || null;

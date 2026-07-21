@@ -662,13 +662,11 @@ function refreshInfoPanel(){
   if(type==='building' && ref.type==='tower'){
     const gEl = document.getElementById('infoGarrison');
     if(gEl){
-      const crew = towerGarrisonCount(ref);
-      let bonus = 0;
-      for(let ci=1; ci<crew; ci++) bonus += TOWER_EXTRA_DMG[ci-1] || 0;
-      const dmgNow = crew > 0 ? BUILD_DEFS.tower.attack.damage + bonus : BUILD_DEFS.tower.attack.damageLow;
-      gEl.textContent = crew > 0
-        ? `Garrison: ${crew}/3 — ${dmgNow} damage${crew<3 ? ' (more defenders = more damage)' : ' (full crew)'}`
-        : `No garrison — ${BUILD_DEFS.tower.attack.damageLow} damage only. Right-click here with villagers or archers (up to 3).`;
+      const g = towerGarrison(ref);
+      const dmgNow = BUILD_DEFS.tower.attack.damageLow + g.archers*TOWER_GARRISON_DMG.archer + g.villagers*TOWER_GARRISON_DMG.villager;
+      gEl.textContent = g.total > 0
+        ? `Garrison: ${g.total}/${TOWER_GARRISON_CAP} (${g.archers} archer${g.archers!==1?'s':''}, ${g.villagers} villager${g.villagers!==1?'s':''}) — ${dmgNow} damage${g.total<TOWER_GARRISON_CAP ? ' (more defenders = more damage)' : ' (full crew)'}`
+        : `No garrison — ${BUILD_DEFS.tower.attack.damageLow} damage only. Right-click here with villagers or archers (up to ${TOWER_GARRISON_CAP}).`;
     }
   }
   if(type==='building' && STORAGE_LEVELS[ref.type]){

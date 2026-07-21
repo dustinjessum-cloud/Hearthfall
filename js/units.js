@@ -681,13 +681,14 @@ function updateUnits(delta){
       // assigned builder, just standing here — nothing to do this frame
     }
     if(u.type==='villager' && u.assignedBuildingId && !u.enteringTC) updateGatherer(u, delta);
-    // garrisoning archers walk to their tower and hold it
+    // garrisoning archers walk to their tower and hold it from the adjacent
+    // base (the tower blocks its own tile, so they can't stand on it)
     if(u.type==='archer' && u.garrisonId){
       const t = buildingById(u.garrisonId);
       if(!t || t.hp<=0 || t.type!=='tower'){ u.garrisonId = null; }
       else {
-        const onTower = Math.round(u.gx)===t.gx && Math.round(u.gy)===t.gy;
-        if(!onTower && !u.moving){ u.tx = t.gx; u.ty = t.gy; u.moving = true; }
+        const atPost = Math.max(Math.abs(Math.round(u.gx)-t.gx), Math.abs(Math.round(u.gy)-t.gy)) <= 1;
+        if(!atPost && !u.moving){ u.tx = t.gx; u.ty = t.gy; u.moving = true; }
       }
     }
     // repairmen: patch the assigned wall/tower; auto-seek damage when idle

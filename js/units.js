@@ -363,11 +363,16 @@ function commandUnitMove(u, gx, gy){
 // property of the job, not a bug in the queue.
 // ---------------------------------------------------------------------
 
-// Figure out what right-clicking (gx,gy) with unit u WOULD do, without
-// doing it — used for both the immediate-order path and shift-queueing.
-// Returns null if there's nothing valid to do there (matches the old
-// silent-no-op behavior for e.g. right-clicking an occupied/blocked tile).
-function resolveOrder(u, gx, gy){
+// The building/garrison/repair half of order resolution — deliberately
+// ignores whether the unit could physically stand on (gx,gy), since a
+// building order targets the STRUCTURE, not the tile. Returns null if
+// nothing building-related applies here for this unit type. Split out from
+// resolveOrder so group orders (below) can tell "this unit has somewhere
+// specific to go" apart from "this unit just needs a nearby tile to walk
+// to" — they can't all stand on the exact clicked tile, but they should
+// never be blocked from building/working/repairing just because that
+// single tile happens to be occupied by a groupmate.
+function resolveBuildingOrder(u, gx, gy){
   const bAt = occAt(gx, gy);
   if(u.type==='villager'){
     if(bAt && bAt.isCore) return {kind:'garrisonTC'};
@@ -376,18 +381,28 @@ function resolveOrder(u, gx, gy){
     }
     const targetBuilding = findProductionBuildingFor(gx, gy);
     if(targetBuilding) return {kind:'work', buildingId: targetBuilding.id};
-    if(isTileFreeForUnit(gx, gy, u)) return {kind:'move', gx, gy};
     return null;
   }
   if(u.type==='repairman'){
     if(bAt && (bAt.type==='wall' || bAt.type==='tower') && bAt.hp < bAt.maxHp) return {kind:'repair', buildingId: bAt.id};
-    return {kind:'move', gx, gy};
+    return null;
   }
   if(u.type==='archer'){
     if(bAt && bAt.type==='tower' && bAt.hp>0) return {kind:'garrisonTower', buildingId: bAt.id};
-    return {kind:'move', gx, gy};
+    return null;
   }
-  return {kind:'move', gx, gy};
+  return null;
+}
+
+// Figure out what right-clicking (gx,gy) with unit u WOULD do, without
+// doing it — used for both the immediate-order path and shift-queueing.
+// Returns null if there's nothing valid to do there (matches the old
+// silent-no-op behavior for e.g. right-clicking an occupied/blocked tile).
+function resolveOrder(u, gx, gy){
+  const order = resolveBuildingOrder(u, gx, gy);
+  if(order) return order;
+  if(isTileFreeForUnit(gx, gy, u)) return {kind:'move', gx, gy};
+  return null;
 }
 
 // Actually carry out a resolved order. Building/tile references are
@@ -521,25 +536,61 @@ function computeGroupTargets(units, gx, gy){
   return targets;
 }
 
-function commandGroupMove(units, gx, gy){
-  const targets = computeGroupTargets(units, gx, gy);
-  units.forEach((u, i)=>{
-    if(u.hp<=0) return;
-    const t = targets.length ? targets[i % targets.length] : {gx, gy};
-    if(u.type==='villager') unassignVillager(u);
-    if(u.type==='archer') u.garrisonId = null;
-    if(u.type==='repairman') u.repairTargetId = null;
-    u.tx = t.gx; u.ty = t.gy; u.moving = true; u.playerOrder = true;
+// build/garrisonTC are single-assignee jobs — only one unit in a group
+// should actually claim one (executeOrder's own "bump the previous
+// builder" logic would otherwise have groupmates fight over it, with only
+// the last one processed actually winning). work/garrisonTower/repair have
+// real worker caps (or just don't conflict), so every eligible groupmate
+// is let through for those.
+const SINGLE_ASSIGNEE_KINDS = new Set(['build', 'garrisonTC']);
+function resolveGroupOrders(units, gx, gy){
+  const claimed = new Set();
+  return units.map(u=>{
+    const order = resolveBuildingOrder(u, gx, gy);
+    if(order && SINGLE_ASSIGNEE_KINDS.has(order.kind)){
+      const key = order.kind + ':' + (order.buildingId != null ? order.buildingId : 'core');
+      if(claimed.has(key)) return null; // a groupmate already has this — fall back to a spread move
+      claimed.add(key);
+    }
+    return order;
   });
 }
 
-// shift-click on a group: same spread, but queued behind whatever each
-// unit is currently doing instead of interrupting it
+// A group right-click checks EACH unit for a building order first (build/
+// work/garrison/repair — whichever applies to that unit's type) and only
+// falls back to a plain move for whoever has nothing building-related to
+// do there (or already lost a single-assignee job to a groupmate). Only
+// the movers get spread across nearby tiles — they can't all stand on the
+// one clicked tile, but that's no reason to block a villager from being
+// sent to build/work the thing that IS there.
+function commandGroupMove(units, gx, gy){
+  const live = units.filter(u=>u.hp>0);
+  const orders = resolveGroupOrders(live, gx, gy);
+  const movers = live.filter((u,i)=> !orders[i]);
+  const targets = computeGroupTargets(movers, gx, gy);
+  let mi = 0;
+  live.forEach((u, i)=>{
+    const order = orders[i];
+    if(order){ executeOrder(u, order); return; }
+    const t = targets.length ? targets[mi % targets.length] : {gx, gy};
+    mi++;
+    executeOrder(u, {kind:'move', gx:t.gx, gy:t.gy});
+  });
+}
+
+// shift-click on a group: same per-unit resolution, but queued behind
+// whatever each unit is currently doing instead of interrupting it
 function queueGroupMove(units, gx, gy){
-  const targets = computeGroupTargets(units, gx, gy);
-  units.forEach((u, i)=>{
-    if(u.hp<=0) return;
-    const t = targets.length ? targets[i % targets.length] : {gx, gy};
+  const live = units.filter(u=>u.hp>0);
+  const orders = resolveGroupOrders(live, gx, gy);
+  const movers = live.filter((u,i)=> !orders[i]);
+  const targets = computeGroupTargets(movers, gx, gy);
+  let mi = 0;
+  live.forEach((u, i)=>{
+    const order = orders[i];
+    if(order){ queueOrder(u, order); return; }
+    const t = targets.length ? targets[mi % targets.length] : {gx, gy};
+    mi++;
     queueOrder(u, {kind:'move', gx:t.gx, gy:t.gy});
   });
 }

@@ -636,7 +636,7 @@ function tryPlaceBuilding(type, gx, gy){
     // otherwise fall back to the nearest idle one
     morphDrone = explicitlySelectedWorker({gx, gy}) || pickWorkerFor({gx, gy});
     if(!morphDrone){
-      flashWaveBanner('No drone free to morph — birth more at the Hive!');
+      flashWaveBanner('No ghoul free to raise it — grow more at the Necropolis!');
       return;
     }
   }
@@ -1322,7 +1322,7 @@ function updateProduction(delta){
         if(b.rallyPoint) sendToRally(twin, b);
       }
       if(scene.cameras && scene.cameras.main.pan) scene.cameras.main.pan(spot.gx*TILE+TILE/2, spot.gy*TILE+TILE/2, 500, 'Sine.easeInOut');
-      flashWaveBanner(state.faction==='swarm' && kind==='swordsman' ? 'Two Zerglings hatch, hissing!' : `${kind==='archer'?'Archer':'Swordsman'} trained and ready!`);
+      flashWaveBanner(state.faction==='swarm' && kind==='swordsman' ? 'Two Skeletons claw up from the grave!' : `${kind==='archer'?'Archer':'Swordsman'} trained and ready!`);
     } else if(kind==='repairman'){
       newUnit = createRepairman(spot.gx, spot.gy);
       if(scene.cameras && scene.cameras.main.pan) scene.cameras.main.pan(spot.gx*TILE+TILE/2, spot.gy*TILE+TILE/2, 500, 'Sine.easeInOut');

@@ -20,8 +20,8 @@ const SWARM = {
     spreadMs: 900,              // one growth pulse this often
     tilesPerPulse: 3,           // frontier tiles claimed per pulse
     incomePerTilePerTick: 0.008,// passive biomass absorbed per creep tile
-    tileTint: 0x9a6bd4,         // the purple stain
-    roadTint: 0x7a4bb4,         // slime trails read darker than raw creep
+    tileTint: 0x82945a,         // the sickly grave-green of spreading blight
+    roadTint: 0x5f6b45,         // bone paths read darker than raw blight
   },
   corpseBiomass: 6,             // a dead human dissolves into this much
   outpostLoot: 130,             // biomass windfall for razing a human outpost
@@ -32,32 +32,32 @@ const SWARM = {
                         // far cheaper than the human villager they're reskinned from
   spitter:  { cost: {food:25} },
   broodmother: { cost: 60, reviveCost: 75, burstCount: 2, burstLifeMs: 20000, burstCooldownMs: 9000 },
-  unitTints: { villager: 0xc79bff, archer: 0x9fe8a0, swordsman: 0xff9bd4, captain: 0xb478ff },
+  unitTints: { villager: 0xa8b884, archer: 0x9fd07a, swordsman: 0xe2ddc4, captain: 0x9a8fb0 }, // ghoul (grey-green), plaguebearer (bilious), skeleton (bone-white), necromancer (deathly violet)
 };
 
 // Word-level re-theming: every banner and info-panel string passes through
 // this map in swarm mode, so the human-flavored copy deep in the UI reads
 // hive-flavored without rewriting fifty call sites. Longest entries first.
 const SWARM_TEXT = [
-  ['A Minotaur strides in, scythe in hand, to lead your soldiers!', 'The Broodmother claws free of the Hive, her brood-sacs pulsing!'],
-  ['The Minotaur returns to the field!', 'The Broodmother is reborn from the deep creep!'],
-  ['No one settles in a starving town — get food first!', 'The Hive cannot birth while it starves — feed it biomass!'],
-  ['No one apprentices in a starving town!', 'The starving Hive births nothing!'],
-  ['Starving men make poor soldiers — get food first!', 'Starving broods cannot be spawned — feed the Hive!'],
-  ['Famine! Your people are starving.', 'The Swarm starves! Broods are withering.'],
-  ['A new villager joins the town!', 'A Drone wriggles out of the Hive!'],
-  ['Population at cap — build more houses!', 'Brood limit reached — grow more Creep Tumors!'],
-  ['No wood for upkeep — your buildings are weathering!', 'No biomass to feed your growths — they are withering!'],
-  ['A villager reports for duty', 'A drone enters the birthing pool'],
+  ['A Minotaur strides in, scythe in hand, to lead your soldiers!', 'The Necromancer rises from the Necropolis, staff wreathed in grave-light!'],
+  ['The Minotaur returns to the field!', 'The Necromancer claws back from the grave!'],
+  ['No one settles in a starving town — get food first!', 'The Necropolis cannot raise the dead while it starves — feed it carrion!'],
+  ['No one apprentices in a starving town!', 'The starving Necropolis raises nothing!'],
+  ['Starving men make poor soldiers — get food first!', 'The dead cannot be raised without carrion — feed the Necropolis!'],
+  ['Famine! Your people are starving.', 'No carrion left — your dead are crumbling to dust!'],
+  ['A new villager joins the town!', 'A Ghoul claws up from the grave!'],
+  ['Population at cap — build more houses!', 'The dead are at their limit — raise more Grave Mounds!'],
+  ['No wood for upkeep — your buildings are weathering!', 'No carrion to sustain your growths — they are rotting away!'],
+  ['A villager reports for duty', 'A ghoul shambles from the pit'],
   ['Bandit camp destroyed!', 'Human outpost razed!'],
   ['Bandit camp', 'Human outpost'], ['bandit camp', 'human outpost'],
-  ['The Minotaur', 'The Broodmother'], ['Minotaur', 'Broodmother'],
-  ['Town Hall', 'Hive'], ['Town Center', 'Hive'],
-  ['Villagers', 'Drones'], ['villagers', 'drones'], ['Villager', 'Drone'], ['villager', 'drone'],
-  ['Swordsman', 'Zergling'], ['swordsman', 'zergling'], ['Archer', 'Spitter'], ['archer', 'spitter'],
-  ['soldiers', 'broods'], ['Soldiers', 'Broods'],
-  ['wood', 'biomass'], ['gold', 'biomass'], ['food', 'biomass'],
-  ['town', 'hive'], ['Town', 'Hive'],
+  ['The Minotaur', 'The Necromancer'], ['Minotaur', 'Necromancer'],
+  ['Town Hall', 'Necropolis'], ['Town Center', 'Necropolis'],
+  ['Villagers', 'Ghouls'], ['villagers', 'ghouls'], ['Villager', 'Ghoul'], ['villager', 'ghoul'],
+  ['Swordsman', 'Skeleton'], ['swordsman', 'skeleton'], ['Archer', 'Plaguebearer'], ['archer', 'plaguebearer'],
+  ['soldiers', 'risen'], ['Soldiers', 'Risen'],
+  ['wood', 'carrion'], ['gold', 'carrion'], ['food', 'carrion'],
+  ['town', 'necropolis'], ['Town', 'Necropolis'],
 ];
 
 function applySkinText(msg){
@@ -174,7 +174,7 @@ function trySpreadTumor(parent){
   const child = createBuilding('creep_tumor', spot.gx, spot.gy, BUILD_DEFS.creep_tumor);
   child.creepGen = nextGen;
   if(child.sprite && child.sprite.setScale) child.sprite.setScale(1 - nextGen*0.15); // visibly smaller each generation
-  if(scene && scene.add) floatResourceText(spot.gx, spot.gy, 'creep spreads...', '#c9a0ff');
+  if(scene && scene.add) floatResourceText(spot.gx, spot.gy, 'the blight spreads...', '#b6c98a');
 }
 
 function updateTumorSpread(delta){
@@ -228,21 +228,21 @@ function applyFaction(faction){
   state.faction = faction;
   if(faction !== 'swarm') return;
 
-  // -- building roster: rename/re-cost the types the swarm keeps --
-  BUILD_DEFS.lumber_camp = { name:'Feeding Pit', cost:{food:15}, hp:50, frame:'lumber_camp', tint:0xb478ff, produces:{food:4}, needsWorker:true, bonusNear:'forest' };
-  BUILD_DEFS.granary     = { name:'Biomass Pool', cost:{food:25}, hp:80, frame:'granary', tint:0xb478ff, nearTC:true };
-  BUILD_DEFS.barracks    = { name:'Spawning Pool', cost:{food:35}, hp:100, frame:'wall_gate', tint:0xb478ff, trains:'archer' };
-  BUILD_DEFS.tower       = { name:'Spine Colony', cost:{food:30}, hp:150, frame:'tower', tint:0xd478ff, blocksPath:true, garrison:true, attack:{range:4.2,damage:7,damageLow:4,cooldownMs:900} };
-  BUILD_DEFS.road        = { name:'Slime Trail', cost:{food:2}, frame:'dirt', tint:SWARM.creep.roadTint, isRoad:true };
-  BUILD_DEFS.creep_tumor = { name:'Creep Tumor', cost:{food:18}, hp:40, frame:'farm', tint:0x9a5fd0, popCap:2 };
+  // -- building roster: rename/re-cost the types the undead keep --
+  BUILD_DEFS.lumber_camp = { name:'Charnel Pit', cost:{food:15}, hp:50, frame:'lumber_camp', tint:0x9aae78, produces:{food:4}, needsWorker:true, bonusNear:'forest' };
+  BUILD_DEFS.granary     = { name:'Ossuary', cost:{food:25}, hp:80, frame:'granary', tint:0x9aae78, nearTC:true };
+  BUILD_DEFS.barracks    = { name:'Mass Grave', cost:{food:35}, hp:100, frame:'wall_gate', tint:0x9aae78, trains:'archer' };
+  BUILD_DEFS.tower       = { name:'Bone Spire', cost:{food:30}, hp:150, frame:'tower', tint:0xb0b49a, blocksPath:true, garrison:true, attack:{range:4.2,damage:7,damageLow:4,cooldownMs:900} };
+  BUILD_DEFS.road        = { name:'Bone Path', cost:{food:2}, frame:'dirt', tint:SWARM.creep.roadTint, isRoad:true };
+  BUILD_DEFS.creep_tumor = { name:'Grave Mound', cost:{food:18}, hp:40, frame:'farm', tint:0x82945a, popCap:2 };
   BUILD_TIME.creep_tumor = 5000;
-  CARRY.lumber_camp = { key:'food', amt:6 }; // feeding pits haul biomass home
+  CARRY.lumber_camp = { key:'food', amt:6 }; // charnel pits haul carrion home
 
-  // -- build bar shows only the hive roster --
+  // -- build bar shows only the undead roster --
   BUILD_CATEGORIES.splice(0, BUILD_CATEGORIES.length,
-    { key:'economy', label:'Growth',  types:['lumber_camp','creep_tumor','road','wildstone_refinery'] },
-    { key:'trade',   label:'Storage', types:['granary'] },
-    { key:'defense', label:'Swarm',   types:['tower','barracks'] },
+    { key:'economy', label:'Blight',   types:['lumber_camp','creep_tumor','road','wildstone_refinery'] },
+    { key:'trade',   label:'Storage',  types:['granary'] },
+    { key:'defense', label:'Undead',   types:['tower','barracks'] },
   );
 
   // -- unit costs collapse to pure biomass --
@@ -259,10 +259,10 @@ function applyFaction(faction){
   HERO.slash.cooldownMs = SWARM.broodmother.burstCooldownMs; // K births broodlings — slower than a slash
 
   // -- evolutions: different bonus shapes for the swarm, biomass-only cost --
-  EVOLUTIONS.swordsman.name = 'Chitinous Plating';
+  EVOLUTIONS.swordsman.name = 'Bonewrought Armor';
   EVOLUTIONS.swordsman.hpBonus = 10; EVOLUTIONS.swordsman.dmgBonus = 0;
   EVOLUTIONS.swordsman.cost = { wildstone:15, food:35 };
-  EVOLUTIONS.archer.name = 'Volatile Acid';
+  EVOLUTIONS.archer.name = 'Necrotic Bile';
   EVOLUTIONS.archer.hpBonus = 0; EVOLUTIONS.archer.dmgBonus = 4; EVOLUTIONS.archer.rangeBonus = 0;
   EVOLUTIONS.archer.cost = { wildstone:15, food:30 };
 
@@ -281,22 +281,22 @@ function applyFaction(faction){
     if(el) el.style.display = 'none';
   }
   const foodEl = document.getElementById('resFood');
-  if(foodEl) foodEl.title = 'Biomass — the one hunger. Feeds every brood, births every unit, grows every structure. At zero, the Swarm withers.';
+  if(foodEl) foodEl.title = 'Carrion — the one hunger. Sustains every risen thing, raises every unit, grows every structure. At zero, the dead crumble to dust.';
   const workersEl = document.getElementById('resWorkers');
-  if(workersEl) workersEl.title = 'Idle/harvesting drones';
+  if(workersEl) workersEl.title = 'Idle/harvesting ghouls';
   const soldiersEl = document.getElementById('resSoldiers');
-  if(soldiersEl) soldiersEl.title = 'Fighting broods — zerglings & spitters';
+  if(soldiersEl) soldiersEl.title = 'The risen dead — skeletons & plaguebearers';
 
   // -- swap the tutorial hint for a hive-flavored one --
   const hint = document.getElementById('hint');
   if(hint){
     hint.innerHTML = '<button id="hintClose" title="Dismiss">✕</button>' +
-      'THE SWARM: Creep (purple ground) spreads from your Hive and Creep Tumors — structures can only grow ON creep, and each one consumes a Drone to morph (the drone WALKS to the site first, then dissolves into the growth on arrival — placing a structure just reserves the spot). ' +
-      'Drones harvest forests into BIOMASS via Feeding Pits — biomass is your only resource: it feeds every brood each tick, births new units, and pays for everything. Every creep tile also absorbs a slow biomass trickle, so territory IS economy. ' +
-      'Dead humans dissolve into biomass where they fall — defense feeds you. Creep Tumors raise your brood cap (+2 each), and each one eventually grows a smaller child tumor of its own, extending your reach on its own — the chain shrinks and stops after a couple of generations. ' +
-      'Spawn Zerglings (cheap melee, birthed in PAIRS) and Spitters (ranged acid) at the Spawning Pool — each consumes a drone. Spine Colonies auto-attack; drones can crew them for extra damage. ' +
-      'Human knights raid on a timer, and fortified human OUTPOSTS on the frontier send constant patrols — raze one for a biomass windfall. ' +
-      'Birth the BROODMOTHER at the Hive: J fires a web toward the mouse, slowing whatever it hits by 20% for a few seconds. K births short-lived broodlings around her. She levels from kills near her and keeps her level through rebirth. Your Hive must not fall. NEW: a few remote WILDSTONE deposits dot the map (pinkish crystal) — once your Hive reaches level 3, morph a REFINERY directly onto one to start extracting it. Funds permanent EVOLUTIONS at the Spawning Pool: Chitinous Plating and Volatile Acid upgrade every Zergling/Spitter you have, forever.';
+      'THE UNDEAD: Blight (sickly green ground) spreads from your Necropolis and Grave Mounds — structures can only rise ON blighted ground, and each one consumes a Ghoul to raise (the ghoul WALKS to the site first, then is consumed into the growth on arrival — placing a structure just reserves the spot). ' +
+      'Ghouls harvest forests into CARRION via Charnel Pits — carrion is your only resource: it sustains every risen thing each tick, raises new units, and pays for everything. Every blighted tile also drinks a slow trickle of carrion from the land, so territory IS economy. ' +
+      'Dead humans rot into carrion where they fall — defense feeds you. Grave Mounds raise your undead cap (+2 each), and each one eventually spreads a smaller mound of its own, extending the blight on its own — the chain shrinks and stops after a couple of generations. ' +
+      'Raise Skeletons (cheap melee, clawing up in PAIRS) and Plaguebearers (ranged bile) at the Mass Grave — each consumes a ghoul. Bone Spires auto-attack; ghouls can crew them for extra damage. ' +
+      'Human knights raid on a timer, and fortified human OUTPOSTS on the frontier send constant patrols — raze one for a carrion windfall. ' +
+      'Raise the NECROMANCER at the Necropolis: J hurls a hex toward the mouse, slowing whatever it hits by 20% for a few seconds. K raises short-lived risen around the Necromancer. Gains power from kills nearby and keeps it through rebirth. Your Necropolis must not fall. NEW: a few remote WILDSTONE deposits dot the map (pale crystal) — once your Necropolis reaches level 3, raise a REFINERY directly onto one to start extracting it. Funds permanent EVOLUTIONS at the Mass Grave: Bonewrought Armor and Necrotic Bile upgrade every Skeleton/Plaguebearer you have, forever.';
     const hc = document.getElementById('hintClose');
     if(hc) hc.addEventListener('click', ()=>{ hint.style.display='none'; });
   }

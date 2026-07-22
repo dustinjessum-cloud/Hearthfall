@@ -462,7 +462,7 @@ function refreshInfoPanel(){
         ${isVillager ? `<div id="infoAssign" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         <div style="margin-top:6px;color:#d8c79a;">${isVillager
           ? 'Right-click a Farm/Lumber Camp/Quarry to assign them there, or an empty tile to send them there (unassigns).'
-          : (isHero ? (state.faction==='swarm' ? 'Right-click to move. J = fire a web toward the mouse, slowing the target 20% for a few seconds. K = birth broodlings. She gains XP from kills near her.'
+          : (isHero ? (state.faction==='swarm' ? 'Right-click to move. J = hurl a hex toward the mouse, slowing the target 20% for a few seconds. K = raise short-lived risen. Gains power from kills nearby.'
                                                 : 'Right-click to move. J = hurl javelin toward the mouse. K = slash everything adjacent. He gains XP from kills near him.')
                     : (ref.type==='repairman' ? 'Right-click a damaged Wall or Tower to repair it (costs wood). He works only on your orders.'
                     : 'Right-click a tile to move.'))}</div>`;
@@ -605,10 +605,10 @@ function refreshInfoPanel(){
         const swarmHero = state.faction==='swarm';
         capBtn.disabled = state.resources[swarmHero ? 'food' : 'gold'] < cost;
         capBtn.textContent = swarmHero
-          ? `${state.captainRecruited ? 'Rebirth' : 'Birth'} Broodmother (${cost}B)`
+          ? `${state.captainRecruited ? 'Raise anew' : 'Raise'} Necromancer (${cost}C)`
           : `${state.captainRecruited ? 'Revive' : 'Recruit'} Minotaur (${cost}G)`;
         capBtn.title = swarmHero
-          ? 'Manual hero. Broods within 3 tiles of her deal +25% damage. J fires a web toward the mouse, slowing the target 20% for a few seconds; K births short-lived broodlings.'
+          ? 'Manual hero. Risen within 3 tiles deal +25% damage. J hurls a hex toward the mouse, slowing the target 20% for a few seconds; K raises short-lived risen.'
           : 'Strong melee hero. Soldiers within 3 tiles of him deal +25% damage.';
       }
     }

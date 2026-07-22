@@ -153,7 +153,7 @@ function restoreGame(snapshot){
   for(const sb of snapshot.buildings){
     const override = sb.isCore
       ? (state.faction==='swarm'
-          ? {name:'Hive', hp:sb.maxHp, frame:'town_hall', size:sb.size||2, tint:0xb478ff}
+          ? {name:'Necropolis', hp:sb.maxHp, frame:'town_hall', size:sb.size||2, tint:0x9aae78}
           : {name:'Town Hall', hp:sb.maxHp, frame:'town_hall', size:sb.size||2})
       : Object.assign({}, BUILD_DEFS[sb.type], {hp: sb.maxHp});
     if(!override.frame){ console.error('Skipping unknown building type on restore:', sb.type); continue; }

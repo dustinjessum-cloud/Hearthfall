@@ -33,7 +33,7 @@ function heroThrowJavelin(){
   dx /= dist; dy /= dist;
   const j = { x: cap.gx, y: cap.gy, dx, dy, left: flight, kind: swarm ? 'web' : 'javelin' };
   j.sprite = scene.add.image(cap.gx*TILE+TILE/2, cap.gy*TILE+TILE/2, 'tiles', FRAME.arrow)
-    .setDepth(8).setTint(swarm ? 0xd0e8ff : 0xffd76b).setScale(1.3) // web reads pale/icy, javelin gold
+    .setDepth(8).setTint(swarm ? 0xbfe89a : 0xffd76b).setScale(1.3) // hex reads sickly green, javelin gold
     .setRotation(Math.atan2(dy, dx) + Math.PI/4);
   state.heroProjectiles.push(j);
   if(swarm) cap.webCd = HERO.web.cooldownMs;
@@ -61,9 +61,9 @@ function heroSlash(){
     }
     syncPopulationCount();
     if(born && scene && scene.add){
-      floatResourceText(cgx, cgy, 'BIRTH!', '#c9a0ff');
-      const ring = scene.add.ellipse(cap.gx*TILE+TILE/2, cap.gy*TILE+TILE/2, 20, 20, 0xb478ff, 0.25)
-        .setStrokeStyle(2, 0xb478ff, 0.9).setDepth(9);
+      floatResourceText(cgx, cgy, 'RISE!', '#b6c98a');
+      const ring = scene.add.ellipse(cap.gx*TILE+TILE/2, cap.gy*TILE+TILE/2, 20, 20, 0x9aae78, 0.25)
+        .setStrokeStyle(2, 0x9aae78, 0.9).setDepth(9);
       scene.tweens.add({ targets: ring, scaleX: 4, scaleY: 4, alpha: 0, duration: 320, onComplete: ()=> ring.destroy() });
     }
     updateHUD();
@@ -107,7 +107,7 @@ function updateHeroCombat(delta){
       if(Phaser.Math.Distance.Between(j.x, j.y, e.gx, e.gy) <= hitRadius){
         if(isWeb){
           e.hp -= heroWebDmg();
-          if(!(e.webSlowMs > 0) && e.sprite && e.sprite.setTint) e.sprite.setTint(0xbfe8ff); // pale web-strand tint
+          if(!(e.webSlowMs > 0) && e.sprite && e.sprite.setTint) e.sprite.setTint(0xbfe89a); // sickly hex-rot tint
           e.webSlowMs = HERO.web.slowDurationMs;
         } else {
           e.hp -= heroJavelinDmg();
@@ -753,7 +753,7 @@ function updateUnits(delta){
           if(targetBuilding.sprite && targetBuilding.sprite.setAlpha) targetBuilding.sprite.setAlpha(0.55);
           if(scene && scene.add) floatResourceText(targetBuilding.gx, targetBuilding.gy, 'building started!', '#a8e6a1');
           if(state.faction==='swarm'){
-            if(scene && scene.add) floatResourceText(Math.round(u.gx), Math.round(u.gy), 'morphing...', '#c9a0ff');
+            if(scene && scene.add) floatResourceText(Math.round(u.gx), Math.round(u.gy), 'rising...', '#b6c98a');
             destroyUnitVisuals(u);
             state.units = state.units.filter(x=>x!==u);
             syncPopulationCount();

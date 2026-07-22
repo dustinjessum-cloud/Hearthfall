@@ -75,7 +75,7 @@ class MainScene extends Phaser.Scene {
       // place the starting core — Town Hall for humans, the Hive for the swarm
       const swarm = state.faction === 'swarm';
       const th = createBuilding('town_hall_core', cx, cy,
-        swarm ? {name:'Hive', hp:500, frame:'town_hall', size:2, tint:0xb478ff}
+        swarm ? {name:'Necropolis', hp:500, frame:'town_hall', size:2, tint:0x9aae78}
               : {name:'Town Hall', hp:500, frame:'town_hall', size:2});
       th.isCore = true;
       th.level = 1;

@@ -42,7 +42,7 @@ class MainScene extends Phaser.Scene {
   }
 
   setupFrames(texture){
-    const cols=6, rows=9, size=32;
+    const cols=6, rows=10, size=32; // 6x10 grid — must match gen_sprites.py ROWS
     let idx=0;
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){

@@ -235,7 +235,7 @@ function applyFaction(faction){
   // -- building roster: rename/re-cost the types the undead keep --
   BUILD_DEFS.lumber_camp = { name:'Charnel Pit', cost:{food:15}, hp:50, frame:'lumber_camp', tint:0x9aae78, produces:{food:4}, needsWorker:true, bonusNear:'forest' };
   BUILD_DEFS.granary     = { name:'Ossuary', cost:{food:25}, hp:80, frame:'granary', tint:0x9aae78, nearTC:true };
-  BUILD_DEFS.barracks    = { name:'Mass Grave', cost:{food:35}, hp:100, frame:'wall_gate', tint:0x9aae78, trains:'archer' };
+  BUILD_DEFS.barracks    = { name:'Mass Grave', cost:{food:35}, hp:100, frame:'graveyard', trains:'archer' }; // dedicated graveyard sprite, baked colors — no tint
   BUILD_DEFS.tower       = { name:'Bone Spire', cost:{food:30}, hp:150, frame:'bone_spire', blocksPath:true, garrison:true, attack:{range:4.2,damage:7,damageLow:4,cooldownMs:900} }; // dedicated bone-spire sprite, baked colors — no tint
   BUILD_DEFS.road        = { name:'Bone Path', cost:{food:2}, frame:'dirt', tint:SWARM.creep.roadTint, isRoad:true };
   BUILD_DEFS.creep_tumor = { name:'Grave Mound', cost:{food:18}, hp:40, frame:'headstone', popCap:2 }; // grey stone cross, baked colors — no tint

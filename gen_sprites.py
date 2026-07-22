@@ -9,7 +9,7 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 9
+ROWS = 10  # 6x10 = 60 slots (was 6x9=54, which the undead art filled exactly)
 
 frames = {}
 order = []
@@ -606,6 +606,44 @@ def draw_bone_spire(d):
     d.polygon([(14, 6), (18, 6), (16, 0)], fill=BONE_L)
     d.polygon([(15, 6), (17, 6), (16, 2)], fill=BONE)
 
+def draw_graveyard(d):
+    # the undead's Mass Grave (where the dead are raised): a fenced plot of
+    # grave dirt with a few leaning headstones, and an open grave pit with a
+    # green soul-glow that the risen claw up out of. Baked colors, no tint.
+    DIRT, DIRT_D = (74, 68, 58), (52, 48, 40)
+    ST, ST_D, ST_L = (150, 150, 156), (112, 112, 120), (182, 182, 188)
+    IRON = (48, 50, 54)
+    GLOW, GLOW_L = (96, 152, 92), (150, 240, 150)
+    DARK = (16, 14, 18)
+    # grave-dirt plot with a couple of low mounds
+    rect(d, 2, 21, 29, 31, DIRT)
+    rect(d, 2, 21, 29, 22, DIRT_D)
+    d.ellipse([3, 25, 13, 31], fill=DIRT_D)
+    d.ellipse([20, 26, 30, 31], fill=DIRT_D)
+    # a low iron railing across the back
+    rect(d, 2, 15, 3, 22, IRON)
+    rect(d, 28, 15, 29, 22, IRON)
+    rect(d, 2, 15, 29, 16, IRON)
+    for fx in range(6, 28, 4):
+        rect(d, fx, 16, fx, 21, IRON)
+    # headstone 1 — a rounded stone, leaning slightly (left)
+    rect(d, 5, 13, 10, 23, ST)
+    d.ellipse([5, 11, 10, 15], fill=ST)
+    rect(d, 5, 13, 5, 23, ST_L); rect(d, 10, 13, 10, 23, ST_D)
+    d.line([7, 16, 8, 20], fill=ST_D, width=1)
+    # headstone 2 — a stone cross, taller (right-back)
+    rect(d, 21, 9, 24, 23, ST)
+    rect(d, 19, 12, 26, 15, ST)
+    rect(d, 21, 9, 21, 23, ST_L); rect(d, 24, 9, 24, 23, ST_D)
+    # open grave pit, front-centre, with the raising glow
+    rect(d, 11, 22, 20, 30, DARK)
+    rect(d, 12, 23, 19, 24, DIRT_D)          # dug rim
+    rect(d, 13, 25, 18, 29, GLOW)
+    rect(d, 14, 26, 17, 29, GLOW_L)
+    # a skull resting on the dirt
+    d.ellipse([24, 25, 28, 29], fill=BONE)
+    rect(d, 25, 26, 25, 27, DARK); rect(d, 27, 26, 27, 27, DARK)
+
 def draw_broodmother(d):
     # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
     # eyes, and a staff topped with a green flame. Front-facing, matching the
@@ -859,6 +897,7 @@ DRAWERS = [
     ("crypt", draw_crypt),
     ("ghoul", draw_ghoul),
     ("bone_spire", draw_bone_spire),
+    ("graveyard", draw_graveyard),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

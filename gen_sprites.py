@@ -408,6 +408,7 @@ CREEP_BLACK_T = (10, 10, 12, 130)    # semi-transparent black — the game's dar
                                       # canvas bleeds through, reading "sunken"
 BONE   = (226, 224, 206)             # bone white
 BONE_D = (176, 172, 150)             # bone shadow
+BONE_L = (244, 242, 228)             # bone highlight
 
 def draw_creep(d):
     rect(d, 0, 0, 31, 31, CREEP_GREY)
@@ -427,20 +428,31 @@ def draw_creep(d):
 
 def draw_creep_hand(d):
     # blighted ground with a single skeletal hand clawing up out of it — the
-    # game picks this variant only sparingly (see claimCreepTile), so most
+    # game picks this variant only sparingly (see frameForGroundTile), so most
     # tiles stay plain and the hands read as a rare, unsettling detail.
     draw_creep(d)
-    # a shallow grave-hole the hand emerges from
-    d.ellipse([9, 17, 22, 27], fill=CREEP_BLACK_T)
-    # wrist/palm
-    rect(d, 14, 20, 18, 25, BONE_D)
-    rect(d, 14, 19, 18, 22, BONE)
-    # five finger bones splayed upward
-    for fx in (13, 15, 16, 18, 20):
-        d.line([fx, 20, fx-1 if fx < 16 else (fx+1 if fx > 16 else fx), 13], fill=BONE, width=1)
-    # knuckle highlights
-    for fx in (13, 16, 20):
-        rect(d, fx-1, 13, fx, 14, BONE)
+    # a dug-open grave-hole with a rim of upthrust dirt
+    d.ellipse([8, 17, 23, 29], fill=(48, 44, 38, 200))
+    d.ellipse([10, 19, 21, 28], fill=(8, 8, 10, 220))
+    # forearm (radius/ulna) rising out of the hole
+    rect(d, 15, 23, 17, 28, BONE_D)
+    rect(d, 15, 23, 15, 28, BONE)
+    # back of the hand / metacarpals, shaded
+    rect(d, 12, 19, 19, 23, BONE_D)
+    rect(d, 12, 19, 18, 21, BONE)
+    rect(d, 13, 19, 17, 20, BONE_L)
+    # knuckle ridge
+    for kx in (12, 14, 16, 18):
+        rect(d, kx, 18, kx, 19, BONE)
+    # four fingers, each in TWO bone segments with a joint gap, splayed
+    for bx, tipdx in [(12, -2), (14, -1), (16, 1), (18, 2)]:
+        rect(d, bx, 15, bx, 18, BONE)                 # lower segment
+        rect(d, bx, 14, bx, 14, BONE_D)               # knuckle joint (gap)
+        d.line([bx, 13, bx + tipdx, 9], fill=BONE, width=1)  # upper segment, splayed
+        rect(d, bx + tipdx, 8, bx + tipdx, 9, BONE_L)        # fingertip
+    # a thumb jutting off to the side, lower
+    d.line([12, 21, 9, 18], fill=BONE, width=1)
+    rect(d, 8, 17, 9, 18, BONE_L)
 
 def draw_headstone(d):
     # a stone cross on a small grave mound — the undead's Grave Mound (raises
@@ -515,6 +527,49 @@ def draw_crypt(d):
     # weathering + moss
     rect(d, 6, 21, 8, 23, MOSS)
     rect(d, 24, 16, 26, 18, MOSS)
+
+def draw_ghoul(d):
+    # a gaunt, hunched GHOUL — the undead harvester (drone). Sickly grey-green
+    # flesh, deep-sunken glowing eyes and a gaping maw, visible ribs, and long
+    # bony clawed arms hanging low. Baked colors so it needs no runtime tint.
+    FLESH   = (138, 156, 116)
+    FLESH_D = (102, 118, 84)
+    FLESH_L = (168, 182, 140)
+    RAG     = (68, 60, 50)
+    SOCK    = (24, 30, 20)
+    EYE     = (196, 246, 150)
+    # hunched head, jutting low and forward
+    d.ellipse([11, 5, 21, 14], fill=FLESH, outline=FLESH_D)
+    rect(d, 12, 6, 14, 8, FLESH_L)                 # brow highlight
+    # deep-sunken sockets with a cold glow
+    rect(d, 13, 9, 15, 11, SOCK); rect(d, 17, 9, 19, 11, SOCK)
+    rect(d, 14, 10, 14, 10, EYE); rect(d, 18, 10, 18, 10, EYE)
+    # gaping maw with jagged teeth
+    rect(d, 14, 12, 18, 14, SOCK)
+    for tx in (14, 16, 18):
+        rect(d, tx, 12, tx, 12, FLESH_L)
+    # hunched, emaciated torso
+    d.polygon([(11,14),(21,14),(19,23),(13,23)], fill=FLESH)
+    rect(d, 15, 15, 16, 22, FLESH_D)               # sternum shadow
+    for ry in (16, 18, 20):                        # exposed ribs
+        rect(d, 12, ry, 14, ry, FLESH_L)
+        rect(d, 18, ry, 20, ry, FLESH_L)
+    # tattered loincloth
+    rect(d, 12, 22, 20, 25, RAG)
+    d.polygon([(12,25),(14,25),(13,28)], fill=RAG)
+    d.polygon([(17,25),(19,25),(18,28)], fill=RAG)
+    # long bony arms hanging low, ending in claws
+    d.line([11, 15, 8, 25], fill=FLESH, width=2)
+    d.line([21, 15, 24, 25], fill=FLESH, width=2)
+    for cx in (7, 8, 9):
+        d.line([cx, 25, cx-1, 29], fill=BONE, width=1)
+    for cx in (23, 24, 25):
+        d.line([cx, 25, cx+1, 29], fill=BONE, width=1)
+    # thin bent legs + feet
+    d.line([14, 25, 13, 30], fill=FLESH, width=2)
+    d.line([18, 25, 19, 30], fill=FLESH, width=2)
+    rect(d, 11, 29, 14, 30, FLESH_D)
+    rect(d, 18, 29, 21, 30, FLESH_D)
 
 def draw_broodmother(d):
     # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
@@ -767,6 +822,7 @@ DRAWERS = [
     ("creep_hand", draw_creep_hand),
     ("headstone", draw_headstone),
     ("crypt", draw_crypt),
+    ("ghoul", draw_ghoul),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

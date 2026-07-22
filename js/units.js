@@ -304,8 +304,10 @@ function createVillager(gx, gy){
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   u.marker = scene.add.ellipse(cx, cy+9, 18, 8, 0x3a7a3a, 0.5).setStrokeStyle(1, 0xa8e6a1, 0.85).setDepth(3);
-  u.sprite = scene.add.image(cx, cy, 'tiles', FRAME.villager).setDepth(4);
-  if(state.faction==='swarm'){ u.baseTint = SWARM.unitTints.villager; u.sprite.setTint(u.baseTint); }
+  // the undead drone is a proper ghoul sprite (baked sickly-green flesh), so
+  // it needs no runtime tint — unlike the other swarm units which recolor a
+  // shared frame
+  u.sprite = scene.add.image(cx, cy, 'tiles', state.faction==='swarm' ? FRAME.ghoul : FRAME.villager).setDepth(4);
   u.hpBarBg = scene.add.rectangle(cx, cy-18, TILE-10, 4, 0x2a1c10).setDepth(5).setVisible(false);
   u.hpBarFg = scene.add.rectangle(cx-(TILE-10)/2, cy-18, TILE-10, 4, 0x6bbf59).setOrigin(0,0.5).setDepth(6).setVisible(false);
   state.units.push(u);

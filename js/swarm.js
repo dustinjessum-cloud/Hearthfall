@@ -99,7 +99,11 @@ function frameForGroundTile(gx, gy){
     if(t === 'forest') return FRAME.forest_corrupted;
     if(t === 'stone_deposit') return FRAME.stone_deposit_corrupted;
     if(t === 'wildstone_deposit') return FRAME.wildstone_deposit_corrupted;
-    return FRAME.creep; // bare creeped ground
+    // bare blighted ground — a rare skeletal hand claws up on some tiles.
+    // Deterministic per-tile (hashed coords) so it stays put across re-skins
+    // and save/load, and sparse (~1 in 19) so it reads as an occasional detail.
+    const h = ((gx*73856093) ^ (gy*19349663)) >>> 0;
+    return (h % 19 === 0) ? FRAME.creep_hand : FRAME.creep;
   }
   return FRAME[t];
 }
@@ -234,7 +238,7 @@ function applyFaction(faction){
   BUILD_DEFS.barracks    = { name:'Mass Grave', cost:{food:35}, hp:100, frame:'wall_gate', tint:0x9aae78, trains:'archer' };
   BUILD_DEFS.tower       = { name:'Bone Spire', cost:{food:30}, hp:150, frame:'tower', tint:0xb0b49a, blocksPath:true, garrison:true, attack:{range:4.2,damage:7,damageLow:4,cooldownMs:900} };
   BUILD_DEFS.road        = { name:'Bone Path', cost:{food:2}, frame:'dirt', tint:SWARM.creep.roadTint, isRoad:true };
-  BUILD_DEFS.creep_tumor = { name:'Grave Mound', cost:{food:18}, hp:40, frame:'farm', tint:0x82945a, popCap:2 };
+  BUILD_DEFS.creep_tumor = { name:'Grave Mound', cost:{food:18}, hp:40, frame:'headstone', popCap:2 }; // grey stone cross, baked colors — no tint
   BUILD_TIME.creep_tumor = 5000;
   CARRY.lumber_camp = { key:'food', amt:6 }; // charnel pits haul carrion home
 

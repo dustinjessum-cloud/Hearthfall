@@ -399,98 +399,173 @@ def draw_town_hall_3(d):
     d.polygon([(25,6),(31,6),(28,1)], fill=ROOF_D)
     rect(d, 28, 12, 30, 15, GOLD)
 
-# ---- the Swarm ----
-CREEP_PURPLE   = (60, 26, 88, 255)   # opaque dark purple base — deliberately
-                                      # darker than the old runtime tint
-CREEP_PURPLE_D = (42, 16, 64, 255)   # opaque, darker mottling
-CREEP_BLACK_T  = (10, 6, 16, 145)    # semi-transparent black — the game's
-                                      # dark canvas bleeds through these
-                                      # patches, which is what makes them
-                                      # read as "more see-through"
+# ---- the Undead (blighted ground, risen dead, grave markers) ----
+CREEP_GREY    = (92, 92, 88, 255)    # opaque grey base — dead, ashen ground
+CREEP_GREY_D  = (70, 70, 68, 255)    # darker grey mottling
+CREEP_GREEN_T = (78, 96, 70, 150)    # sickly green rot patches (discoloration)
+CREEP_BROWN_T = (86, 74, 58, 140)    # dried-blood / grave-dirt discoloration
+CREEP_BLACK_T = (10, 10, 12, 130)    # semi-transparent black — the game's dark
+                                      # canvas bleeds through, reading "sunken"
+BONE   = (226, 224, 206)             # bone white
+BONE_D = (176, 172, 150)             # bone shadow
 
 def draw_creep(d):
-    rect(d, 0, 0, 31, 31, CREEP_PURPLE)
+    rect(d, 0, 0, 31, 31, CREEP_GREY)
+    # darker grey mottling
     for x, y, w, h in [(2,3,10,8), (17,13,11,9), (5,20,9,8), (21,2,8,7)]:
-        d.ellipse([x, y, x+w, y+h], fill=CREEP_PURPLE_D)
-    for x, y, w, h in [(11,9,12,10), (0,16,9,10), (19,19,11,9), (13,0,8,7)]:
+        d.ellipse([x, y, x+w, y+h], fill=CREEP_GREY_D)
+    # discoloration throughout — a couple of sickly-green and grave-brown patches
+    for x, y, w, h in [(11,9,11,8), (19,19,10,8)]:
+        d.ellipse([x, y, x+w, y+h], fill=CREEP_GREEN_T)
+    for x, y, w, h in [(0,16,9,9), (13,0,8,7)]:
+        d.ellipse([x, y, x+w, y+h], fill=CREEP_BROWN_T)
+    # sunken cracks
+    for x, y, w, h in [(6,24,8,6), (23,9,7,7)]:
         d.ellipse([x, y, x+w, y+h], fill=CREEP_BLACK_T)
-    d.line([3,15, 11,11, 19,17, 28,13], fill=CREEP_PURPLE_D, width=1)
-    d.line([6,25, 14,21, 22,26], fill=CREEP_BLACK_T, width=1)
+    d.line([3,15, 11,12, 19,17, 28,13], fill=CREEP_GREY_D, width=1)
+    d.line([6,26, 14,22, 22,27], fill=CREEP_BLACK_T, width=1)
+
+def draw_creep_hand(d):
+    # blighted ground with a single skeletal hand clawing up out of it — the
+    # game picks this variant only sparingly (see claimCreepTile), so most
+    # tiles stay plain and the hands read as a rare, unsettling detail.
+    draw_creep(d)
+    # a shallow grave-hole the hand emerges from
+    d.ellipse([9, 17, 22, 27], fill=CREEP_BLACK_T)
+    # wrist/palm
+    rect(d, 14, 20, 18, 25, BONE_D)
+    rect(d, 14, 19, 18, 22, BONE)
+    # five finger bones splayed upward
+    for fx in (13, 15, 16, 18, 20):
+        d.line([fx, 20, fx-1 if fx < 16 else (fx+1 if fx > 16 else fx), 13], fill=BONE, width=1)
+    # knuckle highlights
+    for fx in (13, 16, 20):
+        rect(d, fx-1, 13, fx, 14, BONE)
+
+def draw_headstone(d):
+    # a stone cross on a small grave mound — the undead's Grave Mound (raises
+    # the undead cap and spreads the blight). Baked grey stone (the building
+    # def carries no tint), so it reads as weathered rock, not tinted flesh.
+    ST    = (150, 150, 156)   # stone
+    ST_D  = (112, 112, 120)   # stone shadow
+    ST_L  = (180, 180, 186)   # stone highlight
+    MOUND   = (84, 80, 72)    # turned grave dirt
+    MOUND_D = (64, 60, 54)
+    # mound of dirt at the base
+    d.ellipse([4, 24, 28, 31], fill=MOUND, outline=MOUND_D)
+    d.ellipse([9, 26, 23, 30], fill=MOUND_D)
+    # cross — vertical bar
+    rect(d, 13, 3, 18, 27, ST)
+    rect(d, 13, 3, 13, 27, ST_L)
+    rect(d, 18, 3, 18, 27, ST_D)
+    # cross — horizontal bar
+    rect(d, 7, 10, 24, 15, ST)
+    rect(d, 7, 10, 24, 10, ST_L)
+    rect(d, 7, 15, 24, 15, ST_D)
+    # weathering cracks + a patch of sickly moss
+    d.line([15, 6, 16, 12], fill=ST_D, width=1)
+    d.line([9, 12, 12, 14], fill=ST_D, width=1)
+    rect(d, 19, 20, 21, 22, (86, 104, 74))
 
 def draw_broodmother(d):
-    # a genuinely spider-shaped hero: bulbous abdomen, jointed legs,
-    # mandibles and glowing eyes — no longer a re-tinted Minotaur.
-    BM_PURPLE   = (58, 26, 84)
-    BM_PURPLE_D = (38, 14, 58)
-    BM_BLACK    = (16, 11, 22)
-    BM_EYE      = (232, 130, 255)
-    # legs first (drawn behind the body) — 4 jointed pairs, splayed wide
-    left_hips  = [(12,15),(11,17),(11,19),(12,21)]
-    right_hips = [(20,15),(21,17),(21,19),(20,21)]
-    for i,(hx,hy) in enumerate(left_hips):
-        kx,ky = hx-7, hy+1+i
-        fx,fy = hx-11, hy+6+i*2
-        d.line([hx,hy, kx,ky, fx,fy], fill=BM_BLACK, width=2)
-    for i,(hx,hy) in enumerate(right_hips):
-        kx,ky = hx+7, hy+1+i
-        fx,fy = hx+11, hy+6+i*2
-        d.line([hx,hy, kx,ky, fx,fy], fill=BM_BLACK, width=2)
-    # abdomen — large, plump, lower body
-    d.ellipse([8,15,23,29], fill=BM_PURPLE, outline=BM_PURPLE_D)
-    d.ellipse([11,19,20,27], fill=BM_PURPLE_D)
-    # thorax / head — smaller, upper-front
-    d.ellipse([10,5,21,17], fill=BM_PURPLE, outline=BM_PURPLE_D)
-    # mandibles / claws
-    d.polygon([(11,13),(7,18),(12,17)], fill=BM_BLACK)
-    d.polygon([(20,13),(24,18),(19,17)], fill=BM_BLACK)
-    # glowing eyes
-    rect(d, 13,9,14,10, BM_EYE)
-    rect(d, 17,9,18,10, BM_EYE)
+    # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
+    # eyes, and a staff topped with a green flame. Front-facing, matching the
+    # other standing units. (Frame name stays 'broodmother' so the sprite
+    # lookup in the code is untouched.)
+    ROBE   = (54, 52, 66)      # deathly charcoal-violet robe
+    ROBE_D = (36, 34, 48)      # robe shadow
+    ROBE_L = (72, 70, 86)      # robe highlight
+    HOOD   = (40, 38, 52)
+    EYE    = (150, 240, 150)   # cold necrotic soul-light
+    STAFF  = (120, 96, 66)     # aged wood
+    # staff down the left with a soul-flame orb on top
+    rect(d, 5, 9, 6, 30, STAFF)
+    d.ellipse([2, 2, 9, 9], fill=(38, 58, 36))          # orb aura
+    d.ellipse([3, 3, 8, 8], fill=EYE)                    # glowing orb
+    rect(d, 4, 4, 5, 5, (215, 255, 215))                 # hotspot
+    # robe body: a bell widening to the ground
+    d.polygon([(12,15),(21,15),(26,30),(8,30)], fill=ROBE)
+    d.polygon([(15,16),(18,16),(20,30),(13,30)], fill=ROBE_D)   # centre fold shadow
+    d.polygon([(12,15),(14,15),(10,30),(8,30)], fill=ROBE_L)    # left highlight fold
+    # shoulders / hood drape
+    d.polygon([(10,13),(23,13),(25,19),(8,19)], fill=HOOD)
+    # hood around the head
+    d.polygon([(11,4),(22,4),(24,15),(9,15)], fill=HOOD)
+    # bone skull inside the hood
+    d.ellipse([12,6,21,16], fill=BONE, outline=BONE_D)
+    rect(d, 14, 14, 19, 16, BONE_D)                      # jaw shadow
+    # eye sockets + soul-light
+    rect(d, 13, 9, 15, 11, (18, 20, 18))
+    rect(d, 18, 9, 20, 11, (18, 20, 18))
+    rect(d, 14, 10, 14, 10, EYE)
+    rect(d, 19, 10, 19, 10, EYE)
+    # nasal cavity + teeth
+    rect(d, 16, 11, 16, 12, (18, 20, 18))
+    for tx in (14, 16, 18):
+        rect(d, tx, 15, tx, 16, BONE_D)
+    # a skeletal hand clasped at the robe front
+    rect(d, 19, 20, 22, 22, BONE)
+    for fx in (19, 20, 21, 22):
+        rect(d, fx, 20, fx, 20, BONE_D)
 
 def draw_forest_corrupted(d):
     # a forest tile the creep has spread into: creep ground underneath,
     # the trees themselves re-themed sick purple/black rather than erased —
     # the resource stays visible and harvestable, just visibly infected
     draw_creep(d)
-    TRUNK_C = (35, 20, 45)
-    CANOPY_DARK = (52, 22, 68)
-    CANOPY_LIGHT = (78, 36, 98)
+    TRUNK_C = (46, 40, 34)          # dead grey-brown bark
+    CANOPY_DARK = (48, 58, 42)      # withered grey-green
+    CANOPY_LIGHT = (66, 78, 56)
     for cx, cy in [(9,20),(21,19),(15,10)]:
         rect(d, cx-1, cy+4, cx+1, cy+8, TRUNK_C)
         d.polygon([(cx-7,cy+5),(cx+7,cy+5),(cx,cy-9)], fill=CANOPY_DARK)
         d.polygon([(cx-5,cy),(cx+5,cy),(cx,cy-9)], fill=CANOPY_LIGHT)
     for x,y in [(9,15),(21,13)]:
-        d.ellipse([x,y,x+2,y+2], fill=(220,110,230))  # sickly pustules
+        d.ellipse([x,y,x+2,y+2], fill=(150,190,120))  # sickly fungal blooms
 
 def draw_stone_deposit_corrupted(d):
     # same idea for stone: creep ground, rocks re-tinted and veined with
     # creep growth instead of being wiped off the map
     draw_creep(d)
-    ROCK_C   = (92, 66, 108)
-    ROCK_C_D = (62, 42, 78)
+    ROCK_C   = (104, 104, 100)      # ashen grey rock
+    ROCK_C_D = (76, 76, 74)
     for x, y, w, h, c in [(6,14,10,10,ROCK_C),(14,16,12,12,ROCK_C_D),(9,10,8,8,ROCK_C)]:
-        d.ellipse([x, y, x+w, y+h], fill=c, outline=(18,10,24))
-    d.line([8,18, 14,22, 20,19], fill=(200,110,230), width=1)
+        d.ellipse([x, y, x+w, y+h], fill=c, outline=(20,20,22))
+    d.line([8,18, 14,22, 20,19], fill=(120,160,110), width=1)  # sickly vein
 
 def draw_zergling_quad(d):
-    # side-view quadruped (the ram sprite already establishes side-view as
-    # fair game in this art style) — low body, four jointed legs, a tail,
-    # spine ridges, and a fanged head. Neutral tones matching the existing
-    # enemy_swordsman palette so the runtime pink tint still applies the
-    # same way it always has.
-    BODY_D = (40, 40, 46)
-    d.polygon([(2,17),(8,14),(8,20)], fill=BODY_D)  # tail
-    d.line([9,20, 8,25, 6,29], fill=BODY_D, width=3)    # rear leg 1
-    d.line([12,20, 13,25, 15,29], fill=BODY_D, width=3) # rear leg 2
-    d.line([20,20, 21,25, 19,29], fill=BODY_D, width=3) # front leg 1
-    d.line([23,19, 25,25, 27,29], fill=BODY_D, width=3) # front leg 2
-    d.ellipse([6,11,26,23], fill=DARKGREY, outline=BODY_D)  # body
-    for x in (11,16,21):
-        d.polygon([(x-2,11),(x+2,11),(x,7)], fill=BODY_D)   # spine ridges
-    d.ellipse([21,8,31,18], fill=DARKGREY, outline=BODY_D)   # head
-    d.polygon([(27,15),(31,17),(26,18)], fill=SKIN)  # lower fang
-    d.polygon([(27,10),(31,9),(27,13)], fill=SKIN)   # upper fang
-    rect(d, 26,11,27,12, (255,80,90))  # feral eye
+    # a standing SKELETON, front-facing and bone-white so the runtime bone
+    # tint keeps it pale. Bold shapes so it still reads at the small in-game
+    # scale. (Frame name stays 'zergling_quad' — the code lookup is untouched.)
+    SOCK = (28, 26, 24)
+    # skull
+    d.ellipse([10, 2, 21, 12], fill=BONE, outline=BONE_D)
+    rect(d, 12, 11, 19, 13, BONE)          # jaw
+    rect(d, 12, 5, 14, 8, SOCK)            # left socket
+    rect(d, 17, 5, 19, 8, SOCK)            # right socket
+    rect(d, 15, 8, 16, 10, SOCK)           # nasal
+    for tx in (12, 14, 16, 18):            # teeth
+        rect(d, tx, 12, tx, 13, SOCK)
+    # spine
+    rect(d, 15, 13, 16, 23, BONE_D)
+    # ribcage — pairs of ribs off the spine
+    for ry in (14, 16, 18):
+        d.line([15, ry, 10, ry + 1], fill=BONE, width=1)
+        d.line([16, ry, 21, ry + 1], fill=BONE, width=1)
+    # collarbone + arms down the sides
+    rect(d, 9, 13, 22, 14, BONE)
+    d.line([9, 14, 8, 22], fill=BONE, width=2)
+    d.line([22, 14, 23, 22], fill=BONE, width=2)
+    rect(d, 7, 21, 9, 23, BONE)            # left hand
+    rect(d, 22, 21, 24, 23, BONE)          # right hand
+    # pelvis
+    rect(d, 12, 22, 19, 24, BONE)
+    rect(d, 15, 23, 16, 24, SOCK)
+    # legs + feet
+    d.line([13, 24, 12, 30], fill=BONE, width=2)
+    d.line([18, 24, 19, 30], fill=BONE, width=2)
+    rect(d, 10, 29, 13, 30, BONE)
+    rect(d, 18, 29, 21, 30, BONE)
 
 def draw_spitter_naga(d):
     # Naga/cobra/alien hybrid, front-facing to match the other "standing"
@@ -640,6 +715,8 @@ DRAWERS = [
     ("icon_wildstone", draw_icon_wildstone),
     ("wildstone_refinery", draw_wildstone_refinery),
     ("wildstone_deposit_corrupted", draw_wildstone_deposit_corrupted),
+    ("creep_hand", draw_creep_hand),
+    ("headstone", draw_headstone),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

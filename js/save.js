@@ -61,7 +61,9 @@ function serializeGame(){
     buildings: state.buildings,
     units: state.units,
     enemies: state.enemies,
-    buildingIdCounter, unitIdCounter, enemyIdCounter,
+    corpses: state.corpses,
+    burialBoost: state.burialBoost,
+    buildingIdCounter, unitIdCounter, enemyIdCounter, corpseIdCounter,
   };
 }
 
@@ -148,6 +150,15 @@ function restoreGame(snapshot){
   buildingIdCounter = snapshot.buildingIdCounter || buildingIdCounter;
   unitIdCounter = snapshot.unitIdCounter || unitIdCounter;
   enemyIdCounter = snapshot.enemyIdCounter || enemyIdCounter;
+  corpseIdCounter = snapshot.corpseIdCounter || corpseIdCounter;
+  state.burialBoost = snapshot.burialBoost || 0;
+
+  // ---- corpses (fallen humans awaiting raise/burial) ----
+  state.corpses = [];
+  for(const sc of (snapshot.corpses || [])){
+    const c = spawnCorpse(sc.gx, sc.gy);
+    c.id = sc.id; c.rotMs = sc.rotMs; // keep identity + remaining rot time
+  }
 
   // ---- buildings ----
   for(const sb of snapshot.buildings){
@@ -179,6 +190,7 @@ function restoreGame(snapshot){
     // (job assignment kept via assignedBuildingId) resumes work within a
     // second or two on its own.
     u.tx = u.gx; u.ty = u.gy; u.moving = false; u.buildTaskId = null; u.path = null;
+    u.buryCorpseId = null; u.raiseCorpseId = null; // mid-walk corpse errands don't survive a reload — re-order them
     if(su.type==='villager'){ u.gatherWorking = false; u.gatherPhase = null; u.gatherTarget = null; u.carrying = null; u.harvestMs = 0; }
     positionUnitVisuals(u, u.gx*TILE+TILE/2, u.gy*TILE+TILE/2);
     if(u.baseTint && u.sprite && u.sprite.setTint) u.sprite.setTint(u.baseTint);

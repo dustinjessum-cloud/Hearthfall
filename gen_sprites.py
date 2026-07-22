@@ -644,6 +644,28 @@ def draw_graveyard(d):
     d.ellipse([24, 25, 28, 29], fill=BONE)
     rect(d, 25, 26, 25, 27, DARK); rect(d, 27, 26, 27, 27, DARK)
 
+def draw_corpse(d):
+    # a fallen human lying where they died — the shared raise/bury resource.
+    # Neutral grey-brown garb so it reads for any dead human (raider,
+    # skirmisher, villager or soldier alike).
+    GARB, GARB_D = (104, 92, 76), (78, 68, 56)
+    # ground shadow / disturbed earth beneath the body
+    d.ellipse([4, 19, 28, 29], fill=(40, 36, 30, 150))
+    # legs, crumpled sideways
+    rect(d, 6, 23, 13, 25, GARB_D)
+    rect(d, 7, 25, 12, 26, (58, 50, 42))
+    # torso lying prone
+    rect(d, 12, 20, 22, 25, GARB)
+    rect(d, 12, 24, 22, 25, GARB_D)
+    # an arm flopped out above the head
+    rect(d, 22, 18, 27, 19, SKIN)
+    # head, tilted
+    d.ellipse([22, 20, 27, 25], fill=SKIN)
+    rect(d, 24, 22, 24, 22, (60, 46, 38))   # closed eye
+    # a dropped weapon beside them
+    d.line([8, 18, 14, 15], fill=(120, 120, 128), width=1)
+    rect(d, 8, 18, 9, 19, WOOD_D)
+
 def draw_broodmother(d):
     # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
     # eyes, and a staff topped with a green flame. Front-facing, matching the
@@ -898,6 +920,7 @@ DRAWERS = [
     ("ghoul", draw_ghoul),
     ("bone_spire", draw_bone_spire),
     ("graveyard", draw_graveyard),
+    ("corpse", draw_corpse),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

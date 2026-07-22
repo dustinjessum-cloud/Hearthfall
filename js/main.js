@@ -354,6 +354,7 @@ class MainScene extends Phaser.Scene {
     updateHeroCombat(delta);
     updateConstruction(delta);
     updateUnitEvolution(delta);
+    updateCorpses(delta);
 
     updateUnits(delta);
     updateEnemies(delta);

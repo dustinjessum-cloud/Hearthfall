@@ -130,6 +130,7 @@ function refreshRallyMarkers(){
 function orderPosition(order){
   if(order.kind==='move') return {gx: order.gx, gy: order.gy};
   if(order.kind==='garrisonTC'){ const th = townHall(); return th ? {gx: th.gx, gy: th.gy} : null; }
+  if(order.corpseId!=null){ const c = corpseById(order.corpseId); return c ? {gx: c.gx, gy: c.gy} : null; }
   const b = order.buildingId!=null ? buildingById(order.buildingId) : null;
   return b ? {gx: b.gx, gy: b.gy} : null;
 }

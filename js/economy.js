@@ -339,12 +339,49 @@ function buyWithGold(res){
 // Wells and taverns cheer people up; overcrowding and famine sour them.
 // Happiness scales farm output and tax income.
 const TAX_GOLD_PER_HOUSE = 0.25; // per economy tick, scaled by happiness
+// ---- corpses: the shared raise/bury resource (see CORPSE in content.js) ----
+let corpseIdCounter = 1;
+function spawnCorpse(gx, gy){
+  const c = {
+    id: corpseIdCounter++, gx: Math.round(gx), gy: Math.round(gy),
+    rotMs: state.faction==='swarm' ? CORPSE.rotMsSwarm : CORPSE.rotMs,
+  };
+  if(scene && scene.add){
+    c.sprite = scene.add.image(c.gx*TILE+TILE/2, c.gy*TILE+TILE/2, 'tiles', FRAME.corpse).setDepth(2); // above ground, below units
+  }
+  state.corpses.push(c);
+  return c;
+}
+function corpseAt(gx, gy){ return state.corpses.find(c=> c.gx===gx && c.gy===gy) || null; }
+function corpseById(id){ return state.corpses.find(c=> c.id===id) || null; }
+function removeCorpse(c){
+  if(c.sprite) c.sprite.destroy();
+  state.corpses = state.corpses.filter(x=>x!==c);
+}
+function updateCorpses(delta){
+  for(const c of [...state.corpses]){
+    c.rotMs -= delta;
+    // fade out over the last stretch so the disappearance isn't a pop
+    if(c.sprite && c.rotMs < 10000) c.sprite.setAlpha(Math.max(0.25, c.rotMs/10000));
+    if(c.rotMs > 0) continue;
+    if(state.faction==='swarm'){
+      // left to rot on the blight, the fallen dissolve into carrion —
+      // the old instant-on-death income, now the "didn't bother raising" default
+      addResource('food', SWARM.corpseBiomass);
+      if(scene && scene.add) floatResourceText(c.gx, c.gy, '+'+SWARM.corpseBiomass+' carrion', '#b6c98a');
+      updateHUD();
+    }
+    removeCorpse(c);
+  }
+}
+
 function computeHappiness(){
   let h = 70;
   const wells = state.buildings.filter(b=>b.type==='well' && b.hp>0 && !underConstruction(b)).length;
   const taverns = state.buildings.filter(b=>b.type==='tavern' && b.hp>0 && !underConstruction(b)).length;
   h += Math.min(wells, 3) * 5;    // up to +15
   h += Math.min(taverns, 2) * 10; // up to +20
+  h += Math.min(state.burialBoost || 0, CORPSE.buryHappyCap); // the honored dead — recent burials
   if(state.population.current >= state.population.cap) h -= 15; // overcrowded
   if(state.starving) h -= 40;
   return Phaser.Math.Clamp(h, 10, 105);
@@ -1147,6 +1184,8 @@ function updateResourceRates(){
 
 function economyTick(){
   const recalled = isRecalled();
+  // the honor of a burial fades with time — mourning isn't forever
+  if(state.burialBoost > 0) state.burialBoost = Math.max(0, state.burialBoost - CORPSE.buryDecayPerTick);
   state.happiness = computeHappiness();
   const hm = state.happiness / 100; // output multiplier
 

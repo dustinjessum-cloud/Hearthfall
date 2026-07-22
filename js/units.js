@@ -344,6 +344,12 @@ function destroyUnitVisuals(u){
 
 function removeUnit(u){
   u.hp = 0;
+  // fallen humans leave a corpse to bury (or, in enemy hands one day, to
+  // raise). Only the living do: the undead's units are already dead, and
+  // the hero has a revival of his own. (See CORPSE in content.js.)
+  if(state.faction!=='swarm' && (u.type==='villager' || u.type==='repairman' || u.type==='archer' || u.type==='swordsman')){
+    spawnCorpse(u.gx, u.gy);
+  }
   destroyUnitVisuals(u);
   state.units = state.units.filter(x=>x!==u);
   if(state.selectedGroup && state.selectedGroup.includes(u)){
@@ -398,6 +404,12 @@ function resolveBuildingOrder(u, gx, gy){
     }
     const targetBuilding = findProductionBuildingFor(gx, gy);
     if(targetBuilding) return {kind:'work', buildingId: targetBuilding.id};
+    // right-click a corpse: lay the fallen to rest (human villagers only —
+    // ghouls have no reverence in them)
+    if(state.faction!=='swarm'){
+      const c = corpseAt(gx, gy);
+      if(c) return {kind:'bury', corpseId: c.id};
+    }
     return null;
   }
   if(u.type==='repairman'){
@@ -406,6 +418,12 @@ function resolveBuildingOrder(u, gx, gy){
   }
   if(u.type==='archer'){
     if(bAt && bAt.type==='tower' && bAt.hp>0) return {kind:'garrisonTower', buildingId: bAt.id};
+    return null;
+  }
+  if(u.type==='captain' && state.faction==='swarm'){
+    // the Necromancer raises the fallen where they lie
+    const c = corpseAt(gx, gy);
+    if(c) return {kind:'raise', corpseId: c.id};
     return null;
   }
   return null;
@@ -456,11 +474,25 @@ function executeOrder(u, order){
     u.garrisonId = b.id; u.path = null;
     u.tx = b.gx; u.ty = b.gy; u.moving = true;
     flashWaveBanner('Archer climbs the tower.');
+  } else if(order.kind==='bury'){
+    const c = corpseById(order.corpseId);
+    if(!c) return; // already rotted or buried by someone else
+    unassignVillager(u);
+    u.buryCorpseId = c.id;
+    u.tx = c.gx; u.ty = c.gy; u.moving = true; u.playerOrder = true;
+    flashWaveBanner('Villager goes to lay the fallen to rest.');
+  } else if(order.kind==='raise'){
+    const c = corpseById(order.corpseId);
+    if(!c) return;
+    u.raiseCorpseId = c.id; u.path = null;
+    u.tx = c.gx; u.ty = c.gy; u.moving = true; u.playerOrder = true;
+    flashWaveBanner('The Necromancer approaches the fallen...');
   } else if(order.kind==='move'){
     if(u.inTowerId) exitTower(u); // any move order pops them out of the tower
-    if(u.type==='villager') unassignVillager(u);
+    if(u.type==='villager'){ unassignVillager(u); u.buryCorpseId = null; }
     else if(u.type==='repairman') u.repairTargetId = null;
     else if(u.type==='archer'){ u.garrisonId = null; u.path = null; }
+    else if(u.type==='captain'){ u.raiseCorpseId = null; }
     commandUnitMove(u, order.gx, order.gy);
   }
 }
@@ -472,6 +504,8 @@ function describeOrder(order){
   if(order.kind==='repair') return 'repair';
   if(order.kind==='build') return 'build';
   if(order.kind==='work') return 'work';
+  if(order.kind==='bury') return 'bury the fallen';
+  if(order.kind==='raise') return 'raise the fallen';
   return 'order';
 }
 
@@ -511,7 +545,7 @@ function clearOrderQueue(u){
 // goes stale (executeOrder's checks just no-op and the NEXT frame moves on).
 function isUnitIdle(u){
   return !u.moving && !u.assignedBuildingId && !u.buildTaskId && !u.garrisonId
-    && !u.repairTargetId && !u.inTC && !u.enteringTC;
+    && !u.repairTargetId && !u.buryCorpseId && !u.raiseCorpseId && !u.inTC && !u.enteringTC;
 }
 
 // ---- multi-unit selection ----
@@ -561,13 +595,13 @@ function computeGroupTargets(units, gx, gy){
 // the last one processed actually winning). work/garrisonTower/repair have
 // real worker caps (or just don't conflict), so every eligible groupmate
 // is let through for those.
-const SINGLE_ASSIGNEE_KINDS = new Set(['build', 'garrisonTC']);
+const SINGLE_ASSIGNEE_KINDS = new Set(['build', 'garrisonTC', 'bury', 'raise']);
 function resolveGroupOrders(units, gx, gy){
   const claimed = new Set();
   return units.map(u=>{
     const order = resolveBuildingOrder(u, gx, gy);
     if(order && SINGLE_ASSIGNEE_KINDS.has(order.kind)){
-      const key = order.kind + ':' + (order.buildingId != null ? order.buildingId : 'core');
+      const key = order.kind + ':' + (order.buildingId != null ? order.buildingId : (order.corpseId != null ? 'c'+order.corpseId : 'core'));
       if(claimed.has(key)) return null; // a groupmate already has this — fall back to a spread move
       claimed.add(key);
     }
@@ -770,6 +804,46 @@ function updateUnits(delta){
           u.buildTaskId = null; // genuinely unreachable — free the builder so dispatch can try someone else
           flashWaveBanner('A builder can\'t reach the site — is it walled off?');
         }
+      }
+    }
+    // burial: a villager standing over the corpse lays it to rest
+    if(u.type==='villager' && u.buryCorpseId && !u.moving){
+      const c = corpseById(u.buryCorpseId);
+      if(!c){ u.buryCorpseId = null; } // rotted away (or someone else got there) mid-walk
+      else if(Math.round(u.gx)===c.gx && Math.round(u.gy)===c.gy){
+        u.buryCorpseId = null;
+        state.burialBoost = Math.min((state.burialBoost||0) + CORPSE.buryHappy, CORPSE.buryHappyCap);
+        if(scene && scene.add) floatResourceText(c.gx, c.gy, 'laid to rest', '#a8e6a1');
+        removeCorpse(c);
+        updateHUD();
+      } else if(!u.path || !u.path.length){
+        // stopped short (blocked) — path around, same as the other work-walks
+        u.path = findFriendlyPath(u, c.gx, c.gy, null);
+        if(!u.path) u.buryCorpseId = null; // unreachable — give up gracefully
+      }
+    }
+    // raising: the Necromancer within reach pulls the fallen up as a skeleton
+    if(u.type==='captain' && u.raiseCorpseId && !u.moving && state.faction==='swarm'){
+      const c = corpseById(u.raiseCorpseId);
+      if(!c){ u.raiseCorpseId = null; } // rotted to carrion before he arrived
+      else if(Phaser.Math.Distance.Between(u.gx, u.gy, c.gx, c.gy) <= 1.6){
+        u.raiseCorpseId = null;
+        if(state.population.current >= state.population.cap){
+          flashWaveBanner('The dead are at their limit — raise more Grave Mounds!');
+        } else if(state.resources.food < CORPSE.raiseCost){
+          flashWaveBanner(`Not enough carrion to raise the fallen (${CORPSE.raiseCost} needed).`);
+        } else {
+          state.resources.food -= CORPSE.raiseCost;
+          const sk = createSwordsman(c.gx, c.gy);
+          sk.raised = true; // raised dead are swarm units — they leave no corpse, so no re-raising chains
+          removeCorpse(c);
+          syncPopulationCount();
+          if(scene && scene.add) floatResourceText(c.gx, c.gy, 'RISE!', '#b6c98a');
+          updateHUD();
+        }
+      } else if(!u.path || !u.path.length){
+        u.path = findFriendlyPath(u, c.gx, c.gy, null);
+        if(!u.path) u.raiseCorpseId = null;
       }
     }
     if(u.type==='villager' && u.assignedBuildingId && !u.enteringTC) updateGatherer(u, delta);

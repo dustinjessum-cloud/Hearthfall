@@ -347,12 +347,19 @@ function updateEnemies(delta){
         if(scene && scene.add) floatResourceText(e.gx, e.gy, 'LOOT!', RESOURCE_COLOR.gold);
         flashWaveBanner(`Bandit camp destroyed! Looted ${BANDIT_CAMP.loot.wood} wood, ${BANDIT_CAMP.loot.stone} stone, ${BANDIT_CAMP.loot.gold} gold.`);
       }
-    } else if(state.faction==='swarm'){
-      // dead humans dissolve into biomass where they fall — defense feeds you
-      addResource('food', SWARM.corpseBiomass);
-      if(scene && scene.add) floatResourceText(Math.round(e.gx), Math.round(e.gy), '+'+SWARM.corpseBiomass+' bio', '#c9a0ff');
+    } else if(e.kind==='ram'){
+      // a wrecked ram is machinery, not a body — no corpse. The undead
+      // still salvage the crew's remains as instant carrion, as before.
+      if(state.faction==='swarm'){
+        addResource('food', SWARM.corpseBiomass);
+        if(scene && scene.add) floatResourceText(Math.round(e.gx), Math.round(e.gy), '+'+SWARM.corpseBiomass+' carrion', '#b6c98a');
+      }
     } else {
-      addResource('food', 1); addResource('wood', 1);
+      // a dead human leaves a CORPSE where they fall (raiders, pillagers,
+      // swordsmen alike). Undead: raise it via the Necromancer, or let it
+      // rot into carrion. Humans: bury it for morale (see updateCorpses).
+      spawnCorpse(e.gx, e.gy);
+      if(state.faction!=='swarm'){ addResource('food', 1); addResource('wood', 1); } // scavenged gear, as before
     }
   }
   state.enemies = state.enemies.filter(e=>e.hp>0);

@@ -571,6 +571,41 @@ def draw_ghoul(d):
     rect(d, 11, 29, 14, 30, FLESH_D)
     rect(d, 18, 29, 21, 30, FLESH_D)
 
+def draw_bone_spire(d):
+    # the undead defensive tower (Bone Spire): a tall tapering column of
+    # stacked bone on a stone footing, a skull crown with a spiked bone tip,
+    # small barbs hugging the shaft, and a green soul-glow burning up its
+    # core (its attack). Baked colors -> the tower def carries no tint.
+    STF, STF_D = (120, 120, 126), (90, 90, 96)
+    GLOW, GLOW_L = (118, 196, 108), (170, 245, 150)
+    DARK = (22, 20, 18)
+    # stone footing
+    rect(d, 10, 26, 22, 31, STF)
+    rect(d, 10, 26, 22, 27, STF_D)
+    rect(d, 9, 30, 23, 31, STF_D)
+    # tapering stacked-bone shaft (base wide -> crown narrow)
+    for (x0, y0, x1, y1) in [(11,22,21,26), (12,18,20,22), (12,14,20,18), (13,10,19,14)]:
+        rect(d, x0, y0, x1, y1, BONE)
+        rect(d, x0, y0, x0, y1, BONE_L)     # left highlight
+        rect(d, x1, y0, x1, y1, BONE_D)     # right shadow
+        rect(d, x0, y1, x1, y1, BONE_D)     # stacking seam
+    # small bone barbs hugging the shaft (jut up-and-out, not long arms)
+    d.line([11, 22, 9, 20], fill=BONE, width=1)
+    d.line([21, 22, 23, 20], fill=BONE, width=1)
+    d.line([12, 18, 10, 16], fill=BONE, width=1)
+    d.line([20, 18, 22, 16], fill=BONE, width=1)
+    # green soul-glow burning up the core
+    rect(d, 15, 19, 16, 25, GLOW)
+    rect(d, 15, 21, 16, 23, GLOW_L)
+    rect(d, 15, 15, 16, 17, GLOW)
+    # skull at the crown
+    d.ellipse([13, 6, 19, 13], fill=BONE, outline=BONE_D)
+    rect(d, 14, 8, 15, 9, DARK); rect(d, 17, 8, 18, 9, DARK)
+    rect(d, 15, 11, 16, 12, BONE_D)
+    # spiked bone tip
+    d.polygon([(14, 6), (18, 6), (16, 0)], fill=BONE_L)
+    d.polygon([(15, 6), (17, 6), (16, 2)], fill=BONE)
+
 def draw_broodmother(d):
     # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
     # eyes, and a staff topped with a green flame. Front-facing, matching the
@@ -823,6 +858,7 @@ DRAWERS = [
     ("headstone", draw_headstone),
     ("crypt", draw_crypt),
     ("ghoul", draw_ghoul),
+    ("bone_spire", draw_bone_spire),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

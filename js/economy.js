@@ -401,6 +401,9 @@ function addResource(key, amt){
 // like a pokemon line — new sacks and gilt on storage, towers on the keep
 function evolutionFrameFor(b){
   const lvl = b.level || 1;
+  // the undead core is the crypt at every level — the human town-hall tiers
+  // would otherwise get re-set onto it when it upgrades
+  if(b.isCore && state.faction==='swarm') return 'crypt';
   if(b.isCore) return lvl >= 3 ? 'town_hall_3' : (lvl === 2 ? 'town_hall_2' : 'town_hall');
   if(b.type==='granary') return lvl >= 4 ? 'granary_3' : (lvl >= 2 ? 'granary_2' : 'granary');
   if(b.type==='warehouse') return lvl >= 4 ? 'warehouse_3' : (lvl >= 2 ? 'warehouse_2' : 'warehouse');

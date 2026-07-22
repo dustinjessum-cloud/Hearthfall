@@ -467,6 +467,55 @@ def draw_headstone(d):
     d.line([9, 12, 12, 14], fill=ST_D, width=1)
     rect(d, 19, 20, 21, 22, (86, 104, 74))
 
+def draw_crypt(d):
+    # the undead core (Necropolis): a squat stone mausoleum with a heavy
+    # slab door slid PARTLY OPEN, a sickly soul-glow leaking from the dark
+    # within, a cross-topped pediment and a carved skull over the door.
+    # One 32x32 frame shown at 2x2 in game, baked grey stone (no tint).
+    ST   = (150, 150, 156)
+    ST_D = (112, 112, 120)
+    ST_L = (182, 182, 188)
+    DARK = (16, 14, 18)
+    GLOW = (96, 152, 92)
+    GLOW_L = (150, 240, 150)
+    MOSS = (86, 104, 74)
+    # base step
+    rect(d, 2, 27, 30, 30, ST_D)
+    rect(d, 3, 27, 29, 27, ST)
+    # main tomb body
+    rect(d, 4, 9, 28, 28, ST)
+    rect(d, 4, 9, 5, 28, ST_L)          # left highlight
+    rect(d, 27, 9, 28, 28, ST_D)        # right shadow
+    for y in (14, 19, 24):              # mortar courses
+        rect(d, 4, y, 28, y, ST_D)
+    for x in (10, 22):                  # block verticals (kept clear of the door)
+        rect(d, x, 9, x, 14, ST_D)
+        rect(d, x, 19, x, 24, ST_D)
+    # stone pediment / gable
+    d.polygon([(2, 10), (30, 10), (16, 1)], fill=ST_D)
+    d.polygon([(4, 10), (28, 10), (16, 3)], fill=ST)
+    # cross at the apex
+    rect(d, 15, 0, 16, 5, ST_L)
+    rect(d, 13, 1, 18, 2, ST_L)
+    # doorway opening (dark), with soul-light leaking from deep inside
+    rect(d, 11, 15, 21, 28, DARK)
+    rect(d, 12, 23, 16, 27, GLOW)
+    rect(d, 13, 25, 15, 27, GLOW_L)
+    # the heavy slab door, slid to the RIGHT and left ajar — covers only the
+    # right half, so the left half stays a dark, glowing gap
+    rect(d, 16, 15, 21, 28, ST)
+    rect(d, 16, 15, 16, 28, DARK)       # the ajar shadow-gap edge
+    rect(d, 20, 15, 21, 28, ST_L)
+    rect(d, 18, 20, 18, 23, ST_D)       # a groove on the slab
+    # carved skull keystone over the door
+    d.ellipse([12, 9, 20, 15], fill=BONE, outline=BONE_D)
+    rect(d, 14, 11, 15, 12, DARK)
+    rect(d, 17, 11, 18, 12, DARK)
+    rect(d, 15, 13, 16, 14, BONE_D)
+    # weathering + moss
+    rect(d, 6, 21, 8, 23, MOSS)
+    rect(d, 24, 16, 26, 18, MOSS)
+
 def draw_broodmother(d):
     # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
     # eyes, and a staff topped with a green flame. Front-facing, matching the
@@ -717,6 +766,7 @@ DRAWERS = [
     ("wildstone_deposit_corrupted", draw_wildstone_deposit_corrupted),
     ("creep_hand", draw_creep_hand),
     ("headstone", draw_headstone),
+    ("crypt", draw_crypt),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

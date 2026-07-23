@@ -373,20 +373,27 @@ function removeUnit(u){
 
 function commandUnitMove(u, gx, gy){
   if(!isTileFreeForUnit(gx, gy, u)) return;
-  // Plain move orders PATHFIND now. They used to be a straight line, so a
-  // unit sent past (or behind) a wall or tower walked into the stones and
-  // stopped dead — the "units get stuck near walls" bug. Only the automated
-  // work-walks used to route around obstacles; now every move order does.
-  const path = findFriendlyPath(u, gx, gy, null);
-  if(path && path.length){
-    u.path = path;          // the path-follower in updateUnits starts leg one
-    u.moving = false;
-    u.tx = u.gx; u.ty = u.gy;
-  } else {
-    // already standing there, or genuinely unreachable — degrade to the old
-    // straight walk rather than silently refusing the order
+  // FREE MOVEMENT FIRST. If nothing is actually in the way, walk the direct
+  // line at whatever angle — no waypoints at all. Routing every order through
+  // the grid pathfinder (as this did briefly) made units march in rigid
+  // right-angle staircases, like they were running on rails.
+  const sx = Math.round(u.gx), sy = Math.round(u.gy);
+  if(hasClearLine(u, sx, sy, gx, gy, null)){
     u.path = null;
     u.tx = gx; u.ty = gy; u.moving = true;
+  } else {
+    // something's genuinely blocking — path around it (already smoothed into
+    // long diagonal legs, so it still doesn't look robotic)
+    const path = findFriendlyPath(u, gx, gy, null);
+    if(path && path.length){
+      u.path = path;        // the path-follower in updateUnits starts leg one
+      u.moving = false;
+      u.tx = u.gx; u.ty = u.gy;
+    } else {
+      // unreachable — degrade to a straight walk rather than refuse the order
+      u.path = null;
+      u.tx = gx; u.ty = gy; u.moving = true;
+    }
   }
   // a direct order suppresses the melee auto-charge until they arrive —
   // this was the hero bug: his charge instinct overwrote every move
@@ -699,6 +706,41 @@ function friendlyBlocked(u, gx, gy, goalBuildingId){
   return blocksUnitMovement(b);   // unbuilt foundations are walkable
 }
 
+// Can the unit walk the straight line between two tiles without clipping
+// anything solid? Oversampled so it can't step over a one-tile wall.
+function hasClearLine(u, x0, y0, x1, y1, goalBuildingId){
+  const dx = x1-x0, dy = y1-y0;
+  const steps = Math.max(Math.abs(dx), Math.abs(dy)) * 3;
+  if(steps === 0) return true;
+  for(let i=1; i<=steps; i++){
+    const x = Math.round(x0 + dx*i/steps);
+    const y = Math.round(y0 + dy*i/steps);
+    if(friendlyBlocked(u, x, y, goalBuildingId)) return false;
+  }
+  return true;
+}
+
+// Collapse a grid path into as few long straight legs as possible. The BFS
+// below only steps in 4 directions, so its raw output is an axis-aligned
+// staircase — following that literally is what made units look like they
+// were running on rails. Smoothing lets them cut corners at any angle.
+function smoothPath(u, path, goalBuildingId){
+  if(!path || path.length <= 1) return path;
+  const out = [];
+  let cx = Math.round(u.gx), cy = Math.round(u.gy);
+  let i = 0;
+  while(i < path.length){
+    let best = i;                       // furthest waypoint still in clear sight
+    for(let j = path.length-1; j > i; j--){
+      if(hasClearLine(u, cx, cy, path[j].gx, path[j].gy, goalBuildingId)){ best = j; break; }
+    }
+    out.push(path[best]);
+    cx = path[best].gx; cy = path[best].gy;
+    i = best + 1;
+  }
+  return out;
+}
+
 // Returns waypoints from the unit's tile to (tx,ty) — excluding the start
 // tile — or null when unreachable.
 function findFriendlyPath(u, tx, ty, goalBuildingId){
@@ -716,7 +758,9 @@ function findFriendlyPath(u, tx, ty, goalBuildingId){
       while(cur){ path.push({gx:cur[0], gy:cur[1]}); cur = prev.get(key(cur[0], cur[1])); }
       path.reverse();
       path.shift(); // drop the start tile — the unit is already there
-      return path;
+      // smooth before handing it back, so every caller (move orders, build
+      // walks, tower posts) gets natural diagonal legs instead of a staircase
+      return smoothPath(u, path, goalBuildingId);
     }
     for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
       const nx=x+dx, ny=y+dy;

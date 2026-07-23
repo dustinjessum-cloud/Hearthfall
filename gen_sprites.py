@@ -9,7 +9,7 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 10  # 6x10 = 60 slots (was 6x9=54, which the undead art filled exactly)
+ROWS = 11  # 6x11 = 66 slots (grew from 6x10 for the pass-3 civic buildings)
 
 frames = {}
 order = []
@@ -150,13 +150,16 @@ def draw_stone_deposit(d):
         d.ellipse([x+2, y+2, x+2+max(2, w//3), y+2+max(2, h//3)], fill=STONE_L)
 
 def draw_water(d):
+    # depth mottling + surface shimmer, then crests of VARYING length and
+    # spacing — the old evenly-spaced rows read as banding once tiled
     rect(d, 0, 0, 31, 31, WATER)
-    scatter(d, 101, 26, WATER_D)
-    # staggered crests — offset per row so it doesn't read as banding
-    for wy, off in [(4,1),(10,7),(16,3),(22,9),(28,5)]:
-        for x in range(off, 32, 11):
-            rect(d, x, wy, x+3, wy, WATER_L)
-            rect(d, x+1, wy+1, x+2, wy+1, WATER)
+    scatter(d, 101, 36, WATER_D)
+    scatter(d, 113, 22, shade(WATER, 1.10))
+    for wy, off, ln in [(3,2,4),(8,9,3),(13,4,5),(18,11,3),(23,1,4),(28,7,5)]:
+        for x in range(off, 32, 13):
+            rect(d, x, wy, x+ln, wy, WATER_L)
+    for sx, sy in [(6,6),(20,15),(11,24),(26,27)]:      # sun sparkles
+        rect(d, sx, sy, sx, sy, (198, 226, 248))
 
 def draw_dirt(d):
     rect(d, 0, 0, 31, 31, DIRT)
@@ -1058,6 +1061,111 @@ def draw_wildstone_deposit_corrupted(d):
         d.ellipse([x-1,y-1,x+1,y+1], fill=CRYSTAL_L)
     d.line([9,24, 15,19, 21,23], fill=VEIN, width=1)
 
+# ---- civic buildings ----
+# These seven all used to be recoloured clones of house/warehouse/quarry/
+# stone_deposit/wall_gate — three of them shared the SAME house sprite, so
+# a tavern, a bakery and an apothecary were told apart only by tint. Each
+# now gets a deliberately distinct SILHOUETTE (roofline, chimney, awning,
+# hanging sign) so they're identifiable at a glance, not just by colour.
+
+def draw_well(d):
+    draw_dirt(d)
+    ground_shadow(d, 7, 24, 27, 3)
+    d.ellipse([8, 20, 23, 29], fill=STONE_D)          # stone rim
+    d.ellipse([9, 19, 22, 27], fill=STONE)
+    d.ellipse([12, 21, 19, 25], fill=(24, 30, 44))    # dark water
+    rect(d, 9, 19, 22, 19, shade(STONE, 1.2))
+    rect(d, 10, 6, 11, 20, WOOD_D); rect(d, 10, 6, 10, 20, WOOD)   # posts
+    rect(d, 20, 6, 21, 20, WOOD_D)
+    gable_roof(d, 7, 24, 8, 2, ROOF)
+    rect(d, 11, 10, 20, 11, WOOD)                     # winch bar
+    rect(d, 14, 12, 17, 15, WOOD_D)                   # bucket
+    rect(d, 14, 12, 17, 12, WOOD)
+
+def draw_tavern(d):
+    draw_dirt(d)
+    ground_shadow(d, 4, 27, 28, 3)
+    shaded_box(d, 5, 15, 26, 29, TAN_D)
+    gable_roof(d, 3, 28, 15, 5, (122, 72, 44))
+    plank_door(d, 13, 21, 18, 29)
+    lit_window(d, 7, 18, 10, 21); lit_window(d, 21, 18, 24, 21)
+    rect(d, 26, 12, 31, 13, WOOD_D)                   # sign bracket
+    rect(d, 29, 13, 30, 16, WOOD_D)
+    shaded_box(d, 26, 16, 31, 21, (150, 96, 48))      # hanging sign
+    rect(d, 28, 18, 29, 19, GOLD)                     # mug painted on it
+    for bx in (1, 5):                                  # barrels out front
+        rect(d, bx, 24, bx+3, 29, WOOD)
+        rect(d, bx, 25, bx+3, 25, WOOD_D)
+        rect(d, bx, 28, bx+3, 28, WOOD_D)
+
+def draw_bakery(d):
+    draw_dirt(d)
+    ground_shadow(d, 4, 27, 28, 3)
+    shaded_box(d, 5, 16, 26, 29, TAN)
+    gable_roof(d, 3, 28, 16, 7, ROOF)
+    stone_courses(d, 20, 2, 27, 16, (150, 96, 76))    # big brick chimney
+    for sx, sy in [(22, 1), (25, -1)]:                # smoke
+        d.ellipse([sx, sy, sx+4, sy+4], fill=(196, 196, 200, 140))
+    rect(d, 8, 21, 14, 27, (58, 40, 28))              # oven mouth
+    d.ellipse([9, 22, 13, 26], fill=(240, 150, 60))   # fire glow
+    for bx in (16, 20):                               # loaves cooling
+        d.ellipse([bx, 23, bx+3, 26], fill=(196, 150, 92))
+        rect(d, bx+1, 23, bx+2, 23, (222, 184, 128))
+
+def draw_apothecary(d):
+    draw_dirt(d)
+    ground_shadow(d, 4, 27, 28, 3)
+    shaded_box(d, 5, 14, 26, 29, (206, 196, 168))
+    gable_roof(d, 3, 28, 14, 5, (74, 110, 66))        # herb-green roof
+    plank_door(d, 13, 22, 18, 29)
+    lit_window(d, 7, 17, 10, 20)
+    for hx in (7, 11, 21, 25):                        # herb bundles hung to dry
+        rect(d, hx, 14, hx, 17, (92, 74, 44))
+        d.polygon([(hx-2,17),(hx+2,17),(hx,21)], fill=(86, 140, 70))
+    for bx, c in [(20,(120,190,120)), (23,(180,140,200))]:   # tinctures
+        rect(d, bx, 23, bx+1, 27, c)
+        rect(d, bx, 22, bx+1, 22, WOOD_D)
+
+def draw_market(d):
+    draw_dirt(d)
+    ground_shadow(d, 2, 29, 28, 3)
+    for px in (4, 15, 26):                            # stall posts
+        rect(d, px, 12, px+1, 28, WOOD_D)
+    for i, ax in enumerate(range(2, 30, 4)):          # striped awning
+        rect(d, ax, 8, ax+3, 12, (196, 70, 60) if i % 2 == 0 else (232, 226, 208))
+    rect(d, 2, 8, 29, 8, (226, 120, 104))
+    rect(d, 2, 12, 29, 13, WOOD_D)
+    rect(d, 5, 20, 14, 22, WOOD); rect(d, 17, 20, 27, 22, WOOD)   # tables
+    for gx, c in [(6,(200,80,60)),(9,(230,190,70)),(12,(120,170,90)),
+                  (19,(190,140,90)),(23,(200,80,60))]:            # produce
+        d.ellipse([gx, 17, gx+2, 20], fill=c)
+
+def draw_mason(d):
+    draw_dirt(d)
+    ground_shadow(d, 3, 28, 28, 3)
+    stone_courses(d, 6, 8, 12, 29, STONE)             # half-carved column
+    d.ellipse([5, 4, 13, 10], fill=STONE)
+    rect(d, 5, 4, 13, 5, shade(STONE, 1.2))
+    shaded_box(d, 16, 20, 23, 25, STONE)              # squared blocks
+    shaded_box(d, 24, 22, 30, 27, STONE_D)
+    shaded_box(d, 17, 26, 24, 30, STONE_D)
+    rect(d, 15, 15, 29, 17, WOOD)                     # workbench
+    rect(d, 15, 17, 29, 17, WOOD_D)
+    rect(d, 19, 11, 20, 15, WOOD_D)                   # chisel
+    shaded_box(d, 24, 11, 27, 15, WOOD)               # mallet
+
+def draw_barracks(d):
+    draw_dirt(d)
+    ground_shadow(d, 3, 28, 28, 3)
+    shaded_box(d, 4, 14, 27, 29, WOOD_D)
+    gable_roof(d, 2, 29, 14, 6, (96, 70, 46))
+    plank_door(d, 13, 21, 18, 29)
+    for sx in (6, 9, 22, 25):                         # spear rack
+        rect(d, sx, 16, sx, 27, WOOD)
+        d.polygon([(sx-1,16),(sx+1,16),(sx,12)], fill=STONE)
+    rect(d, 15, 5, 16, 14, WOOD_D)                    # banner pole
+    d.polygon([(16,5),(25,7),(16,12)], fill=(160, 44, 40))
+
 DRAWERS = [
     ("grass", draw_grass),
     ("forest", draw_forest),
@@ -1117,6 +1225,13 @@ DRAWERS = [
     ("corpse", draw_corpse),
     ("troll", draw_troll),
     ("hobgoblin", draw_hobgoblin),
+    ("well", draw_well),
+    ("tavern", draw_tavern),
+    ("bakery", draw_bakery),
+    ("apothecary", draw_apothecary),
+    ("market", draw_market),
+    ("mason", draw_mason),
+    ("barracks", draw_barracks),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

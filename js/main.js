@@ -389,6 +389,7 @@ class MainScene extends Phaser.Scene {
     updateEnemyProjectiles(delta);
     updateCombat(delta, time);
 
+    updateSelectionRings(); // range/aura rings follow the selection as it moves
     if(state.selected || (state.selectedGroup && state.selectedGroup.length)) refreshInfoPanel();
   }
 }

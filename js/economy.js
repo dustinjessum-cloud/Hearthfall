@@ -1205,21 +1205,32 @@ function floatResourceText(gx, gy, text, color){
 // Wood and stone income now happens entirely in updateGatherer (delivery on
 // arrival). economyTick handles the two things that are still clock-based:
 // farm harvests and food upkeep/famine.
-// net resource flow, sampled once per economy tick (3s window catches
-// hauls, taxes, upkeep — everything), shown as +/- per minute on hover
-function updateResourceRates(){
-  const keys = ['food','wheat','flour','wood','stone','gold'];
-  if(state._resSnap){
-    state.resourceRates = {};
-    for(const k of keys){
-      state.resourceRates[k] = (state.resources[k] - state._resSnap[k]) * 20; // 3s -> per min
-    }
-  }
+const RATE_KEYS = ['food','wheat','flour','wood','stone','gold'];
+
+// SUSTAINED flow only — production, hauls, taxes, upkeep and rations. The
+// snapshot is taken at the START of economyTick and diffed at the END, so
+// the window covers just this function's own work.
+//
+// It used to snapshot at the end of one tick and diff at the start of the
+// next, which meant the window covered the whole 3s INCLUDING one-off
+// purchases. Training a villager (-30 food) read as -600/min, so the number
+// lurched around and told you nothing about whether your economy was
+// actually keeping up. Purchases all happen on click, outside economyTick,
+// so bracketing the tick excludes them for free — no need to itemise spends.
+function snapshotResourceRates(){
   state._resSnap = {};
-  for(const k of keys) state._resSnap[k] = state.resources[k];
+  for(const k of RATE_KEYS) state._resSnap[k] = state.resources[k];
+}
+function updateResourceRates(){
+  if(!state._resSnap) return;
+  state.resourceRates = {};
+  for(const k of RATE_KEYS){
+    state.resourceRates[k] = (state.resources[k] - state._resSnap[k]) * 20; // 3s -> per min
+  }
 }
 
 function economyTick(){
+  snapshotResourceRates(); // bracket the tick — see updateResourceRates
   const recalled = isRecalled();
   // the honor of a burial fades with time — mourning isn't forever
   if(state.burialBoost > 0) state.burialBoost = Math.max(0, state.burialBoost - CORPSE.buryDecayPerTick);

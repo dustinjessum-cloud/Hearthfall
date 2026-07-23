@@ -145,6 +145,73 @@ function unitAttack(u){
   };
 }
 
+// What a selected unit is actually doing right now. Soldiers previously said
+// nothing, so there was no way to tell "holding the line" from "hasn't
+// noticed the enemy yet" — the states already exist, they just weren't shown.
+function unitActivity(u){
+  if(u.inTC) return 'Sheltering in the Town Hall';
+  if(u.inTowerId) return 'Garrisoned in a tower';
+  if(u.buryCorpseId) return 'Going to bury the fallen';
+  if(u.raiseCorpseId) return 'Going to raise the fallen';
+  if(u.buildTaskId) return 'Heading to a build site';
+  if(u.repairTargetId) return 'On a repair order';
+  if(u.garrisonId) return 'Climbing to a tower';
+  if(u.moving) return u.playerOrder ? 'Moving on your order' : 'Moving';
+  if(u.type==='swordsman' && state.enemies.some(e=> e.hp>0 &&
+      Phaser.Math.Distance.Between(e.gx, e.gy, u.gx, u.gy) <= SWORDSMAN_AGGRO)) return 'Engaging';
+  return 'Holding position';
+}
+
+// What this unit costs to keep, per minute (economy ticks are 3s => x20).
+function unitUpkeepPerMin(u){
+  const soldier = (u.type==='archer' || u.type==='swordsman' || u.type==='captain');
+  return (soldier ? UPKEEP.soldierFoodPerTick : 0.5) * 20;
+}
+function foodWord(){ return state.faction==='swarm' ? 'carrion' : 'food'; }
+
+// Range + aura rings drawn on the map for the current selection. Numbers tell
+// you an archer has 3.5 range; a ring tells you whether that wall is actually
+// covered. Rebuilt lazily and just toggled/moved after that, so this is cheap
+// enough to run every frame (it has to — the rings follow moving units).
+function updateSelectionRings(){
+  if(!scene || !scene.add) return;
+  const sel = state.selected;
+  const u = (sel && sel.type==='unit') ? sel.ref : null;
+  const b = (sel && sel.type==='building') ? sel.ref : null;
+
+  let r = 0, rx = 0, ry = 0;
+  if(u && u.hp > 0){
+    const a = unitAttack(u);
+    if(a && !a.inTower){ r = a.range; rx = u.gx; ry = u.gy; }
+  } else if(b && b.hp > 0 && !underConstruction(b)){
+    const def = BUILD_DEFS[b.type];
+    if(def && def.attack){ r = def.attack.range; rx = b.gx; ry = b.gy; }
+  }
+  if(r > 0){
+    if(!scene._rangeRing){
+      scene._rangeRing = scene.add.circle(0, 0, 10, 0xffe08a, 0)
+        .setStrokeStyle(1, 0xffe08a, 0.55).setDepth(1);
+    }
+    scene._rangeRing.setVisible(true).setRadius(r * TILE)
+      .setPosition(rx*TILE + TILE/2, ry*TILE + TILE/2);
+  } else if(scene._rangeRing){
+    scene._rangeRing.setVisible(false);
+  }
+
+  // the Minotaur's banner — who is actually inside the +25%
+  const heroSel = u && u.type==='captain' && u.hp > 0;
+  if(heroSel){
+    if(!scene._auraRing){
+      scene._auraRing = scene.add.circle(0, 0, 10, 0xffd76b, 0.07)
+        .setStrokeStyle(1, 0xffd76b, 0.45).setDepth(1);
+    }
+    scene._auraRing.setVisible(true).setRadius(CAPTAIN.auraRange * TILE)
+      .setPosition(u.gx*TILE + TILE/2, u.gy*TILE + TILE/2);
+  } else if(scene._auraRing){
+    scene._auraRing.setVisible(false);
+  }
+}
+
 // A crosshair that blinks out at the tile you just ordered a unit to —
 // confirmation that the click registered and where they're headed. Purely
 // cosmetic and self-destructing: nothing holds a reference, and it tears
@@ -431,12 +498,27 @@ function refreshInfoPanel(){
       if(panel._boundRef !== 'group'){
         panel._boundRef = 'group';
         panel.innerHTML = `<h3>Group</h3><div id="groupCount"></div>
+          <div class="hpbar"><div class="hpfill" id="groupHpFill"></div></div>
+          <div id="groupAtk" style="margin-top:4px;color:#e8dcc0;"></div>
+          <div id="groupUpkeep" style="color:#d8c79a;"></div>
           <div style="margin-top:6px;color:#d8c79a;">Right-click a tile to move everyone there. Esc deselects.</div>`;
       }
       const gc = document.getElementById('groupCount');
       if(gc){
+        // pooled totals — lets you size up an army at a glance instead of
+        // clicking through it one unit at a time
         const alive = state.selectedGroup.filter(u=>u.hp>0);
-        gc.textContent = `${alive.length} units selected`;
+        const hp = alive.reduce((s,u)=> s + Math.max(0, u.hp), 0);
+        const maxHp = alive.reduce((s,u)=> s + u.maxHp, 0);
+        const dmg = alive.reduce((s,u)=>{ const a = unitAttack(u); return s + (a ? a.dmg : 0); }, 0);
+        const up = alive.reduce((s,u)=> s + unitUpkeepPerMin(u), 0);
+        gc.textContent = `${alive.length} units — ${Math.round(hp)}/${maxHp} HP`;
+        const fill = document.getElementById('groupHpFill');
+        if(fill) fill.style.width = (maxHp ? Math.max(0, hp/maxHp)*100 : 0) + '%';
+        const ae = document.getElementById('groupAtk');
+        if(ae) ae.textContent = dmg > 0 ? `${dmg} dmg per volley` : 'No combat units';
+        const ue = document.getElementById('groupUpkeep');
+        if(ue) ue.textContent = `Eats ${Math.round(up)} ${foodWord()}/min`;
       }
       return;
     }
@@ -525,6 +607,8 @@ function refreshInfoPanel(){
         <div class="hpbar"><div class="hpfill" id="infoHpFill"></div></div>
         ${unitAttack(ref) ? `<div id="infoAtk" style="margin-top:4px;color:#e8dcc0;"></div>
         <div id="infoAtkNote" style="color:#ffd76b;"></div>` : ''}
+        <div id="infoActivity" style="margin-top:4px;color:#9fc4ff;"></div>
+        <div id="infoUpkeep" style="color:#d8c79a;"></div>
         ${isHero ? `<div id="heroXp" style="margin-top:4px;color:#c9a0ff;"></div>
         <div class="hpbar"><div class="hpfill" id="heroXpFill" style="background:#9a6fd4;"></div></div>
         <div id="heroCds" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
@@ -808,6 +892,10 @@ function refreshInfoPanel(){
                     : `every ${a.secs}s`);
       noteEl.style.color = a.inTower ? '#9fc4ff' : (a.inAura ? '#ffd76b' : '#d8c79a');
     }
+    const actEl = document.getElementById('infoActivity');
+    if(actEl) actEl.textContent = unitActivity(ref);
+    const upEl = document.getElementById('infoUpkeep');
+    if(upEl) upEl.textContent = `Eats ${unitUpkeepPerMin(ref)} ${foodWord()}/min`;
   }
   if(type==='unit' && ref.type==='villager'){
     const assignEl = document.getElementById('infoAssign');

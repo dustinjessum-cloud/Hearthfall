@@ -77,7 +77,7 @@ function spawnBanditCamps(){
       id: enemyIdCounter++, gx, gy, hp:BANDIT_CAMP.hp, maxHp:BANDIT_CAMP.hp, dmg:0,
       kind:'camp', speedMult:0, path:null, pathIdx:0, lastMoveAt:0, lastAttackAt:0, target:null,
     };
-    e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME.wall_gate).setTint(state.faction==='swarm' ? 0x8fb4e8 : 0xcc5544);
+    e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME.bandit_camp); // own sprite now — was a tinted wall gate
     e.hpBarBg = scene.add.rectangle(gx*TILE+TILE/2, gy*TILE-2, TILE-8, 4, 0x2a1c10).setDepth(5);
     e.hpBarFg = scene.add.rectangle(gx*TILE+4, gy*TILE-2, TILE-8, 4, 0xd85a3a).setOrigin(0,0.5).setDepth(6);
     state.enemies.push(e);
@@ -117,8 +117,12 @@ function spawnEnemy(hp, dmg, wave, kind, at, opts){
 
   // sprite by race + role (rams keep their own frame)
   let frame;
+  // human economy-hunters are the bandits from the camps — they get their own
+  // scruffy hooded sprite rather than a recoloured line-soldier
+  const isBandit = (race==='human' && k==='pillager');
   if(isRam) frame = 'enemy_ram';
   else if(ranged) frame = rc.ranged;
+  else if(isBandit) frame = 'bandit';
   else frame = (k==='swordsman') ? rc.meleeTough : rc.melee;
 
   const e = {
@@ -133,7 +137,9 @@ function spawnEnemy(hp, dmg, wave, kind, at, opts){
   // tint: pillagers read orange (they're after your sprawl); some reused
   // friendly sprites (the human archer) get a hostile red so they don't
   // read as your own troops. Remembered so the web-slow tint restores right.
-  e.baseTint = (k==='pillager') ? 0xffaa55 : (ranged && rc && rc.rangedTint ? rc.rangedTint : null);
+  // bandits carry their own colours, so no orange wash over them; other-race
+  // pillagers still get it as the "this one hunts your sprawl" signal
+  e.baseTint = (k==='pillager' && !isBandit) ? 0xffaa55 : (ranged && rc && rc.rangedTint ? rc.rangedTint : null);
   if(e.baseTint && e.sprite.setTint) e.sprite.setTint(e.baseTint);
   e.hpBarBg = scene.add.rectangle(gx*TILE+TILE/2, gy*TILE-2, TILE-8, 4, 0x2a1c10).setDepth(5);
   e.hpBarFg = scene.add.rectangle(gx*TILE+4, gy*TILE-2, TILE-8, 4, 0xd85a3a).setOrigin(0,0.5).setDepth(6);

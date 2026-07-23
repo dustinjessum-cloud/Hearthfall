@@ -9,7 +9,7 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 11  # 6x11 = 66 slots (grew from 6x10 for the pass-3 civic buildings)
+ROWS = 12  # 6x12 = 72 slots (grew from 6x11 for the bandit camp + bandit)
 
 frames = {}
 order = []
@@ -892,28 +892,82 @@ def draw_troll(d):
     rect(d, 17, 27, 21, 31, HIDE_D)
 
 def draw_hobgoblin(d):
-    # a skinny goblinoid spear-thrower: wiry yellow-green, big ears, ragged
-    # scraps, one arm cocked back with a spear ready to hurl.
-    SKN, SKN_D = (140, 132, 78), (106, 100, 56)
-    RAG = (92, 72, 52)
-    SHAFT, TIP = (120, 96, 60), (168, 168, 176)
-    EYE = (200, 60, 40)
-    # spear, cocked back over the shoulder, angled to throw
-    d.line([9, 4, 24, 20], fill=SHAFT, width=1)
-    d.polygon([(23, 18), (26, 22), (22, 22)], fill=TIP)   # spearhead, low-front
-    # skinny ragged torso
-    rect(d, 13, 12, 18, 22, RAG)
-    rect(d, 13, 12, 13, 22, SKN_D)
-    # thin limbs — left arm cocked back holding the spear, right forward
-    rect(d, 10, 8, 13, 13, SKN)          # rear/throwing arm up-back
-    rect(d, 18, 13, 21, 18, SKN)         # lead arm forward
-    rect(d, 13, 22, 15, 30, SKN_D)       # legs
-    rect(d, 16, 22, 18, 30, SKN_D)
-    # big-eared head
-    rect(d, 13, 5, 18, 11, SKN)
-    d.polygon([(13, 6), (10, 4), (13, 9)], fill=SKN)   # left ear
-    d.polygon([(18, 6), (21, 4), (18, 9)], fill=SKN)   # right ear
-    rect(d, 14, 8, 15, 9, EYE); rect(d, 16, 8, 17, 9, EYE)
+    # Wiry goblinoid spear-thrower, snarling, spear cocked back to HURL —
+    # the old one angled the spear down-forward so it read as if it were
+    # stabbing the dirt, and was flat-shaded with no ground shadow.
+    SKN, SKN_D, SKN_L = (140, 132, 78), (104, 98, 54), (168, 160, 102)
+    RAG, RAG_D = (98, 78, 56), (72, 56, 40)
+    SHAFT, TIP = (122, 96, 60), (178, 178, 186)
+    EYE = (222, 72, 44)
+    d.ellipse([10, 27, 22, 31], fill=(0, 0, 0, 70))          # ground shadow
+    # spear drawn back over the shoulder, head angled UP and forward
+    d.line([5, 21, 27, 6], fill=SHAFT, width=1)
+    d.polygon([(28, 3), (24, 8), (29, 8)], fill=TIP)
+    # bent legs
+    rect(d, 12, 22, 14, 29, SKN_D); rect(d, 12, 22, 12, 29, SKN)
+    rect(d, 17, 22, 19, 29, SKN_D); rect(d, 17, 22, 17, 29, SKN)
+    rect(d, 11, 29, 15, 30, RAG_D); rect(d, 16, 29, 20, 30, RAG_D)   # feet
+    # hunched ragged torso
+    rect(d, 12, 12, 19, 23, RAG)
+    rect(d, 12, 12, 13, 23, shade(RAG, 1.28))
+    rect(d, 18, 12, 19, 23, RAG_D)
+    for ry in (15, 19):
+        rect(d, 12, ry, 19, ry, RAG_D)                       # rag ties
+    # rear arm cocked back on the spear, lead arm thrown forward
+    rect(d, 7, 17, 12, 19, SKN); rect(d, 7, 17, 12, 17, SKN_L)
+    rect(d, 19, 13, 23, 15, SKN); rect(d, 19, 13, 23, 13, SKN_L)
+    # big-eared snarling head
+    d.ellipse([12, 4, 20, 12], fill=SKN)
+    rect(d, 12, 4, 16, 5, SKN_L)                             # lit brow
+    d.polygon([(12, 6), (7, 2), (12, 10)], fill=SKN)         # left ear
+    d.polygon([(20, 6), (25, 2), (20, 10)], fill=SKN)        # right ear
+    d.polygon([(12, 7), (9, 4), (12, 9)], fill=SKN_D)        # inner-ear shadow
+    rect(d, 13, 7, 14, 8, EYE); rect(d, 17, 7, 18, 8, EYE)
+    rect(d, 14, 10, 18, 11, SKN_D)                           # snarl
+    for tx in (15, 17):
+        rect(d, tx, 10, tx, 10, (232, 228, 206))             # teeth
+
+def draw_bandit(d):
+    # a scruffy hooded outlaw with a knife — the drilled-soldier silhouette
+    # of a regular raider read wrong for camp skirmishers
+    HOOD, HOOD_D = (98, 78, 60), (68, 52, 40)
+    TUNIC = (122, 98, 70)
+    SASH = (150, 60, 50)
+    d.ellipse([10, 27, 22, 31], fill=(0, 0, 0, 70))
+    rect(d, 13, 21, 15, 27, shade(TUNIC, 0.70))
+    rect(d, 17, 21, 19, 27, shade(TUNIC, 0.70))
+    rect(d, 12, 27, 15, 30, (58, 44, 32)); rect(d, 17, 27, 20, 30, (58, 44, 32))
+    rect(d, 11, 12, 21, 22, TUNIC)
+    rect(d, 11, 12, 12, 22, shade(TUNIC, 1.18))
+    rect(d, 20, 12, 21, 22, shade(TUNIC, 0.74))
+    d.line([12, 13, 20, 21], fill=SASH, width=2)             # bandolier
+    rect(d, 8, 13, 10, 21, TUNIC); rect(d, 22, 13, 24, 21, TUNIC)
+    # deep hood with the face in shadow, just eyes glinting
+    d.ellipse([11, 3, 21, 13], fill=HOOD)
+    d.polygon([(11, 9), (21, 9), (16, 1)], fill=HOOD)
+    d.ellipse([13, 7, 19, 12], fill=HOOD_D)
+    rect(d, 14, 9, 15, 10, (226, 204, 124)); rect(d, 17, 9, 18, 10, (226, 204, 124))
+    rect(d, 24, 16, 25, 21, WOOD_D)                          # knife
+    d.polygon([(24, 16), (26, 16), (25, 9)], fill=(198, 198, 206))
+
+def draw_bandit_camp(d):
+    # an outlaw camp: sharpened palisade stakes, a hide tent, a campfire and
+    # a skull on a pike. Was a red-tinted wall GATE, of all things.
+    draw_dirt(d)
+    ground_shadow(d, 3, 29, 29, 2)
+    for sx in range(2, 30, 5):                               # palisade
+        rect(d, sx, 7, sx+2, 19, WOOD)
+        rect(d, sx, 7, sx, 19, shade(WOOD, 1.22))
+        d.polygon([(sx, 7), (sx+2, 7), (sx+1, 3)], fill=shade(WOOD, 1.1))
+    d.polygon([(3, 29), (17, 29), (10, 13)], fill=(146, 126, 98))   # hide tent
+    d.polygon([(10, 29), (17, 29), (10, 13)], fill=(112, 96, 74))
+    rect(d, 9, 22, 11, 29, (56, 44, 34))                     # tent mouth
+    rect(d, 18, 26, 26, 28, WOOD_D)                          # campfire logs
+    d.polygon([(19, 26), (25, 26), (22, 19)], fill=(232, 142, 52))
+    d.polygon([(20, 26), (24, 26), (22, 21)], fill=(250, 212, 92))
+    rect(d, 28, 9, 29, 24, WOOD_D)                           # skull on a pike
+    d.ellipse([26, 4, 31, 9], fill=BONE, outline=BONE_D)
+    rect(d, 27, 6, 27, 7, BLACK); rect(d, 29, 6, 29, 7, BLACK)
 
 def draw_broodmother(d):
     # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
@@ -1293,6 +1347,8 @@ DRAWERS = [
     ("mason", draw_mason),
     ("barracks", draw_barracks),
     ("caravan", draw_caravan),
+    ("bandit", draw_bandit),
+    ("bandit_camp", draw_bandit_camp),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

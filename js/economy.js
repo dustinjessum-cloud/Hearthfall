@@ -787,6 +787,15 @@ function removeBuilding(b){
 }
 
 function damageBuilding(b, dmg){
+  // Scaffolding is flimsy: ANY hit levels an unfinished building, and the
+  // materials are lost. Without this, cheap unbuilt wall foundations were a
+  // free barricade — you could wall a raid out with walls you never paid to
+  // finish. Refunds are what the Cancel button is for; being overrun isn't.
+  if(underConstruction(b)){
+    if(scene && scene.add) floatResourceText(b.gx, b.gy, 'wrecked!', '#ff8a6b');
+    removeBuilding(b); // no refund
+    return;
+  }
   b.hp -= dmg;
   b.hpBarBg.setVisible(true); b.hpBarFg.setVisible(true);
   const pct = Math.max(0, b.hp/b.maxHp);

@@ -124,6 +124,27 @@ function refreshRallyMarkers(){
   }
 }
 
+// Live combat stats for a selected unit. Reads the shared ATTACK constants
+// rather than a copy, so permanent evolutions (Veteran Training / Masterwork
+// Bows, which mutate those constants) show up here automatically, and the
+// Minotaur's banner bonus appears the moment the unit steps into his radius.
+// Returns null for non-combatants (villagers, repairmen).
+function unitAttack(u){
+  const atk = u.type==='archer' ? ARCHER_ATTACK
+            : (u.type==='swordsman' ? SWORDSMAN_ATTACK : null);
+  if(!atk) return null;
+  const cap = livingCaptain();
+  const inAura = !!(cap && cap !== u &&
+    Phaser.Math.Distance.Between(cap.gx, cap.gy, u.gx, u.gy) <= CAPTAIN.auraRange);
+  const dmg = inAura ? Math.round(atk.damage * CAPTAIN.auraMult) : atk.damage;
+  const secs = atk.cooldownMs / 1000;
+  return {
+    dmg, base: atk.damage, inAura, range: atk.range,
+    secs: secs.toFixed(1), dps: (dmg / secs).toFixed(1),
+    inTower: !!u.inTowerId,
+  };
+}
+
 // A crosshair that blinks out at the tile you just ordered a unit to —
 // confirmation that the click registered and where they're headed. Purely
 // cosmetic and self-destructing: nothing holds a reference, and it tears
@@ -502,6 +523,8 @@ function refreshInfoPanel(){
       panel.innerHTML = `<h3>${unitName}${isHero ? ' <span id="heroLvl"></span>' : ''}</h3>
         <div>HP: <span id="infoHpText"></span></div>
         <div class="hpbar"><div class="hpfill" id="infoHpFill"></div></div>
+        ${unitAttack(ref) ? `<div id="infoAtk" style="margin-top:4px;color:#e8dcc0;"></div>
+        <div id="infoAtkNote" style="color:#ffd76b;"></div>` : ''}
         ${isHero ? `<div id="heroXp" style="margin-top:4px;color:#c9a0ff;"></div>
         <div class="hpbar"><div class="hpfill" id="heroXpFill" style="background:#9a6fd4;"></div></div>
         <div id="heroCds" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
@@ -772,6 +795,18 @@ function refreshInfoPanel(){
       const jav = (ref.javCd||0) > 0 ? (ref.javCd/1000).toFixed(1)+'s' : 'READY (J)';
       const sl  = (ref.slashCd||0) > 0 ? (ref.slashCd/1000).toFixed(1)+'s' : 'READY (K)';
       cdEl.textContent = `Javelin ${heroJavelinDmg()}dmg: ${jav} — Slash ${heroSlashDmg()}dmg: ${sl}`;
+    }
+  }
+  if(type==='unit'){
+    const a = unitAttack(ref);
+    const atkEl = document.getElementById('infoAtk');
+    if(a && atkEl) atkEl.textContent = `${a.dmg} dmg · ${a.range} range · ${a.dps}/s`;
+    const noteEl = document.getElementById('infoAtkNote');
+    if(a && noteEl){
+      noteEl.textContent = a.inTower ? 'Manning the tower — fires through it, not their own bow'
+        : (a.inAura ? `+25% under the banner (base ${a.base}, every ${a.secs}s)`
+                    : `every ${a.secs}s`);
+      noteEl.style.color = a.inTower ? '#9fc4ff' : (a.inAura ? '#ffd76b' : '#d8c79a');
     }
   }
   if(type==='unit' && ref.type==='villager'){

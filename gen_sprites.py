@@ -666,6 +666,62 @@ def draw_corpse(d):
     d.line([8, 18, 14, 15], fill=(120, 120, 128), width=1)
     rect(d, 8, 18, 9, 19, WOOD_D)
 
+def draw_troll(d):
+    # a hulking ogre-troll: broad hunched body of sickly green hide, small
+    # tusked head sunk into the shoulders, huge fists and a crude club.
+    # Drawn big to fill the frame (it's scaled up further in-game).
+    HIDE, HIDE_D, HIDE_L = (104, 132, 86), (78, 102, 64), (128, 156, 106)
+    LOIN = (86, 64, 44)
+    TUSK = (232, 228, 206)
+    CLUB, CLUB_D = (112, 84, 54), (84, 62, 40)
+    EYE = (150, 40, 34)
+    # a crude club raised in the right fist (drawn first, behind the arm)
+    rect(d, 25, 3, 29, 14, CLUB); rect(d, 25, 3, 29, 4, CLUB_D)
+    rect(d, 26, 12, 28, 22, CLUB_D)
+    # broad hunched torso
+    rect(d, 9, 12, 23, 25, HIDE)
+    rect(d, 9, 12, 10, 25, HIDE_L)
+    rect(d, 22, 12, 23, 25, HIDE_D)
+    rect(d, 12, 15, 20, 20, HIDE_D)      # belly shadow
+    # small head sunk between the shoulders
+    rect(d, 13, 6, 19, 12, HIDE)
+    rect(d, 13, 6, 19, 7, HIDE_D)
+    rect(d, 14, 9, 15, 10, EYE); rect(d, 17, 9, 18, 10, EYE)
+    rect(d, 14, 11, 15, 12, TUSK); rect(d, 17, 11, 18, 12, TUSK)  # jutting tusks
+    # huge arms
+    rect(d, 5, 13, 9, 23, HIDE); rect(d, 5, 13, 6, 23, HIDE_L)
+    rect(d, 23, 13, 27, 23, HIDE); rect(d, 26, 13, 27, 23, HIDE_D)
+    rect(d, 4, 21, 9, 26, HIDE_D)        # left fist
+    rect(d, 23, 21, 28, 26, HIDE_D)      # right fist (gripping the club)
+    # loincloth + stumpy legs
+    rect(d, 11, 24, 21, 28, LOIN)
+    rect(d, 11, 27, 15, 31, HIDE_D)
+    rect(d, 17, 27, 21, 31, HIDE_D)
+
+def draw_hobgoblin(d):
+    # a skinny goblinoid spear-thrower: wiry yellow-green, big ears, ragged
+    # scraps, one arm cocked back with a spear ready to hurl.
+    SKN, SKN_D = (140, 132, 78), (106, 100, 56)
+    RAG = (92, 72, 52)
+    SHAFT, TIP = (120, 96, 60), (168, 168, 176)
+    EYE = (200, 60, 40)
+    # spear, cocked back over the shoulder, angled to throw
+    d.line([9, 4, 24, 20], fill=SHAFT, width=1)
+    d.polygon([(23, 18), (26, 22), (22, 22)], fill=TIP)   # spearhead, low-front
+    # skinny ragged torso
+    rect(d, 13, 12, 18, 22, RAG)
+    rect(d, 13, 12, 13, 22, SKN_D)
+    # thin limbs — left arm cocked back holding the spear, right forward
+    rect(d, 10, 8, 13, 13, SKN)          # rear/throwing arm up-back
+    rect(d, 18, 13, 21, 18, SKN)         # lead arm forward
+    rect(d, 13, 22, 15, 30, SKN_D)       # legs
+    rect(d, 16, 22, 18, 30, SKN_D)
+    # big-eared head
+    rect(d, 13, 5, 18, 11, SKN)
+    d.polygon([(13, 6), (10, 4), (13, 9)], fill=SKN)   # left ear
+    d.polygon([(18, 6), (21, 4), (18, 9)], fill=SKN)   # right ear
+    rect(d, 14, 8, 15, 9, EYE); rect(d, 16, 8, 17, 9, EYE)
+
 def draw_broodmother(d):
     # a robed LICH: hooded dark robe, a bone skull face with cold soul-light
     # eyes, and a staff topped with a green flame. Front-facing, matching the
@@ -921,6 +977,8 @@ DRAWERS = [
     ("bone_spire", draw_bone_spire),
     ("graveyard", draw_graveyard),
     ("corpse", draw_corpse),
+    ("troll", draw_troll),
+    ("hobgoblin", draw_hobgoblin),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

@@ -12,7 +12,10 @@
 // ---------------------------------------------------------------------
 const SAVE_KEY = 'hearthfall_save_v1';
 const SAVE_INTERVAL_MS = 20000;
-const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker']);
+// Live Phaser handles that must never be serialized (circular refs to the
+// scene). garrisonMarker (tower badge) and queueMarkers (order-queue dots)
+// are recreated from live state on restore, so drop them here too.
+const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker', 'garrisonMarker', 'queueMarkers']);
 
 function hasSavedGame(){
   try { return !!localStorage.getItem(SAVE_KEY); } catch(err){ return false; }

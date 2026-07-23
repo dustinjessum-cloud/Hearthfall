@@ -40,6 +40,33 @@ function exitTower(u){
   positionUnitVisuals(u, u.gx*TILE+TILE/2, u.gy*TILE+TILE/2);
 }
 
+// A small always-on badge above any manned tower showing its defender
+// count — so the player can tell at a glance which towers are crewed
+// (they're hidden INSIDE, so there's otherwise no on-map sign). Refreshed
+// from updateHUD, which fires on every garrison change and economy tick.
+function updateTowerGarrisonMarkers(){
+  if(!scene || !scene.add) return;
+  for(const b of state.buildings){
+    if(b.type!=='tower' || b.hp<=0){
+      if(b.garrisonMarker){ b.garrisonMarker.destroy(); b.garrisonMarker = null; }
+      continue;
+    }
+    const n = towerGarrison(b).total;
+    if(n <= 0){
+      if(b.garrisonMarker) b.garrisonMarker.setVisible(false);
+      continue;
+    }
+    if(!b.garrisonMarker){
+      const circ = scene.add.circle(0, 0, 6, 0x24406e).setStrokeStyle(1, 0x9fc4ff, 1);
+      const txt = scene.add.text(0, 0, '', { fontSize:'9px', color:'#dbe8ff', fontStyle:'bold' }).setOrigin(0.5);
+      b.garrisonMarker = scene.add.container(b.gx*TILE+TILE-5, b.gy*TILE+5, [circ, txt]).setDepth(7);
+      b.garrisonMarker._txt = txt;
+    }
+    b.garrisonMarker.setVisible(true);
+    b.garrisonMarker._txt.setText(String(n));
+  }
+}
+
 function releaseTowerGarrison(tower){
   let n = 0;
   for(const u of [...state.units]){
@@ -747,6 +774,7 @@ function removeBuilding(b){
     if(inBounds(b.gx+dx, b.gy+dy) && state.occupied[b.gy+dy][b.gx+dx]===b) state.occupied[b.gy+dy][b.gx+dx] = null;
   }
   state.buildings = state.buildings.filter(x=>x!==b);
+  if(b.garrisonMarker){ b.garrisonMarker.destroy(); b.garrisonMarker = null; }
   b.sprite.destroy(); b.hpBarBg.destroy(); b.hpBarFg.destroy();
   const def = BUILD_DEFS[b.type];
   if(def && def.popCap) state.population.cap = Math.max(3, state.population.cap - def.popCap);

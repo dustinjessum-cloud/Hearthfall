@@ -207,7 +207,7 @@ class MainScene extends Phaser.Scene {
       const x0 = Math.min(w1.x, w2.x), x1 = Math.max(w1.x, w2.x);
       const y0 = Math.min(w1.y, w2.y), y1 = Math.max(w1.y, w2.y);
       const picked = state.units.filter(u=>{
-        if(u.hp<=0 || u.inTC) return false;
+        if(u.hp<=0 || u.inTC || u.inTowerId) return false; // sheltered/garrisoned units aren't on the field to box-select
         const px = u.gx*TILE + TILE/2, py = u.gy*TILE + TILE/2;
         return px>=x0 && px<=x1 && py>=y0 && py<=y1;
       });
@@ -219,7 +219,7 @@ class MainScene extends Phaser.Scene {
       clearGroupSelection();
       let unit=null, bd=0.8;
       for(const uu of state.units){
-        if(uu.hp<=0 || uu.inTC) continue;
+        if(uu.hp<=0 || uu.inTC || uu.inTowerId) continue; // garrisoned units sit on the tower tile hidden — don't let them eat the tower's click
         const d = Math.hypot(uu.gx - (wp.x/TILE - 0.5), uu.gy - (wp.y/TILE - 0.5));
         if(d < bd){ bd = d; unit = uu; }
       }

@@ -61,6 +61,7 @@ function updateHUD(){
 
   refreshBuildBar();
   refreshHud2Buttons();
+  updateTowerGarrisonMarkers();
 }
 
 function refreshHud2Buttons(){

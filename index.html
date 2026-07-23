@@ -83,6 +83,26 @@
   #infoPanel h3 { margin: 0 0 6px 0; font-size: 13px; color: #ffd76b; }
   #infoPanel .hpbar { background:#3a2a18; border:1px solid #7a5a34; height:8px; border-radius:3px; overflow:hidden; margin-top:4px;}
   #infoPanel .hpfill { background:#6bbf59; height:100%; }
+  /* idle-worker button: only appears when someone is standing around doing
+     nothing, so an empty bar means everyone is employed */
+  #idleBox {
+    flex: 0 0 auto; box-sizing: border-box;
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    min-width: 58px; padding: 6px 8px;
+    background: rgba(20,14,8,.5); border: 1px solid #c9a227; border-radius: 6px;
+    color: #f0e6d2; cursor: pointer; user-select: none;
+    animation: idleNudge 2.2s ease-in-out infinite;
+  }
+  #idleBox:hover { background: #4a3520; border-color: #ffd76b; animation: none; }
+  #idleBox:active { transform: translateY(1px); }
+  #idleBox canvas { width: 28px; height: 28px; image-rendering: pixelated; }
+  #idleBox .idleN { font-size: 14px; font-weight: bold; color: #ffd76b; line-height: 1; }
+  #idleBox .idleLabel { font-size: 10px; color: #b8a888; }
+  @keyframes idleNudge {
+    0%, 70%, 100% { border-color: #7a5a34; }
+    85%           { border-color: #ffd76b; }
+  }
+  @media (prefers-reduced-motion: reduce) { #idleBox { animation: none; border-color: #ffd76b; } }
   #trainBtn, #trainSwordBtn, #trainVillagerBtn, #trainRepBtn, #tcUpgradeBtn, #upgradeBtn, #captainBtn, #releaseBtn, #salvageBtn, #towerReleaseBtn, .tradeBtn {
     margin-top: 6px; width: 100%; background: #4a3520; border: 1px solid #7a5a34;
     color: #f0e6d2; padding: 5px; border-radius: 4px; cursor: pointer; font-size: 12px;
@@ -150,6 +170,11 @@
     </div>
   </div>
   <div id="bottomBar">
+    <div id="idleBox">
+      <canvas id="idleIcon" width="32" height="32"></canvas>
+      <span class="idleN" id="idleCount">0</span>
+      <span class="idleLabel" id="idleLabel">idle</span>
+    </div>
     <div id="infoPanel"></div>
     <div id="buildBar"></div>
   </div>

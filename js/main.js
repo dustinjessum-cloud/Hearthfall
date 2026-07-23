@@ -138,6 +138,8 @@ class MainScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D');
+    // "." is the genre-standard idle-worker key; ctrl+. grabs all of them
+    this.idleKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.PERIOD);
 
     this.input.on('wheel', (pointer, go, dx, dy)=>{
       let z = this.cameras.main.zoom - dy*0.001;
@@ -391,6 +393,14 @@ class MainScene extends Phaser.Scene {
 
     updateSelectionRings(); // range/aura rings follow the selection as it moves
     if(state.selected || (state.selectedGroup && state.selectedGroup.length)) refreshInfoPanel();
+
+    // a villager goes idle the instant it finishes a haul or arrives with no
+    // job — neither of which routes through updateHUD, so poll for it
+    this.lastIdleAt = (this.lastIdleAt || 0) + delta;
+    if(this.lastIdleAt >= 250){ this.lastIdleAt = 0; refreshIdleBox(); }
+    if(this.idleKey && Phaser.Input.Keyboard.JustDown(this.idleKey)){
+      selectIdleWorkers(this.idleKey.ctrlKey);
+    }
   }
 }
 
@@ -447,6 +457,16 @@ window.addEventListener('DOMContentLoaded', ()=>{
     });
   } catch(err){
     console.error('Icon draw failed (non-fatal):', err);
+  }
+
+  const idleBox = document.getElementById('idleBox');
+  if(idleBox){
+    idleBox.addEventListener('click', (ev)=>{
+      ev.preventDefault();
+      selectIdleWorkers(ev.ctrlKey || ev.metaKey);
+    });
+    // ctrl+click opens the context menu on some platforms — suppress it here
+    idleBox.addEventListener('contextmenu', (ev)=> ev.preventDefault());
   }
 
   const bootGame = (faction, snapshot)=>{

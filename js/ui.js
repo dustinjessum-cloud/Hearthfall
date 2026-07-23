@@ -61,7 +61,76 @@ function updateHUD(){
 
   refreshBuildBar();
   refreshHud2Buttons();
+  refreshIdleBox();
   updateTowerGarrisonMarkers();
+}
+
+// ---- idle workers ---------------------------------------------------
+// "Idle" means holding no job at all: not assigned to a resource building,
+// not on a build task, not repairing, not burying or raising a corpse, not
+// tucked inside the Town Hall or up a tower, and not walking somewhere you
+// sent them. A villager walking to a destination still has an order, so it
+// is not idle — it becomes idle the moment it arrives with nothing to do.
+function idleWorkers(){
+  if(typeof state === 'undefined' || !state || !state.units) return [];
+  return state.units.filter(u =>
+    u.type === 'villager' && u.hp > 0 &&
+    !u.assignedBuildingId && !u.buildTaskId && !u.repairTargetId &&
+    !u.buryCorpseId && !u.raiseCorpseId &&
+    !u.inTC && !u.enteringTC && !u.inTowerId && !u.garrisonId &&
+    !u.moving && !(u.orderQueue && u.orderQueue.length)
+  );
+}
+
+let _idleCycle = 0;
+let _idleIconFrame = null;
+
+function refreshIdleBox(){
+  const box = document.getElementById('idleBox');
+  if(!box) return;
+  const list = idleWorkers();
+  if(!list.length){ box.style.display = 'none'; _idleCycle = 0; return; }
+  box.style.display = 'flex';
+
+  const noun = state.faction === 'swarm' ? 'ghoul' : 'villager';
+  const word = list.length === 1 ? noun : noun + 's';
+  document.getElementById('idleCount').textContent = list.length;
+  document.getElementById('idleLabel').textContent = 'idle';
+  box.title = `${list.length} idle ${word}\n▸ Click: jump to the next one`
+            + `\n▸ Ctrl+click: select all ${list.length}`;
+
+  // the icon can only be drawn once the faction is known, so it is drawn
+  // lazily on first show rather than at boot with the other HUD icons
+  const frame = state.faction === 'swarm' ? FRAME.ghoul : FRAME.villager;
+  if(_idleIconFrame !== frame && SPRITESHEET_IMG){
+    drawIconCanvas(document.getElementById('idleIcon'), frame);
+    _idleIconFrame = frame;
+  }
+}
+
+function panCameraTo(gx, gy){
+  if(typeof scene !== 'undefined' && scene && scene.cameras && scene.cameras.main && scene.cameras.main.pan)
+    scene.cameras.main.pan(gx*TILE + TILE/2, gy*TILE + TILE/2, 300, 'Sine.easeInOut');
+}
+
+// click cycles one at a time (so you can hand out jobs individually),
+// ctrl+click grabs the whole unemployed crowd at once
+function selectIdleWorkers(all){
+  const list = idleWorkers();
+  if(!list.length) return;
+  if(all){
+    setGroupSelection(list.slice());
+    const cx = list.reduce((s,u)=>s+u.gx, 0) / list.length;
+    const cy = list.reduce((s,u)=>s+u.gy, 0) / list.length;
+    panCameraTo(cx, cy);
+    return;
+  }
+  if(_idleCycle >= list.length) _idleCycle = 0;
+  const u = list[_idleCycle];
+  _idleCycle = (_idleCycle + 1) % list.length;
+  clearGroupSelection();
+  selectEntity('unit', u);
+  panCameraTo(u.gx, u.gy);
 }
 
 function refreshHud2Buttons(){

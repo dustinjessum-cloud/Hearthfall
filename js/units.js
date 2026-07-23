@@ -404,27 +404,21 @@ function resolveBuildingOrder(u, gx, gy){
     }
     const targetBuilding = findProductionBuildingFor(gx, gy);
     if(targetBuilding) return {kind:'work', buildingId: targetBuilding.id};
-    // right-click a corpse: lay the fallen to rest (human villagers only —
-    // ghouls have no reverence in them)
-    if(state.faction!=='swarm'){
-      const c = corpseAt(gx, gy);
-      if(c) return {kind:'bury', corpseId: c.id};
-    }
-    return null;
-  }
-  if(u.type==='repairman'){
+  } else if(u.type==='repairman'){
     if(bAt && (bAt.type==='wall' || bAt.type==='tower') && bAt.hp < bAt.maxHp) return {kind:'repair', buildingId: bAt.id};
-    return null;
-  }
-  if(u.type==='archer'){
+  } else if(u.type==='archer'){
     if(bAt && bAt.type==='tower' && bAt.hp>0) return {kind:'garrisonTower', buildingId: bAt.id};
-    return null;
-  }
-  if(u.type==='captain' && state.faction==='swarm'){
+  } else if(u.type==='captain' && state.faction==='swarm'){
     // the Necromancer raises the fallen where they lie
     const c = corpseAt(gx, gy);
     if(c) return {kind:'raise', corpseId: c.id};
-    return null;
+    return null; // ghouls & the Necromancer never bury — they raise
+  }
+  // burying the fallen: ALL the living can do it — villagers, soldiers,
+  // repairmen, and the hero — humans only (the undead raise instead).
+  if(state.faction!=='swarm'){
+    const c = corpseAt(gx, gy);
+    if(c) return {kind:'bury', corpseId: c.id};
   }
   return null;
 }
@@ -477,10 +471,14 @@ function executeOrder(u, order){
   } else if(order.kind==='bury'){
     const c = corpseById(order.corpseId);
     if(!c) return; // already rotted or buried by someone else
-    unassignVillager(u);
+    // any of the living can bury — drop whatever they were doing first
+    if(u.inTowerId) exitTower(u);
+    if(u.type==='villager') unassignVillager(u);
+    else if(u.type==='repairman') u.repairTargetId = null;
+    else if(u.type==='archer'){ u.garrisonId = null; u.path = null; }
     u.buryCorpseId = c.id;
     u.tx = c.gx; u.ty = c.gy; u.moving = true; u.playerOrder = true;
-    flashWaveBanner('Villager goes to lay the fallen to rest.');
+    flashWaveBanner('Heading over to lay the fallen to rest.');
   } else if(order.kind==='raise'){
     const c = corpseById(order.corpseId);
     if(!c) return;
@@ -489,7 +487,8 @@ function executeOrder(u, order){
     flashWaveBanner('The Necromancer approaches the fallen...');
   } else if(order.kind==='move'){
     if(u.inTowerId) exitTower(u); // any move order pops them out of the tower
-    if(u.type==='villager'){ unassignVillager(u); u.buryCorpseId = null; }
+    u.buryCorpseId = null; // a move cancels a pending burial, whoever's doing it
+    if(u.type==='villager') unassignVillager(u);
     else if(u.type==='repairman') u.repairTargetId = null;
     else if(u.type==='archer'){ u.garrisonId = null; u.path = null; }
     else if(u.type==='captain'){ u.raiseCorpseId = null; }
@@ -807,7 +806,7 @@ function updateUnits(delta){
       }
     }
     // burial: a villager standing over the corpse lays it to rest
-    if(u.type==='villager' && u.buryCorpseId && !u.moving){
+    if(u.buryCorpseId && !u.moving){ // any of the living: villager, soldier, repairman, or hero
       const c = corpseById(u.buryCorpseId);
       if(!c){ u.buryCorpseId = null; } // rotted away (or someone else got there) mid-walk
       else if(Math.round(u.gx)===c.gx && Math.round(u.gy)===c.gy){

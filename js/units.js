@@ -140,12 +140,23 @@ function isMiner(u){
   return !!(b && b.type==='quarry');
 }
 
+// A FINISHED wall/tower/gate is a barrier. A foundation still under
+// construction is not — it's scaffolding on open ground. Treating those as
+// solid is what stopped units walking past walls the player had only just
+// placed (and let a half-built wall wall your own town in).
+function blocksUnitMovement(b){
+  if(!b || underConstruction(b)) return false;
+  const def = BUILD_DEFS[b.type];
+  return !!(def && def.blocksPath && !def.friendlyPassable);
+}
+
 function isTileFreeForUnit(gx, gy, mover){
   if(!inBounds(gx,gy)) return false;
   const t = tileAt(gx,gy);
   if(t==='water') return false;
   if(t==='stone_deposit' && !isMiner(mover)) return false;
-  if(occAt(gx,gy)) return false;
+  const b = occAt(gx,gy);
+  if(b && !underConstruction(b)) return false; // foundations are walkable, finished buildings aren't
   for(const u of state.units){
     if(u!==mover && u.hp>0 && Math.round(u.gx)===gx && Math.round(u.gy)===gy) return false;
   }
@@ -362,8 +373,21 @@ function removeUnit(u){
 
 function commandUnitMove(u, gx, gy){
   if(!isTileFreeForUnit(gx, gy, u)) return;
-  u.path = null; // a direct order overrides any in-progress computed path
-  u.tx = gx; u.ty = gy; u.moving = true;
+  // Plain move orders PATHFIND now. They used to be a straight line, so a
+  // unit sent past (or behind) a wall or tower walked into the stones and
+  // stopped dead — the "units get stuck near walls" bug. Only the automated
+  // work-walks used to route around obstacles; now every move order does.
+  const path = findFriendlyPath(u, gx, gy, null);
+  if(path && path.length){
+    u.path = path;          // the path-follower in updateUnits starts leg one
+    u.moving = false;
+    u.tx = u.gx; u.ty = u.gy;
+  } else {
+    // already standing there, or genuinely unreachable — degrade to the old
+    // straight walk rather than silently refusing the order
+    u.path = null;
+    u.tx = gx; u.ty = gy; u.moving = true;
+  }
   // a direct order suppresses the melee auto-charge until they arrive —
   // this was the hero bug: his charge instinct overwrote every move
   // command the moment any enemy was inside aggro range
@@ -672,8 +696,7 @@ function friendlyBlocked(u, gx, gy, goalBuildingId){
   if(t==='stone_deposit' && u.type!=='villager') return true;
   const b = occAt(gx, gy);
   if(!b || b.id===goalBuildingId) return false;
-  const def = BUILD_DEFS[b.type];
-  return !!(def && def.blocksPath && !def.friendlyPassable);
+  return blocksUnitMovement(b);   // unbuilt foundations are walkable
 }
 
 // Returns waypoints from the unit's tile to (tx,ty) — excluding the start
@@ -955,8 +978,7 @@ function updateUnits(delta){
       // they try to leave — wallBlocked fires on frame one, every frame,
       // forever, and they're stuck there permanently.
       const curTile = occAt(Math.round(u.gx), Math.round(u.gy));
-      const wallBlocked = nb && BUILD_DEFS[nb.type] && BUILD_DEFS[nb.type].blocksPath
-        && !BUILD_DEFS[nb.type].friendlyPassable
+      const wallBlocked = blocksUnitMovement(nb)   // unbuilt foundations don't block
         && u.buildTaskId !== nb.id // never blocked from reaching the very site you're walking over to build
         && nb !== curTile; // ...nor from leaving a blocking tile you're already standing on, for any reason
       if(nt==='water' || (u.type!=='villager' && nt==='stone_deposit') || wallBlocked){

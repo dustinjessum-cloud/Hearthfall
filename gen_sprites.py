@@ -20,15 +20,44 @@ def new_canvas():
 def rect(d, x0, y0, x1, y1, fill):
     d.rectangle([x0, y0, x1, y1], fill=fill)
 
+def shade(c, f):
+    """Lighten (f>1) or darken (f<1) a colour, keeping it in range."""
+    return tuple(max(0, min(255, int(v*f))) for v in c[:3])
+
+def _prng(seed):
+    """Tiny deterministic LCG — same sprite every build, no random import."""
+    s = seed
+    while True:
+        s = (s*1103515245 + 12345) & 0x7fffffff
+        yield s
+
+def scatter(d, seed, n, color, size=1):
+    """Deterministic speckle used to give flat terrain some grain. Kept
+    low-contrast on purpose: ground tiles repeat across the whole map, so
+    anything bold turns into obvious wallpaper."""
+    g = _prng(seed)
+    for _ in range(n):
+        x = next(g) % (TILE - size + 1)
+        y = next(g) % (TILE - size + 1)
+        rect(d, x, y, x+size-1, y+size-1, color)
+
 # ---- palette ----
 GRASS = (86, 160, 61)
 GRASS_D = (70, 138, 48)
+GRASS_D2 = (58, 120, 40)
+GRASS_L = (104, 178, 76)
 DIRT = (155, 118, 83)
 DIRT_D = (128, 94, 63)
+DIRT_L = (178, 142, 106)
 WATER = (58, 108, 173)
 WATER_L = (84, 138, 201)
+WATER_D = (44, 88, 148)
 STONE = (140, 140, 148)
 STONE_D = (105, 105, 113)
+STONE_L = (178, 178, 186)
+FOREST = (58, 132, 50)
+FOREST_D = (40, 96, 36)
+FOREST_L = (80, 156, 66)
 WOOD = (117, 79, 48)
 WOOD_D = (92, 61, 36)
 ROOF = (150, 55, 45)
@@ -44,32 +73,52 @@ BLACK = (30, 28, 26)
 DARKGREY = (60, 60, 66)
 
 def draw_grass(d):
+    # Fine single-pixel grain in tones CLOSE to the base colour. Deliberately
+    # no directional marks (blades) and no high-contrast specks: this tile
+    # repeats across the entire map, and anything aligned or bold lines up
+    # into visible stripes/lattice once tiled.
     rect(d, 0, 0, 31, 31, GRASS)
-    for x, y in [(4,4),(14,9),(22,4),(6,20),(20,22),(27,14)]:
-        rect(d, x, y, x+2, y+2, GRASS_D)
+    scatter(d, 11, 46, GRASS_D)
+    scatter(d, 29, 34, GRASS_L)
+    scatter(d, 47, 6, GRASS_D2)
 
 def draw_forest(d):
     draw_grass(d)
     for cx, cy in [(9,20),(21,19),(15,10)]:
-        rect(d, cx-1, cy+4, cx+1, cy+8, WOOD_D)  # trunk
-        d.polygon([(cx-7,cy+5),(cx+7,cy+5),(cx,cy-9)], fill=(46,110,40))
-        d.polygon([(cx-5,cy),(cx+5,cy),(cx,cy-9)], fill=(58,132,50))
+        d.ellipse([cx-6, cy+6, cx+6, cy+10], fill=GRASS_D2)      # ground shadow
+        rect(d, cx-1, cy+4, cx+1, cy+8, WOOD_D)                  # trunk
+        rect(d, cx-1, cy+4, cx-1, cy+8, WOOD)                    # lit trunk edge
+        d.polygon([(cx-7,cy+5),(cx+7,cy+5),(cx,cy-9)], fill=FOREST_D)
+        d.polygon([(cx-6,cy+4),(cx+5,cy+4),(cx,cy-7)], fill=FOREST)
+        d.polygon([(cx-5,cy+1),(cx+1,cy+1),(cx-1,cy-5)], fill=FOREST_L)  # lit side
 
 def draw_stone_deposit(d):
     draw_grass(d)
-    for x, y, w, h, c in [(6,14,10,10,STONE),(14,16,12,12,STONE_D),(9,10,8,8,STONE)]:
-        d.ellipse([x, y, x+w, y+h], fill=c, outline=BLACK)
+    d.ellipse([5, 22, 27, 29], fill=GRASS_D2)                    # ground shadow
+    for x, y, w, h in [(6,13,11,11),(14,16,13,12),(9,9,9,9)]:
+        d.ellipse([x, y, x+w, y+h], fill=STONE_D, outline=BLACK)
+        d.ellipse([x+1, y+1, x+w-3, y+h-4], fill=STONE)
+        # lit top-left cap, sized proportionally so small rocks stay valid
+        d.ellipse([x+2, y+2, x+2+max(2, w//3), y+2+max(2, h//3)], fill=STONE_L)
 
 def draw_water(d):
     rect(d, 0, 0, 31, 31, WATER)
-    for y in (8, 16, 24):
-        for x in range(0, 32, 8):
-            rect(d, x+2, y, x+6, y+1, WATER_L)
+    scatter(d, 101, 26, WATER_D)
+    # staggered crests — offset per row so it doesn't read as banding
+    for wy, off in [(4,1),(10,7),(16,3),(22,9),(28,5)]:
+        for x in range(off, 32, 11):
+            rect(d, x, wy, x+3, wy, WATER_L)
+            rect(d, x+1, wy+1, x+2, wy+1, WATER)
 
 def draw_dirt(d):
     rect(d, 0, 0, 31, 31, DIRT)
-    for x, y in [(5,5),(19,8),(9,18),(24,22)]:
-        rect(d, x, y, x+2, y+2, DIRT_D)
+    scatter(d, 71, 30, DIRT_D)
+    scatter(d, 83, 20, DIRT_L)
+    # small pebbles — warm greys, NOT the cool blue-grey stone tone, which
+    # read as odd blue specks against the brown
+    for px, py in [(7,9),(21,16),(13,25),(26,6)]:
+        rect(d, px, py, px+1, py+1, (108, 92, 74))
+        rect(d, px, py, px, py, (146, 128, 106))
 
 def draw_town_hall(d):
     # a proper keep: stone ground floor, half-timbered upper story, grand
@@ -180,13 +229,33 @@ def draw_wall_gate(d):
     for x in range(11, 21, 3):
         rect(d, x, 14, x+1, 31, WOOD)
 
-def humanoid(d, tunic, weapon=None):
-    rect(d, 14, 6, 17, 9, SKIN)  # head
-    rect(d, 12, 10, 19, 20, tunic)  # body
-    rect(d, 12, 20, 14, 27, (60,50,40))  # leg
-    rect(d, 17, 20, 19, 27, (60,50,40))  # leg
-    rect(d, 9, 11, 11, 18, SKIN)  # arm
-    rect(d, 20, 11, 22, 18, SKIN)  # arm
+def humanoid(d, tunic, weapon=None, hair=(78, 54, 34)):
+    # A proper little figure instead of stacked flat rectangles: shaded
+    # torso and limbs (light from the top-left), boots, hair and a face,
+    # and a ground shadow so it sits on the tile rather than floating.
+    tunic_l, tunic_d = shade(tunic, 1.18), shade(tunic, 0.72)
+    skin_d = shade(SKIN, 0.82)
+    BOOT, BOOT_D = (62, 46, 32), (42, 31, 21)
+    d.ellipse([10, 27, 22, 31], fill=(0, 0, 0, 70))          # ground shadow
+    # legs + boots
+    rect(d, 13, 21, 15, 27, tunic_d)
+    rect(d, 17, 21, 19, 27, tunic_d)
+    rect(d, 12, 27, 15, 30, BOOT); rect(d, 12, 29, 15, 30, BOOT_D)
+    rect(d, 17, 27, 20, 30, BOOT); rect(d, 17, 29, 20, 30, BOOT_D)
+    # torso, lit on the left and shadowed on the right
+    rect(d, 11, 12, 21, 22, tunic)
+    rect(d, 11, 12, 12, 22, tunic_l)
+    rect(d, 20, 12, 21, 22, tunic_d)
+    rect(d, 11, 20, 21, 21, tunic_d)                          # belt
+    # arms
+    rect(d, 8, 13, 10, 21, SKIN);  rect(d, 8, 13, 8, 21, skin_d)
+    rect(d, 22, 13, 24, 21, SKIN); rect(d, 24, 13, 24, 21, skin_d)
+    # head, hair and face
+    d.ellipse([12, 3, 20, 12], fill=SKIN)
+    rect(d, 19, 5, 20, 10, skin_d)                            # cheek shadow
+    d.ellipse([12, 2, 20, 8], fill=hair)                      # hair cap
+    rect(d, 12, 5, 13, 8, hair)                               # sideburn
+    rect(d, 14, 8, 15, 9, BLACK); rect(d, 17, 8, 18, 9, BLACK)  # eyes
     if weapon == "bow":
         d.arc([20, 6, 30, 24], 250, 110, fill=WOOD_D, width=2)
         d.line([21, 9, 27, 21], fill=BLACK, width=1)

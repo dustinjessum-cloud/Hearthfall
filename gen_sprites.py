@@ -58,6 +58,54 @@ STONE_L = (178, 178, 186)
 FOREST = (58, 132, 50)
 FOREST_D = (40, 96, 36)
 FOREST_L = (80, 156, 66)
+
+# ---- shared structure helpers ----
+# Everything below assumes ONE light source, top-left: lit top/left edges,
+# shadowed right/bottom, plus a contact shadow so buildings sit on the
+# ground instead of floating. Used across the whole human building set so
+# they read as one coherent style (and match the undead structures).
+def ground_shadow(d, x0, x1, y=27, h=4):
+    d.ellipse([x0, y, x1, y+h], fill=(0, 0, 0, 55))
+
+def shaded_box(d, x0, y0, x1, y1, base):
+    rect(d, x0, y0, x1, y1, base)
+    rect(d, x0, y0, x1, y0, shade(base, 1.16))   # lit top
+    rect(d, x0, y0, x0, y1, shade(base, 1.08))   # lit left
+    rect(d, x1, y0, x1, y1, shade(base, 0.76))   # shadowed right
+    rect(d, x0, y1, x1, y1, shade(base, 0.66))   # shadowed bottom
+
+def gable_roof(d, x0, x1, ybase, ypeak, base):
+    """Front-facing gable: lit left slope, shadowed right, dark eave line."""
+    mid = (x0 + x1)//2
+    d.polygon([(x0,ybase),(x1,ybase),(mid,ypeak)], fill=shade(base, 0.74))
+    d.polygon([(x0,ybase),(mid,ybase),(mid,ypeak)], fill=base)
+    rect(d, x0, ybase, x1, ybase, shade(base, 0.50))
+
+def stone_courses(d, x0, y0, x1, y1, base=STONE):
+    """Masonry with staggered block joints instead of a flat grey slab."""
+    rect(d, x0, y0, x1, y1, base)
+    dk = shade(base, 0.76)
+    for i, y in enumerate(range(y0+3, y1, 5)):
+        rect(d, x0, y, x1, y, dk)
+        off = 0 if i % 2 == 0 else 4
+        for x in range(x0+off, x1+1, 8):
+            rect(d, x, y, x, min(y+4, y1), dk)
+    rect(d, x0, y0, x1, y0, shade(base, 1.16))
+    rect(d, x0, y0, x0, y1, shade(base, 1.06))
+    rect(d, x1, y0, x1, y1, dk)
+
+def lit_window(d, x0, y0, x1, y1):
+    """Glowing window with a dark frame so it reads as an opening."""
+    rect(d, x0-1, y0-1, x1+1, y1+1, (56, 42, 28))
+    rect(d, x0, y0, x1, y1, GOLD)
+    rect(d, x0, y0, x1, y0, shade(GOLD, 1.18))
+
+def plank_door(d, x0, y0, x1, y1):
+    rect(d, x0, y0, x1, y1, WOOD_D)
+    for x in range(x0+1, x1, 2):
+        rect(d, x, y0+1, x, y1, WOOD)
+    rect(d, x0, y0, x1, y0, (52, 36, 22))        # lintel
+    rect(d, x0, y0, x0, y1, (52, 36, 22))
 WOOD = (117, 79, 48)
 WOOD_D = (92, 61, 36)
 ROOF = (150, 55, 45)
@@ -121,113 +169,131 @@ def draw_dirt(d):
         rect(d, px, py, px, py, (146, 128, 106))
 
 def draw_town_hall(d):
-    # a proper keep: stone ground floor, half-timbered upper story, grand
-    # roof, lit windows and a pennant — not just a big house.
+    # a proper keep: masonry ground floor, half-timbered upper story, grand
+    # shaded roof, framed lit windows and a pennant.
     # Transparent background so it sits on whatever tile it was built on.
-    # stone ground floor with mortar lines
-    rect(d, 3, 16, 28, 29, STONE)
-    rect(d, 3, 16, 28, 18, STONE_D)
-    for y in range(21, 29, 4):
-        rect(d, 3, y, 28, y, STONE_D)
-    # half-timbered upper floor
-    rect(d, 5, 9, 26, 16, TAN)
-    rect(d, 5, 9, 26, 10, TAN_D)
+    ground_shadow(d, 2, 29, 28, 3)
+    stone_courses(d, 3, 16, 28, 29)
+    # half-timbered upper floor with shaded beams
+    shaded_box(d, 5, 9, 26, 16, TAN)
     for x in (8, 15, 22):
         rect(d, x, 9, x+1, 16, WOOD_D)
-    # grand roof
-    d.polygon([(2,9),(29,9),(15,1)], fill=ROOF)
-    d.polygon([(2,9),(29,9),(15,1)], outline=ROOF_D)
-    # arched oak door
-    rect(d, 13, 20, 18, 29, WOOD_D)
-    rect(d, 13, 19, 18, 20, WOOD)
-    # windows glowing gold
-    rect(d, 7, 11, 10, 14, GOLD)
-    rect(d, 21, 11, 24, 14, GOLD)
-    rect(d, 6, 21, 9, 24, GOLD)
-    rect(d, 22, 21, 25, 24, GOLD)
-    # banner pole + red pennant at the peak
-    rect(d, 15, 0, 16, 3, WOOD_D)
+        rect(d, x, 9, x, 16, WOOD)          # lit beam edge
+    gable_roof(d, 2, 29, 9, 1, ROOF)
+    for sy in (4, 6, 8):                     # shingle courses
+        rect(d, 2+(9-sy), sy, 29-(9-sy), sy, shade(ROOF, 0.62))
+    plank_door(d, 13, 20, 18, 29)
+    d.polygon([(13,20),(18,20),(15,17)], fill=WOOD)   # arch over the door
+    lit_window(d, 7, 11, 10, 14)
+    lit_window(d, 21, 11, 24, 14)
+    lit_window(d, 6, 21, 9, 24)
+    lit_window(d, 22, 21, 25, 24)
+    rect(d, 15, 0, 16, 3, WOOD_D)            # banner pole
     d.polygon([(16,0),(24,1),(16,3)], fill=(190, 52, 45))
 
 def draw_house(d):
     draw_dirt(d)
-    rect(d, 6, 17, 26, 29, TAN)
-    d.polygon([(4,17),(28,17),(16,6)], fill=ROOF)
-    d.polygon([(4,17),(28,17),(16,6)], outline=ROOF_D)
-    rect(d, 14, 21, 18, 29, WOOD_D)
-    rect(d, 8, 20, 11, 23, WATER)
+    ground_shadow(d, 5, 27, 28, 3)
+    shaded_box(d, 6, 17, 26, 29, TAN)
+    gable_roof(d, 4, 28, 17, 6, ROOF)
+    for sy in (10, 13, 16):                  # shingle courses
+        rect(d, 4+(17-sy), sy, 28-(17-sy), sy, shade(ROOF, 0.62))
+    plank_door(d, 14, 21, 18, 29)
+    lit_window(d, 8, 20, 11, 23)
 
 def draw_farm(d):
+    # ploughed field: furrows with a lit crest and shadowed trough, and
+    # ripening crop tufts standing in the rows
     rect(d, 0, 0, 31, 31, (109, 87, 58))
+    scatter(d, 137, 24, (96, 76, 50))
     for y in range(4, 28, 6):
-        rect(d, 3, y, 28, y+2, (94, 74, 48))
+        rect(d, 3, y, 28, y+2, (94, 74, 48))          # furrow trough
+        rect(d, 3, y-1, 28, y-1, (126, 102, 68))      # lit crest above it
         for x in range(4, 28, 6):
-            rect(d, x, y-3, x+1, y, (196, 176, 60))
-    rect(d, 0, 0, 31, 2, WOOD_D)
-    rect(d, 0, 29, 31, 31, WOOD_D)
+            rect(d, x, y-3, x+1, y, (196, 176, 60))   # crop
+            rect(d, x, y-3, x, y, (226, 208, 96))     # lit side of the crop
+    shaded_box(d, 0, 0, 31, 2, WOOD_D)                # fence rails
+    shaded_box(d, 0, 29, 31, 31, WOOD_D)
 
 def draw_lumber_camp(d):
     draw_dirt(d)
-    # log pile
+    ground_shadow(d, 4, 27, 27, 3)
+    # log pile — end-grain rings and a lit top so they read as cut timber
     for i, y in enumerate([22, 18, 14]):
         off = i * 2
         for x in range(6+off, 24-off, 6):
             d.ellipse([x, y, x+7, y+5], fill=WOOD, outline=WOOD_D)
-    rect(d, 20, 6, 29, 18, TAN_D)
-    d.polygon([(18,6),(31,6),(24,-1+3)], fill=ROOF_D)
+            d.ellipse([x+2, y+1, x+5, y+4], fill=shade(WOOD, 1.2))   # cut face
+            rect(d, x+3, y+2, x+4, y+3, WOOD_D)                      # heartwood
+    shaded_box(d, 20, 6, 29, 18, TAN_D)               # sawyer's shed
+    gable_roof(d, 18, 31, 6, 1, ROOF_D)
 
 def draw_quarry(d):
     # an excavated pit with stepped walls, cut blocks, and a timber crane —
-    # clearly industry, not just another rock pile
+    # clearly industry, not just another rock pile. Each step is lit on its
+    # top face and shadowed on the wall below so the pit reads as depth.
     draw_dirt(d)
-    rect(d, 4, 14, 27, 29, (88, 88, 96))
-    rect(d, 6, 16, 25, 27, (70, 70, 78))
-    rect(d, 8, 18, 23, 25, (56, 56, 64))
+    for x0, y0, x1, y1, c in [(4,14,27,29,(88,88,96)), (6,16,25,27,(70,70,78)), (8,18,23,25,(56,56,64))]:
+        rect(d, x0, y0, x1, y1, c)
+        rect(d, x0, y0, x1, y0, shade(c, 1.3))     # lit tread
+        rect(d, x0, y0+1, x0, y1, shade(c, 1.12))  # lit left face
     # cut stone blocks stacked at the rim
-    rect(d, 3, 8, 9, 13, STONE)
-    rect(d, 3, 8, 9, 9, STONE_D)
-    rect(d, 10, 10, 15, 13, STONE_D)
+    shaded_box(d, 3, 8, 9, 13, STONE)
+    shaded_box(d, 10, 10, 15, 13, STONE_D)
     # timber crane with a hoisted block
     rect(d, 22, 2, 24, 14, WOOD)
+    rect(d, 22, 2, 22, 14, shade(WOOD, 1.2))
     d.line([23, 3, 29, 8], fill=WOOD_D, width=2)
     d.line([29, 8, 29, 13], fill=BLACK, width=1)
-    rect(d, 27, 13, 31, 16, STONE)
+    shaded_box(d, 27, 13, 31, 16, STONE)
+
+def merlons(d, xs, y0, y1, w=5):
+    """Crenellation teeth along the top of a wall, lit top-left."""
+    for x in xs:
+        rect(d, x, y0, x+w, y1, STONE)
+        rect(d, x, y0, x+w, y0, shade(STONE, 1.18))
+        rect(d, x+w, y0, x+w, y1, shade(STONE, 0.72))
 
 def draw_wall(d):
-    rect(d, 0, 10, 31, 31, STONE)
-    rect(d, 0, 10, 31, 13, STONE_D)
-    for x in range(0, 32, 8):
-        rect(d, x, 4, x+5, 10, STONE)
-    for y in range(14, 31, 6):
-        rect(d, 0, y, 31, y, STONE_D)
+    stone_courses(d, 0, 10, 31, 31)
+    merlons(d, range(0, 32, 8), 4, 10)
+    rect(d, 0, 10, 31, 10, shade(STONE, 0.6))     # shadow under the parapet
 
 def draw_wall_v(d):
-    # 90-degree rotated wall segment so vertical runs connect cleanly too
-    rect(d, 10, 0, 31, 31, STONE)
-    rect(d, 10, 0, 13, 31, STONE_D)
+    # 90-degree rotated segment so vertical runs connect cleanly too
+    stone_courses(d, 10, 0, 31, 31)
     for y in range(0, 32, 8):
         rect(d, 4, y, 10, y+5, STONE)
-    for x in range(14, 31, 6):
-        rect(d, x, 0, x, 31, STONE_D)
+        rect(d, 4, y, 4, y+5, shade(STONE, 1.18))
+        rect(d, 4, y+5, 10, y+5, shade(STONE, 0.72))
+    rect(d, 10, 0, 10, 31, shade(STONE, 0.6))
 
 def draw_tower(d):
-    rect(d, 5, 8, 26, 31, STONE)
-    for x in range(5, 27, 5):
-        rect(d, x, 8, x+1, 31, STONE_D)
-    for x in range(4, 27, 6):
-        rect(d, x, 2, x+3, 8, STONE)
-    rect(d, 12, 16, 13, 24, BLACK)
+    # a round-shouldered keep tower: curved shading across the barrel, a
+    # crenellated crown, and a recessed arrow slit
+    ground_shadow(d, 3, 28, 28, 3)
+    stone_courses(d, 6, 9, 25, 31)
+    rect(d, 6, 9, 8, 31, shade(STONE, 1.14))      # lit left curve
+    rect(d, 23, 9, 25, 31, shade(STONE, 0.74))    # shadowed right curve
+    # crown: a wider band with teeth on top
+    shaded_box(d, 4, 5, 27, 9, STONE)
+    merlons(d, (4, 12, 20), 1, 5, 4)
+    # arrow slit, recessed
+    rect(d, 14, 15, 17, 25, shade(STONE, 0.55))
+    rect(d, 15, 16, 16, 24, BLACK)
 
 def draw_wall_gate(d):
-    rect(d, 0, 10, 9, 31, STONE)
-    rect(d, 22, 10, 31, 31, STONE)
-    for x in range(0, 10, 8):
-        rect(d, x, 4, x+5, 10, STONE)
-    for x in range(22, 32, 8):
-        rect(d, x, 4, x+5, 10, STONE)
-    rect(d, 10, 14, 21, 31, WOOD_D)
+    # timber gate between two stone piers, with iron bands
+    stone_courses(d, 0, 10, 9, 31)
+    stone_courses(d, 22, 10, 31, 31)
+    merlons(d, (0,), 4, 10); merlons(d, (22,), 4, 10)
+    rect(d, 10, 13, 21, 31, WOOD_D)
     for x in range(11, 21, 3):
-        rect(d, x, 14, x+1, 31, WOOD)
+        rect(d, x, 14, x+1, 31, WOOD)             # planks
+    rect(d, 10, 13, 21, 14, (52, 36, 22))         # lintel shadow
+    for by in (18, 26):                            # iron bands
+        rect(d, 10, by, 21, by+1, (66, 66, 72))
+        rect(d, 10, by, 21, by, (96, 96, 104))
 
 def humanoid(d, tunic, weapon=None, hair=(78, 54, 34)):
     # A proper little figure instead of stacked flat rectangles: shaded
@@ -291,26 +357,30 @@ def draw_enemy_ram(d):
     rect(d, 26, 13, 31, 20, STONE_D)    # iron head
 
 def draw_granary(d):
-    # round grain silo with a conical thatch roof and a grain sack out front
+    # round grain silo with a conical thatch roof and a grain sack out front —
+    # the barrel is shaded across its curve so it reads as round
+    ground_shadow(d, 7, 24, 28, 3)
     rect(d, 8, 12, 23, 29, TAN)
-    rect(d, 8, 12, 11, 29, TAN_D)       # shading
-    rect(d, 6, 8, 25, 13, ROOF)         # roof band
-    rect(d, 10, 4, 21, 9, ROOF)         # roof top
-    rect(d, 10, 4, 21, 5, ROOF_D)
-    rect(d, 14, 20, 17, 29, WOOD_D)     # door
-    rect(d, 24, 24, 29, 29, GOLD)       # grain sack
-    rect(d, 24, 24, 29, 25, TAN_D)
+    rect(d, 8, 12, 10, 29, shade(TAN, 1.14))    # lit left curve
+    rect(d, 21, 12, 23, 29, shade(TAN, 0.74))   # shadowed right curve
+    for hy in (17, 22, 27):                      # barrel hoops
+        rect(d, 8, hy, 23, hy, TAN_D)
+    gable_roof(d, 5, 26, 13, 3, ROOF)            # conical thatch
+    rect(d, 5, 13, 26, 13, shade(ROOF, 0.5))
+    plank_door(d, 14, 21, 17, 29)
+    rect(d, 24, 24, 29, 29, GOLD)                # grain sack
+    rect(d, 24, 24, 29, 24, shade(GOLD, 1.18))
+    rect(d, 29, 24, 29, 29, shade(GOLD, 0.72))
 
 def draw_warehouse(d):
     # long shed stacked with crates
-    rect(d, 3, 14, 28, 29, WOOD)
-    rect(d, 3, 14, 6, 29, WOOD_D)
-    rect(d, 1, 10, 30, 15, STONE_D)     # flat stone roof
-    rect(d, 6, 20, 12, 26, TAN)         # crate 1
-    rect(d, 6, 20, 12, 21, TAN_D)
-    rect(d, 14, 18, 21, 26, TAN_D)      # crate 2
-    rect(d, 14, 18, 21, 19, TAN)
-    rect(d, 23, 21, 27, 26, STONE)      # stone block
+    ground_shadow(d, 2, 29, 28, 3)
+    shaded_box(d, 3, 14, 28, 29, WOOD)
+    shaded_box(d, 1, 10, 30, 15, STONE_D)        # flat stone roof
+    for x0, y0, x1, y1 in [(6,20,12,26), (14,18,21,26)]:
+        shaded_box(d, x0, y0, x1, y1, TAN)
+        rect(d, x0, (y0+y1)//2, x1, (y0+y1)//2, TAN_D)   # crate slat
+    shaded_box(d, 23, 21, 27, 26, STONE)         # stone block
 
 def draw_arrow(d):
     d.line([4, 28, 27, 5], fill=WOOD_D, width=2)
@@ -344,19 +414,18 @@ def draw_grid(d):
     d.rectangle([0,0,31,31], outline=(255,255,255,60), width=1)
 
 def draw_wall_corner(d):
-    # junction piece: horizontal + vertical bands crossing, so L-corners,
+    # junction piece: horizontal + vertical arms crossing, so L-corners,
     # T-junctions and 4-way crossings all read as one continuous wall
-    rect(d, 0, 10, 31, 31, STONE)        # horizontal body
-    rect(d, 10, 0, 31, 31, STONE)        # vertical body
-    rect(d, 0, 10, 9, 13, STONE_D)       # horiz top shading (left of joint)
-    rect(d, 10, 0, 13, 9, STONE_D)       # vert left shading (above joint)
-    rect(d, 10, 10, 13, 13, STONE_D)     # joint shading
+    stone_courses(d, 0, 10, 31, 31)      # horizontal arm
+    stone_courses(d, 10, 0, 31, 31)      # vertical arm
     for x in range(0, 10, 8):            # crenellations, west arm
         rect(d, x, 4, x+5, 10, STONE)
+        rect(d, x, 4, x+5, 4, shade(STONE, 1.18))
     for y in range(0, 10, 8):            # crenellations, north arm
         rect(d, 4, y, 10, y+5, STONE)
-    for y in range(14, 31, 6):           # mortar lines
-        rect(d, 0, y, 31, y, STONE_D)
+        rect(d, 4, y, 4, y+5, shade(STONE, 1.18))
+    rect(d, 0, 10, 9, 10, shade(STONE, 0.6))   # parapet shadow, west
+    rect(d, 10, 0, 10, 9, shade(STONE, 0.6))   # parapet shadow, north
     for x in range(14, 31, 6):
         rect(d, x, 0, x, 31, STONE_D)
 
@@ -406,10 +475,12 @@ def draw_repairman(d):
 def draw_mill(d):
     # a proper windmill tower with four sails
     draw_dirt(d)
+    ground_shadow(d, 9, 23, 28, 3)
     rect(d, 11, 12, 21, 29, TAN)
-    rect(d, 11, 12, 13, 29, TAN_D)
-    d.polygon([(9,12),(23,12),(16,4)], fill=ROOF)
-    rect(d, 14, 22, 18, 29, WOOD_D)           # door
+    rect(d, 11, 12, 12, 29, shade(TAN, 1.14))  # lit left curve
+    rect(d, 20, 12, 21, 29, shade(TAN, 0.74))  # shadowed right curve
+    gable_roof(d, 9, 23, 12, 4, ROOF)
+    plank_door(d, 14, 22, 18, 29)              # door
     d.line([16, 9, 27, 2], fill=WOOD_D, width=2)
     d.line([16, 9, 5, 2], fill=WOOD_D, width=2)
     d.line([16, 9, 27, 16], fill=WOOD_D, width=2)
@@ -454,19 +525,17 @@ def draw_warehouse_3(d):
 
 def draw_town_hall_2(d):
     draw_town_hall(d)
-    # a stone watchtower rises on the west wing
-    rect(d, 0, 6, 5, 29, STONE)
-    rect(d, 0, 6, 5, 8, STONE_D)
-    d.polygon([(0,6),(6,6),(3,1)], fill=ROOF_D)
-    rect(d, 1, 12, 3, 15, GOLD)
+    # a stone watchtower rises on the west wing — same masonry as the keep
+    stone_courses(d, 0, 6, 5, 29)
+    gable_roof(d, 0, 6, 6, 1, ROOF_D)
+    lit_window(d, 1, 12, 3, 15)
 
 def draw_town_hall_3(d):
     draw_town_hall_2(d)
     # twin tower on the east wing — full keep
-    rect(d, 26, 6, 31, 29, STONE)
-    rect(d, 26, 6, 31, 8, STONE_D)
-    d.polygon([(25,6),(31,6),(28,1)], fill=ROOF_D)
-    rect(d, 28, 12, 30, 15, GOLD)
+    stone_courses(d, 26, 6, 31, 29)
+    gable_roof(d, 25, 31, 6, 1, ROOF_D)
+    lit_window(d, 28, 12, 30, 15)
 
 # ---- the Undead (blighted ground, risen dead, grave markers) ----
 CREEP_GREY    = (92, 92, 88, 255)    # opaque grey base — dead, ashen ground

@@ -124,6 +124,29 @@ function refreshRallyMarkers(){
   }
 }
 
+// A crosshair that blinks out at the tile you just ordered a unit to —
+// confirmation that the click registered and where they're headed. Purely
+// cosmetic and self-destructing: nothing holds a reference, and it tears
+// itself down on completion, so it can't leak or outlive the order.
+const MOVE_MARK = { ms: 420, color: 0xe2e8f0, arm: 6, gap: 3, thick: 2 };
+function spawnMoveMarker(gx, gy){
+  if(!scene || !scene.add || !scene.tweens) return;
+  const A = MOVE_MARK.arm, G = MOVE_MARK.gap, T = MOVE_MARK.thick, C = MOVE_MARK.color;
+  const g = scene.add.container(gx*TILE + TILE/2, gy*TILE + TILE/2).setDepth(9);
+  g.add([
+    scene.add.rectangle(0, -(G + A/2), T, A, C),   // up
+    scene.add.rectangle(0,  (G + A/2), T, A, C),   // down
+    scene.add.rectangle(-(G + A/2), 0, A, T, C),   // left
+    scene.add.rectangle( (G + A/2), 0, A, T, C),   // right
+  ]);
+  g.setScale(1.4);
+  scene.tweens.add({
+    targets: g, scaleX: 0.8, scaleY: 0.8, alpha: 0,
+    duration: MOVE_MARK.ms, ease: 'Quad.easeOut',
+    onComplete: ()=> g.destroy(),
+  });
+}
+
 // Where a queued order's destination actually is, for drawing its marker.
 // null means "nothing to draw there" (a stale build/repair/garrison target
 // that's since vanished) — executeOrder() re-validates independently when

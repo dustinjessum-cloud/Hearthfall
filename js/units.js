@@ -651,6 +651,9 @@ function commandGroupMove(units, gx, gy){
   const orders = resolveGroupOrders(live, gx, gy);
   const movers = live.filter((u,i)=> !orders[i]);
   const targets = computeGroupTargets(movers, gx, gy);
+  // one marker at the tile you actually clicked — not one per spread-out
+  // destination, which would litter the ground for a big group
+  if(movers.length) spawnMoveMarker(gx, gy);
   let mi = 0;
   live.forEach((u, i)=>{
     const order = orders[i];

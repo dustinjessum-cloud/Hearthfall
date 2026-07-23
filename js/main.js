@@ -287,7 +287,13 @@ class MainScene extends Phaser.Scene {
         const u = state.selected.ref;
         const order = resolveOrder(u, gx, gy);
         if(queueing) queueOrder(u, order);
-        else { clearOrderQueue(u); executeOrder(u, order); } // a plain right-click cancels the queue and acts now
+        else {
+          clearOrderQueue(u); executeOrder(u, order); // a plain right-click cancels the queue and acts now
+          // confirm the click landed. Move orders only — build/work/garrison
+          // already announce themselves with a banner, and a queued (shift)
+          // order already drops its own numbered marker.
+          if(order && order.kind==='move') spawnMoveMarker(gx, gy);
+        }
         return;
       }
       return;

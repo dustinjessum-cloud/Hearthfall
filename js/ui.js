@@ -334,15 +334,36 @@ function refreshBuildBar(){
   }
 }
 
+// A readable name + one-line description for a selected enemy, by race/role.
+function enemyName(e){
+  if(e.kind==='camp') return state.faction==='swarm' ? 'Human Outpost' : 'Bandit Camp';
+  if(e.kind==='ram') return 'Battering Ram';
+  const race = e.race || 'human';
+  if(race==='troll') return e.ranged ? 'Hobgoblin' : 'Troll';
+  if(race==='undead') return e.ranged ? 'Plaguebearer' : 'Ghoul';
+  if(e.ranged) return 'Enemy Archer';
+  if(e.kind==='swordsman') return 'Enemy Swordsman';
+  if(e.kind==='pillager') return 'Pillager';
+  return 'Raider';
+}
+function enemyDesc(e){
+  if(e.kind==='camp') return 'A fortified enemy outpost — raze it to stop its patrols and take its loot.';
+  if(e.kind==='ram') return 'A siege engine — slow and tough, only interested in smashing buildings.';
+  if(e.ranged) return 'Holds at range and looses at your exposed units and buildings.';
+  if(e.kind==='pillager') return 'Ignores your Town Hall — hunts your farms, camps, mills and markets.';
+  return 'Marches on your Town Hall.';
+}
+
 function selectEntity(type, ref){
-  if(state.selected && state.selected.type==='unit' && state.selected.ref.sprite) {
+  // restore the previously-selected unit/enemy's own tint (a swordsman's
+  // blue, a pillager's orange) rather than just clearing it
+  if(state.selected && (state.selected.type==='unit' || state.selected.type==='enemy') && state.selected.ref.sprite) {
     const prev = state.selected.ref;
-    // restore the unit's own tint (e.g. the swordsman's blue) not just clear it
     if(prev.baseTint != null) prev.sprite.setTint(prev.baseTint);
     else prev.sprite.clearTint();
   }
   state.selected = type ? {type, ref} : null;
-  if(type==='unit') ref.sprite.setTint(0xffe08a);
+  if((type==='unit' || type==='enemy') && ref.sprite) ref.sprite.setTint(0xffe08a);
   refreshRallyMarkers();
   updateQueueMarkerVisibility();
   refreshInfoPanel();
@@ -468,6 +489,11 @@ function refreshInfoPanel(){
                                                 : 'Right-click to move. J = hurl javelin toward the mouse. K = slash everything adjacent. He gains XP from kills near him.')
                     : (ref.type==='repairman' ? 'Right-click a damaged Wall or Tower to repair it (costs wood). He works only on your orders.'
                     : 'Right-click a tile to move.'))}</div>`;
+    } else if(type==='enemy'){
+      panel.innerHTML = `<h3 style="color:#ff8a6b;">${enemyName(ref)}</h3>
+        <div>HP: <span id="infoHpText"></span></div>
+        <div class="hpbar"><div class="hpfill" id="infoHpFill" style="background:#d85a3a;"></div></div>
+        <div style="margin-top:6px;color:#d8c79a;">${enemyDesc(ref)}</div>`;
     }
   }
 

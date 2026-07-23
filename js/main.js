@@ -226,6 +226,15 @@ class MainScene extends Phaser.Scene {
       if(unit){ selectEntity('unit', unit); return; }
       const b = occAt(gx, gy);
       if(b){ selectEntity('building', b); return; }
+      // enemies are selectable too (for info only — you can't command them);
+      // checked after buildings so a wall click always lands on the wall
+      let enemy=null, ed=0.8;
+      for(const e of state.enemies){
+        if(e.hp<=0) continue;
+        const d = Math.hypot(e.gx - (wp.x/TILE - 0.5), e.gy - (wp.y/TILE - 0.5));
+        if(d < ed){ ed = d; enemy = e; }
+      }
+      if(enemy){ selectEntity('enemy', enemy); return; }
       selectEntity(null, null);
     }
   }

@@ -433,6 +433,7 @@ function updateEnemies(delta){
       if(own) grantHeroXp(val*2);
       else if(near) grantHeroXp(val);
     }
+    if(state.selected && state.selected.type==='enemy' && state.selected.ref===e) selectEntity(null, null);
     e.sprite.destroy(); e.hpBarBg.destroy(); e.hpBarFg.destroy();
     if(e.kind==='camp'){
       if(state.faction==='swarm'){

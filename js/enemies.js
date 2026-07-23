@@ -2,30 +2,40 @@
 // Enemies
 // ---------------------------------------------------------------------
 let enemyIdCounter = 1;
+
+// the race that raids the player: the opposite of their own faction
+function oppositeRace(){ return state.faction==='swarm' ? 'human' : 'undead'; }
+
 function spawnWave(){
   const wave = state.wave + 1;
+  // ONE race per wave: usually the opposite faction, sometimes a troll warband
+  const race = Math.random() < OPPOSITE_RACE_CHANCE ? oppositeRace() : 'troll';
   // gentler scaling: raids keep getting harder, but the growth curve is
   // flatter — the town-building game is the star, raids are the weather.
   const count = 3 + Math.round(wave*1.2);
   const hp = Math.round((26 + wave*7) * 1.15);
   const dmg = Math.round((5 + wave) * 1.15);
-  // from wave 2 on, roughly a third of the raiders are PILLAGERS: they
-  // ignore your Town Hall and hunt farms, camps, mills and markets. A safe
-  // wall ring around the center no longer protects your sprawl.
-  const pillagers = wave >= 2 ? Math.floor(count/3) : 0;
+  // from wave 2 on: some raiders are RANGED (hold at range and loose), and
+  // some melee are PILLAGERS that ignore the Town Hall to hunt your sprawl.
+  const ranged = wave >= 2 ? Math.floor(count*0.3) : 0;
+  const pillagers = wave >= 2 ? Math.floor((count-ranged)/3) : 0;
   for(let i=0;i<count;i++){
-    const kind = i < pillagers ? 'pillager' : null;
-    setTimeout(()=> spawnEnemy(hp, dmg, wave, kind), i*500);
+    let kind, isRanged = false;
+    if(i < ranged){ isRanged = true; kind = 'raider'; }
+    else if(i < ranged + pillagers){ kind = 'pillager'; }
+    else { kind = null; } // regular melee (tough swordsman on the wave%3 cadence)
+    setTimeout(()=> spawnEnemy(hp, dmg, wave, kind, null, {race, ranged:isRanged}), i*500);
   }
   // from wave 3 on, battering rams roll in: slow, very tough, immune to the
   // temptation of chasing your soldiers — they exist to flatten buildings.
+  // Rams are siege engines, not troops — they never take a race.
   if(wave >= 3){
     const rams = 1 + Math.floor((wave-3)/3);
     for(let i=0;i<rams;i++){
       setTimeout(()=> spawnEnemy(80 + wave*10, 20, wave, 'ram'), 1500 + i*900);
     }
   }
-  flashWaveBanner(`Wave ${wave} incoming!`);
+  flashWaveBanner(`Wave ${wave} incoming — ${ENEMY_RACES[race].banner}`);
 }
 
 // Small harassment raids between the big waves — one or two raiders probing
@@ -86,21 +96,44 @@ function edgeSpawnPoint(){
   return {gx,gy};
 }
 
-function spawnEnemy(hp, dmg, wave, kind, at){
+function spawnEnemy(hp, dmg, wave, kind, at, opts){
   if(state.gameOver) return;
   const {gx,gy} = at || edgeSpawnPoint();
   const k = kind || (wave%3===0 ? 'swordsman' : 'raider');
-  const frame = k==='ram' ? 'enemy_ram' : (k==='swordsman' ? 'enemy_swordsman' : 'enemy_raider');
+  // rams are raceless siege engines; everything else belongs to a race
+  // (defaults to human so bandit skirmishers stay human, as required)
+  const isRam = k==='ram';
+  const race = isRam ? null : ((opts && opts.race) || 'human');
+  const ranged = !!(opts && opts.ranged);
+  const rc = race ? ENEMY_RACES[race] : null;
+
+  // stats scale by race; ranged troops are frailer than their melee kin
+  let eHp = hp, eDmg = dmg, spd = isRam ? 0.55 : 1;
+  if(rc){
+    eHp = Math.round(hp * rc.hpMult * (ranged ? ENEMY_RANGED_HP_MULT : 1));
+    eDmg = Math.round(dmg * rc.dmgMult);
+    spd = rc.speedMult;
+  }
+
+  // sprite by race + role (rams keep their own frame)
+  let frame;
+  if(isRam) frame = 'enemy_ram';
+  else if(ranged) frame = rc.ranged;
+  else frame = (k==='swordsman') ? rc.meleeTough : rc.melee;
+
   const e = {
-    id: enemyIdCounter++, gx, gy, hp, maxHp:hp, dmg, kind:k,
-    speedMult: k==='ram' ? 0.55 : 1,
+    id: enemyIdCounter++, gx, gy, hp:eHp, maxHp:eHp, dmg:eDmg, kind:k,
+    race, ranged, speedMult: spd,
     path: null, pathIdx: 0, lastMoveAt:0, lastAttackAt:0, target:null,
   };
   e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME[frame]);
-  // pillagers read as orange: they're here for your farms, not your walls
-  e.baseTint = (k==='pillager') ? 0xffaa55 : null; // remembered so the web
-                                                    // slow's tint can be
-                                                    // restored correctly on expiry
+  // trolls loom; hobgoblins are a touch smaller — sizes come from the race def
+  if(rc && !ranged && rc.meleeSize && rc.meleeSize!==1 && e.sprite.setScale) e.sprite.setScale(rc.meleeSize);
+  else if(rc && ranged && rc.rangedSize && rc.rangedSize!==1 && e.sprite.setScale) e.sprite.setScale(rc.rangedSize);
+  // tint: pillagers read orange (they're after your sprawl); some reused
+  // friendly sprites (the human archer) get a hostile red so they don't
+  // read as your own troops. Remembered so the web-slow tint restores right.
+  e.baseTint = (k==='pillager') ? 0xffaa55 : (ranged && rc && rc.rangedTint ? rc.rangedTint : null);
   if(e.baseTint && e.sprite.setTint) e.sprite.setTint(e.baseTint);
   e.hpBarBg = scene.add.rectangle(gx*TILE+TILE/2, gy*TILE-2, TILE-8, 4, 0x2a1c10).setDepth(5);
   e.hpBarFg = scene.add.rectangle(gx*TILE+4, gy*TILE-2, TILE-8, 4, 0xd85a3a).setOrigin(0,0.5).setDepth(6);
@@ -233,6 +266,57 @@ function bfsPath(sx, sy, tx, ty, ignoreBuildings){
   return null;
 }
 
+// What a ranged raider should shoot: the nearest exposed friendly unit in
+// range, or failing that the nearest building in range (they bombard walls
+// and the Town Hall when no one's out to shoot at).
+function rangedFireTarget(e){
+  let best=null, bestD=ENEMY_RANGED.range;
+  for(const u of state.units){
+    if(u.hp<=0 || u.inTC || u.inTowerId) continue;
+    const d = Phaser.Math.Distance.Between(e.gx, e.gy, u.gx, u.gy);
+    if(d <= bestD){ bestD = d; best = {ref:u, kind:'unit'}; }
+  }
+  if(best) return best;
+  let bb=null, bd=ENEMY_RANGED.range;
+  for(const b of state.buildings){
+    if(b.hp<=0) continue;
+    const d = Phaser.Math.Distance.Between(e.gx, e.gy, b.gx, b.gy);
+    if(d <= bd){ bd = d; bb = b; }
+  }
+  return bb ? {ref:bb, kind:'building'} : null;
+}
+
+// A loosed spear/bolt/gob of bile — flies to its target's current position
+// and strikes on arrival. Race decides its look.
+function spawnEnemyProjectile(e, target, kind){
+  const p = { x:e.gx, y:e.gy, target, kind, dmg:e.dmg };
+  const tint = e.race==='undead' ? 0x9fe89a : (e.race==='troll' ? 0xcaa46a : 0xdcdcdc);
+  if(scene && scene.add){
+    p.sprite = scene.add.image(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2, 'tiles', FRAME.arrow).setDepth(8).setTint(tint);
+  }
+  state.enemyProjectiles.push(p);
+}
+
+function updateEnemyProjectiles(delta){
+  if(!state.enemyProjectiles.length) return;
+  const step = ENEMY_RANGED.projectileSpeed * (delta/1000);
+  for(const p of state.enemyProjectiles){
+    if(!p.target || p.target.hp<=0){ p._dead = true; continue; } // target gone — the shot fizzles
+    const dx = p.target.gx - p.x, dy = p.target.gy - p.y;
+    const dist = Math.hypot(dx, dy);
+    if(dist <= step || dist < 0.1){
+      if(p.kind==='unit') damageUnit(p.target, p.dmg);
+      else damageBuilding(p.target, p.dmg);
+      p._dead = true;
+    } else {
+      p.x += dx/dist*step; p.y += dy/dist*step;
+      if(p.sprite){ p.sprite.setPosition(p.x*TILE+TILE/2, p.y*TILE+TILE/2); p.sprite.setRotation(Math.atan2(dy,dx)+Math.PI/4); }
+    }
+  }
+  for(const p of state.enemyProjectiles) if(p._dead && p.sprite){ p.sprite.destroy(); p.sprite = null; }
+  state.enemyProjectiles = state.enemyProjectiles.filter(p=>!p._dead);
+}
+
 function updateEnemies(delta){
   const baseSpeed = 1.4; // tiles/sec
   for(const e of state.enemies){
@@ -254,6 +338,22 @@ function updateEnemies(delta){
     if(e.kind==='camp'){
       e.hpBarFg.width = (TILE-8)*Math.max(0,e.hp/e.maxHp);
       continue;
+    }
+    // ranged raiders (hobgoblins, plaguebearers, enemy archers) hold at
+    // range and loose. If a target is within reach, stop and fire; otherwise
+    // fall through to the normal advance until something comes into range.
+    if(e.ranged){
+      const ft = rangedFireTarget(e);
+      if(ft){
+        const webMult = (e.webSlowMs > 0) ? HERO.web.slowFactor : 1; // the slow drags their rate of fire too
+        e.lastAttackAt += delta * webMult;
+        if(e.lastAttackAt > ENEMY_RANGED.cooldownMs){ e.lastAttackAt = 0; spawnEnemyProjectile(e, ft.ref, ft.kind); }
+        e.sprite.setPosition(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2);
+        e.hpBarBg.setPosition(e.gx*TILE+TILE/2, e.gy*TILE-2);
+        e.hpBarFg.setPosition(e.gx*TILE+4, e.gy*TILE-2);
+        e.hpBarFg.width = (TILE-8)*Math.max(0,e.hp/e.maxHp);
+        continue; // held position and fired — no advance, no melee
+      }
     }
     if(e.path && e.pathIdx < e.path.length){
       const node = e.path[e.pathIdx];
@@ -309,7 +409,7 @@ function updateEnemies(delta){
       target = state.units.find(u=> u.hp>0 && !u.inTC && !u.inTowerId && Phaser.Math.Distance.Between(u.gx,u.gy,e.gx,e.gy) <= 1.6) || null;
     }
     e.target = target;
-    if(target && target.hp>0){
+    if(target && target.hp>0 && !e.ranged){
       const d = Phaser.Math.Distance.Between(e.gx,e.gy,target.gx,target.gy);
       if(d <= 1.6){
         e.lastAttackAt += delta;
@@ -355,11 +455,19 @@ function updateEnemies(delta){
         if(scene && scene.add) floatResourceText(Math.round(e.gx), Math.round(e.gy), '+'+SWARM.corpseBiomass+' carrion', '#b6c98a');
       }
     } else {
-      // a dead human leaves a CORPSE where they fall (raiders, pillagers,
-      // swordsmen alike). Undead: raise it via the Necromancer, or let it
-      // rot into carrion. Humans: bury it for morale (see updateCorpses).
-      spawnCorpse(e.gx, e.gy);
-      if(state.faction!=='swarm'){ addResource('food', 1); addResource('wood', 1); } // scavenged gear, as before
+      // only HUMAN dead leave a raiseable/buryable corpse — the undead are
+      // already dead (nothing to raise twice), trolls aren't human. Non-human
+      // races still drop scavenged scraps / a little carrion, as before.
+      const leavesCorpse = !!(e.race && ENEMY_RACES[e.race] && ENEMY_RACES[e.race].leavesCorpse);
+      if(leavesCorpse){
+        spawnCorpse(e.gx, e.gy);
+        if(state.faction!=='swarm'){ addResource('food', 1); addResource('wood', 1); } // scavenged gear
+      } else if(state.faction==='swarm'){
+        addResource('food', SWARM.corpseBiomass); // dissolve the remains straight to carrion
+        if(scene && scene.add) floatResourceText(Math.round(e.gx), Math.round(e.gy), '+'+SWARM.corpseBiomass+' carrion', '#b6c98a');
+      } else {
+        addResource('food', 1); addResource('wood', 1); // scavenged scraps
+      }
     }
   }
   state.enemies = state.enemies.filter(e=>e.hp>0);

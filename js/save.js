@@ -201,11 +201,14 @@ function restoreGame(snapshot){
   state.population.cap = snapshot.populationCap; // set LAST — createBuilding() bumps this as a side effect while buildings are recreated above
 
   // ---- enemies (raiders + bandit camps alike) ----
+  state.enemyProjectiles = []; // in-flight shots are transient — not saved
   for(const se of snapshot.enemies){
     if(se.kind==='camp'){ restoreCamp(se); continue; }
-    spawnEnemy(se.maxHp, se.dmg, snapshot.wave, se.kind, {gx: se.gx, gy: se.gy});
+    spawnEnemy(se.maxHp, se.dmg, snapshot.wave, se.kind, {gx: se.gx, gy: se.gy}, {race: se.race, ranged: se.ranged});
     const e = state.enemies[state.enemies.length-1];
-    e.hp = se.hp;
+    // spawnEnemy re-derives hp/dmg from the race multipliers, but the saved
+    // values are authoritative — stamp them back so nothing double-scales
+    e.hp = se.hp; e.maxHp = se.maxHp; e.dmg = se.dmg;
     restoreHpBar(e, TILE-8);
   }
 

@@ -116,6 +116,38 @@ const UPKEEP = {
   decayHpPerTick: 1,         // damage per tick while maintenance is unpaid
 };
 
+// ---- raiding races ----
+// Each raid wave is ONE race: usually the opposite of the player's faction
+// (a human town is besieged by the undead; the undead are hunted by the
+// living), sometimes a troll warband. Bandits (from camps) and battering
+// rams sit outside this system and never change race. Every race fields a
+// melee line and a ranged line; only HUMAN dead leave a corpse to
+// raise/bury (undead are already dead, trolls aren't human).
+const OPPOSITE_RACE_CHANCE = 0.65;   // vs 0.35 troll warband
+const ENEMY_RANGED = { range: 4.2, cooldownMs: 1500, projectileSpeed: 8 }; // tiles; ranged units hold at range and loose
+const ENEMY_RACES = {
+  human: {
+    label: 'knights', banner: 'Human knights ride to war!',
+    melee: 'enemy_raider', meleeTough: 'enemy_swordsman', ranged: 'archer', rangedTint: 0xcc5544,
+    hpMult: 1.0, dmgMult: 1.0, speedMult: 1.0, meleeSize: 1.0,
+    leavesCorpse: true,
+  },
+  undead: {
+    label: 'undead', banner: 'The undead claw out of the earth!',
+    melee: 'ghoul', meleeTough: 'ghoul', ranged: 'spitter_naga', rangedTint: null,
+    hpMult: 0.9, dmgMult: 1.0, speedMult: 1.05, meleeSize: 1.0,   // frailer, but relentless
+    leavesCorpse: false,
+  },
+  troll: {
+    label: 'trolls', banner: 'A troll warband crashes out of the wild!',
+    melee: 'troll', meleeTough: 'troll', ranged: 'hobgoblin', rangedTint: null,
+    hpMult: 1.5, dmgMult: 1.3, speedMult: 0.85, meleeSize: 1.35,  // hulking, hard-hitting, slow
+    rangedSize: 0.95,
+    leavesCorpse: false,
+  },
+};
+const ENEMY_RANGED_HP_MULT = 0.7;    // ranged units of any race are frailer than their melee kin
+
 // ---- bandit camps ----
 // Camps squat at the map fringes and send the skirmishers. Burn one down
 // with your soldiers to stop the raids from that flank and take its loot.

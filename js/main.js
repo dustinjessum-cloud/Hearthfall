@@ -358,6 +358,7 @@ class MainScene extends Phaser.Scene {
 
     updateUnits(delta);
     updateEnemies(delta);
+    updateEnemyProjectiles(delta);
     updateCombat(delta, time);
 
     if(state.selected || (state.selectedGroup && state.selectedGroup.length)) refreshInfoPanel();

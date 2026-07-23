@@ -348,16 +348,49 @@ def draw_enemy_swordsman(d):
     humanoid(d, DARKGREY, "sword")
 
 def draw_enemy_ram(d):
-    # battering ram: log on a wheeled frame, side view
-    rect(d, 4, 22, 27, 26, WOOD_D)      # frame base
-    rect(d, 6, 26, 9, 29, DARKGREY)     # wheel L
-    rect(d, 22, 26, 25, 29, DARKGREY)   # wheel R
-    rect(d, 7, 10, 10, 22, WOOD)        # post L
-    rect(d, 21, 10, 24, 22, WOOD)       # post R
-    rect(d, 5, 8, 26, 11, ROOF_D)       # roof beam
-    rect(d, 2, 14, 29, 19, WOOD)        # the ram log itself
-    rect(d, 2, 14, 29, 15, WOOD_D)
-    rect(d, 26, 13, 31, 20, STONE_D)    # iron head
+    # battering ram: iron-headed log slung under a hide roof on a wheeled
+    # frame, side view. Shaded and grounded like everything else now.
+    ground_shadow(d, 3, 28, 28, 3)
+    for wx in (6, 21):                                   # spoked wheels
+        d.ellipse([wx, 24, wx+6, 30], fill=DARKGREY, outline=BLACK)
+        d.ellipse([wx+2, 26, wx+4, 28], fill=shade(DARKGREY, 1.5))
+        rect(d, wx, 27, wx+6, 27, BLACK)
+        rect(d, wx+3, 24, wx+3, 30, BLACK)
+    shaded_box(d, 4, 21, 27, 25, WOOD_D)                 # frame base
+    rect(d, 7, 10, 10, 22, WOOD); rect(d, 7, 10, 7, 22, shade(WOOD, 1.2))   # posts
+    rect(d, 21, 10, 24, 22, WOOD); rect(d, 23, 10, 24, 22, shade(WOOD, 0.75))
+    gable_roof(d, 4, 27, 11, 6, ROOF_D)                  # hide canopy
+    rect(d, 2, 14, 27, 19, WOOD)                         # the ram log
+    rect(d, 2, 14, 27, 14, shade(WOOD, 1.22))            # lit top of the log
+    rect(d, 2, 19, 27, 19, shade(WOOD, 0.68))
+    for ry in (16, 17):                                  # binding ropes
+        rect(d, 9, ry, 10, ry, WOOD_D); rect(d, 18, ry, 19, ry, WOOD_D)
+    rect(d, 26, 12, 31, 21, STONE_D)                     # iron head
+    rect(d, 26, 12, 31, 13, shade(STONE_D, 1.4))
+    rect(d, 26, 20, 31, 21, shade(STONE_D, 0.7))
+
+def draw_caravan(d):
+    # merchant wagon — a canvas-topped cart piled with trade goods. It used to
+    # borrow the battering ram sprite with a gold tint, so a friendly trader
+    # and a siege engine were the same silhouette.
+    CANVAS, CANVAS_D = (226, 214, 186), (188, 174, 146)
+    ground_shadow(d, 3, 28, 28, 3)
+    for wx in (6, 20):                                   # cart wheels
+        d.ellipse([wx, 23, wx+7, 30], fill=WOOD_D, outline=BLACK)
+        d.ellipse([wx+2, 25, wx+5, 28], fill=shade(WOOD, 1.25))
+        rect(d, wx, 26, wx+7, 26, BLACK)
+        rect(d, wx+3, 23, wx+3, 30, BLACK)
+    shaded_box(d, 4, 18, 28, 24, WOOD)                   # wagon bed
+    # arched canvas hood, lit on the left
+    d.ellipse([5, 6, 27, 20], fill=CANVAS_D)
+    d.ellipse([6, 7, 24, 19], fill=CANVAS)
+    for hx in (10, 15, 20):                              # hoop ribs
+        rect(d, hx, 7, hx, 18, CANVAS_D)
+    rect(d, 5, 18, 27, 19, shade(CANVAS_D, 0.85))
+    # goods poking out the back + a lantern on the draw-bar
+    rect(d, 24, 14, 28, 18, GOLD); rect(d, 24, 14, 28, 14, shade(GOLD, 1.2))
+    rect(d, 2, 20, 5, 21, WOOD_D)                        # draw-bar
+    rect(d, 1, 17, 3, 20, GOLD)                          # lantern
 
 def draw_granary(d):
     # round grain silo with a conical thatch roof and a grain sack out front —
@@ -441,30 +474,43 @@ def draw_minotaur(d):
     rect(d, 25, 3, 26, 29, WOOD_D)                    # staff
     d.arc([13, 0, 31, 13], 170, 340, fill=(205, 205, 215), width=3)  # blade
     d.polygon([(14, 5), (18, 2), (16, 8)], fill=(205, 205, 215))     # blade tip
+    d.ellipse([9, 27, 22, 31], fill=(0, 0, 0, 70))   # ground shadow — he has weight
     # legs
     rect(d, 11, 22, 14, 29, FUR_D)
     rect(d, 17, 22, 20, 29, FUR_D)
+    rect(d, 11, 22, 11, 29, shade(FUR_D, 1.2))       # lit leg edges
+    rect(d, 17, 22, 17, 29, shade(FUR_D, 1.2))
     rect(d, 11, 28, 14, 29, BLACK)   # hooves
     rect(d, 17, 28, 20, 29, BLACK)
-    # broad body
+    # broad body, lit from the top-left
     rect(d, 9, 12, 22, 22, FUR)
-    rect(d, 9, 12, 22, 14, FUR_D)
+    rect(d, 9, 12, 22, 13, shade(FUR, 1.18))         # lit shoulders
+    rect(d, 9, 12, 10, 22, shade(FUR, 1.10))         # lit flank
+    rect(d, 21, 12, 22, 22, shade(FUR, 0.74))        # shadowed flank
+    rect(d, 9, 21, 22, 22, FUR_D)
     rect(d, 13, 15, 18, 21, TAN_D)   # belly patch
+    rect(d, 13, 15, 18, 15, shade(TAN_D, 1.15))
     # arms
-    rect(d, 6, 13, 8, 21, FUR)
-    rect(d, 23, 13, 25, 21, FUR)     # grips the staff
+    rect(d, 6, 13, 8, 21, FUR); rect(d, 6, 13, 6, 21, shade(FUR, 1.18))
+    rect(d, 23, 13, 25, 21, FUR); rect(d, 25, 13, 25, 21, shade(FUR, 0.74))
     # bull head
     rect(d, 12, 4, 19, 11, FUR)
+    rect(d, 12, 4, 19, 4, shade(FUR, 1.18))
+    rect(d, 19, 4, 19, 11, shade(FUR, 0.76))
     rect(d, 13, 8, 18, 11, (166, 124, 90))  # muzzle
+    rect(d, 13, 8, 18, 8, shade((166, 124, 90), 1.15))
     rect(d, 14, 9, 15, 10, BLACK)           # nostrils
     rect(d, 16, 9, 17, 10, BLACK)
     rect(d, 13, 5, 14, 6, (210, 50, 40))    # glowing eyes
     rect(d, 17, 5, 18, 6, (210, 50, 40))
-    # horns curving out and up
-    rect(d, 9, 3, 12, 5, HORN)
-    rect(d, 8, 0, 10, 4, HORN)
-    rect(d, 19, 3, 22, 5, HORN)
-    rect(d, 21, 0, 23, 4, HORN)
+    rect(d, 13, 5, 13, 5, (255, 140, 120))  # eye glint
+    rect(d, 17, 5, 17, 5, (255, 140, 120))
+    # horns curving out and up, lit along their upper edge
+    for hx0, hx1, tx0, tx1 in [(9, 12, 8, 10), (19, 22, 21, 23)]:
+        rect(d, hx0, 3, hx1, 5, HORN)
+        rect(d, hx0, 3, hx1, 3, shade(HORN, 1.08))
+        rect(d, tx0, 0, tx1, 4, HORN)
+        rect(d, tx0, 0, tx0, 4, shade(HORN, 1.08))
 
 def draw_repairman(d):
     # slate-blue overalls, leather apron, hammer, gold hard hat — reads as
@@ -552,20 +598,26 @@ BONE_D = (176, 172, 150)             # bone shadow
 BONE_L = (244, 242, 228)             # bone highlight
 
 def draw_creep(d):
+    # Dead, cracked, discoloured earth. Built the same way the grass tile is:
+    # broad soft patches for variation, then FINE low-contrast grain on top so
+    # it reads as parched ground rather than flat grey paint — and so the tile
+    # repeat doesn't turn into wallpaper across a big blighted map.
     rect(d, 0, 0, 31, 31, CREEP_GREY)
-    # darker grey mottling
-    for x, y, w, h in [(2,3,10,8), (17,13,11,9), (5,20,9,8), (21,2,8,7)]:
-        d.ellipse([x, y, x+w, y+h], fill=CREEP_GREY_D)
-    # discoloration throughout — a couple of sickly-green and grave-brown patches
-    for x, y, w, h in [(11,9,11,8), (19,19,10,8)]:
-        d.ellipse([x, y, x+w, y+h], fill=CREEP_GREEN_T)
-    for x, y, w, h in [(0,16,9,9), (13,0,8,7)]:
-        d.ellipse([x, y, x+w, y+h], fill=CREEP_BROWN_T)
-    # sunken cracks
-    for x, y, w, h in [(6,24,8,6), (23,9,7,7)]:
-        d.ellipse([x, y, x+w, y+h], fill=CREEP_BLACK_T)
-    d.line([3,15, 11,12, 19,17, 28,13], fill=CREEP_GREY_D, width=1)
-    d.line([6,26, 14,22, 22,27], fill=CREEP_BLACK_T, width=1)
+    # FINE GRAIN ONLY. The old version used big dark ellipse blobs (plus, in
+    # one draft, crack lines) at fixed positions — across a large blighted map
+    # those repeat into obvious wallpaper, the same trap the grass tile's
+    # "blades" fell into. Speckle at low contrast tiles invisibly.
+    # 2px clumps give the mottled, cracked-earth feel the old blobs had;
+    # being small and pseudo-randomly placed they don't line up into a grid
+    scatter(d, 305, 30, CREEP_GREY_D[:3], 2)
+    scatter(d, 317, 18, shade(CREEP_GREY[:3], 1.16), 2)
+    scatter(d, 329, 12, (74, 84, 66), 2)                     # rot patches
+    scatter(d, 211, 120, CREEP_GREY_D[:3])                   # ashen grain
+    scatter(d, 223, 80, shade(CREEP_GREY[:3], 1.20))
+    scatter(d, 241, 46, shade(CREEP_GREY[:3], 0.70))
+    scatter(d, 257, 30, (88, 102, 78))                       # rot-green flecks
+    scatter(d, 269, 22, (94, 82, 64))                        # grave-dirt flecks
+    scatter(d, 281, 14, (52, 52, 50))                        # little sunken pits
 
 def draw_creep_hand(d):
     # blighted ground with a single skeletal hand clawing up out of it — the
@@ -912,11 +964,16 @@ def draw_forest_corrupted(d):
     TRUNK_C = (46, 40, 34)          # dead grey-brown bark
     CANOPY_DARK = (48, 58, 42)      # withered grey-green
     CANOPY_LIGHT = (66, 78, 56)
+    # same lit-side + ground-shadow treatment the healthy forest got, so the
+    # blighted map doesn't look cruder than the living one
     for cx, cy in [(9,20),(21,19),(15,10)]:
+        d.ellipse([cx-6, cy+6, cx+6, cy+10], fill=CREEP_BLACK_T)     # ground shadow
         rect(d, cx-1, cy+4, cx+1, cy+8, TRUNK_C)
-        d.polygon([(cx-7,cy+5),(cx+7,cy+5),(cx,cy-9)], fill=CANOPY_DARK)
-        d.polygon([(cx-5,cy),(cx+5,cy),(cx,cy-9)], fill=CANOPY_LIGHT)
-    for x,y in [(9,15),(21,13)]:
+        rect(d, cx-1, cy+4, cx-1, cy+8, shade(TRUNK_C, 1.35))        # lit bark edge
+        d.polygon([(cx-7,cy+5),(cx+7,cy+5),(cx,cy-9)], fill=shade(CANOPY_DARK, 0.8))
+        d.polygon([(cx-6,cy+4),(cx+5,cy+4),(cx,cy-7)], fill=CANOPY_DARK)
+        d.polygon([(cx-5,cy+1),(cx+1,cy+1),(cx-1,cy-5)], fill=CANOPY_LIGHT)  # lit side
+    for x,y in [(9,15),(21,13),(15,6)]:
         d.ellipse([x,y,x+2,y+2], fill=(150,190,120))  # sickly fungal blooms
 
 def draw_stone_deposit_corrupted(d):
@@ -925,8 +982,11 @@ def draw_stone_deposit_corrupted(d):
     draw_creep(d)
     ROCK_C   = (104, 104, 100)      # ashen grey rock
     ROCK_C_D = (76, 76, 74)
-    for x, y, w, h, c in [(6,14,10,10,ROCK_C),(14,16,12,12,ROCK_C_D),(9,10,8,8,ROCK_C)]:
-        d.ellipse([x, y, x+w, y+h], fill=c, outline=(20,20,22))
+    d.ellipse([5, 22, 27, 29], fill=CREEP_BLACK_T)             # ground shadow
+    for x, y, w, h in [(6,13,11,11),(14,16,13,12),(9,9,9,9)]:  # lit, like living rock
+        d.ellipse([x, y, x+w, y+h], fill=ROCK_C_D, outline=(20,20,22))
+        d.ellipse([x+1, y+1, x+w-3, y+h-4], fill=ROCK_C)
+        d.ellipse([x+2, y+2, x+2+max(2, w//3), y+2+max(2, h//3)], fill=shade(ROCK_C, 1.3))
     d.line([8,18, 14,22, 20,19], fill=(120,160,110), width=1)  # sickly vein
 
 def draw_zergling_quad(d):
@@ -1232,6 +1292,7 @@ DRAWERS = [
     ("market", draw_market),
     ("mason", draw_mason),
     ("barracks", draw_barracks),
+    ("caravan", draw_caravan),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

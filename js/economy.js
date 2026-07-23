@@ -309,8 +309,8 @@ function spawnCaravanVisual(){
   if(state.caravan && state.caravan.sprite) state.caravan.sprite.destroy();
   const {gx, gy} = edgeSpawnPoint();
   const c = { gx, gy, tx:market.gx, ty:market.gy, phase:'arriving', market };
-  c.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME.enemy_ram)
-    .setDepth(4).setTint(0xffd76b);
+  c.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME.caravan)
+    .setDepth(4); // its own wagon sprite now — no more gold-tinted battering ram
   state.caravan = c;
 }
 

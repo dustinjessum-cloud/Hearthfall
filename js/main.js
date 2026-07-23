@@ -108,6 +108,16 @@ class MainScene extends Phaser.Scene {
     // context menu instead of reaching Phaser's pointerdown/rightButtonDown,
     // which is why right-click (cancel build / move archer) did nothing.
     this.input.mouse.disableContextMenu();
+    // Belt-and-suspenders: Phaser only suppresses the menu on its own canvas,
+    // and SHIFT+right-click (used to queue orders) can still surface the
+    // browser's "Save image as / Open image in new tab" menu. Kill the
+    // contextmenu event page-wide. NOTE: Firefox lets shift+right-click
+    // bypass this by design (a privacy feature JS can't override) — there it
+    // must be disabled in about:config, or use a non-shift queue modifier.
+    if(!window._ctxMenuKilled){
+      window.addEventListener('contextmenu', (ev)=> ev.preventDefault());
+      window._ctxMenuKilled = true;
+    }
 
     this.dragStart = null;
     this.dragging = false;
@@ -254,7 +264,10 @@ class MainScene extends Phaser.Scene {
       const queueing = !!(p.event && p.event.shiftKey);
       if(state.selectedGroup && state.selectedGroup.length > 1){
         if(queueing) queueGroupMove(state.selectedGroup, gx, gy);
-        else commandGroupMove(state.selectedGroup, gx, gy);
+        else {
+          for(const gu of state.selectedGroup) clearOrderQueue(gu); // a plain order wipes any queued shift-clicks
+          commandGroupMove(state.selectedGroup, gx, gy);
+        }
         return;
       }
       if(state.selected && state.selected.type==='building' && canRally(state.selected.ref)){
@@ -265,7 +278,7 @@ class MainScene extends Phaser.Scene {
         const u = state.selected.ref;
         const order = resolveOrder(u, gx, gy);
         if(queueing) queueOrder(u, order);
-        else executeOrder(u, order);
+        else { clearOrderQueue(u); executeOrder(u, order); } // a plain right-click cancels the queue and acts now
         return;
       }
       return;

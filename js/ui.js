@@ -48,7 +48,7 @@ function updateHUD(){
   const goldEl = document.querySelector('#resGold span');
   if(goldEl) goldEl.textContent = Math.floor(state.resources.gold);
   const happyEl = document.querySelector('#resHappy span:last-child');
-  if(happyEl) happyEl.textContent = `${state.happiness}%`;
+  if(happyEl) happyEl.textContent = `${Math.round(state.happiness)}%`;
   const face = document.getElementById('happyFace');
   if(face) face.style.color = state.happiness>=80 ? '#6bbf59' : (state.happiness>=50 ? '#ffd76b' : '#ff8a6b');
   document.querySelector('#resPop span').textContent = `${state.population.current} / ${state.population.cap}`;

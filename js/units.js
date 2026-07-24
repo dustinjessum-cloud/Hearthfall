@@ -793,6 +793,54 @@ function findPathToTowerPost(u, t){
   return best;
 }
 
+// Where this walk is ultimately headed: the last waypoint when following a
+// computed route, otherwise the current straight-line target.
+function walkGoal(u){
+  if(u.path && u.path.length) return u.path[u.path.length-1];
+  return { gx: Math.round(u.tx), gy: Math.round(u.ty) };
+}
+
+// Something solid turned up mid-walk. Route around it instead of stopping.
+//
+// This lives in the mover on purpose. TWENTY-TWO of the twenty-three places
+// that start a walk set a raw straight-line target with no obstacle check at
+// all — the whole gather commute does (walk out to the trees, walk home to
+// the warehouse), as do recall, rally and the melee auto-charge. Only
+// commandUnitMove looks before it leaps. Since every one of those funnels
+// through this single mover, recovering here fixes all of them at once
+// instead of teaching twenty-two call sites to path.
+function repathAround(u){
+  const now = performance.now();
+  if(u.repathAt && now - u.repathAt < 400) return false;  // don't re-run BFS every frame while pinned
+  u.repathAt = now;
+  const g = walkGoal(u);
+  if(Math.round(u.gx)===g.gx && Math.round(u.gy)===g.gy) return false;
+  // Walking ONTO a tower or gate tile is legitimate (garrisoning it, or
+  // building it), so hand the destination's own building across as the goal
+  // exception — otherwise the pathfinder decides the target is solid and
+  // reports it unreachable.
+  const gb = occAt(g.gx, g.gy);
+  const path = findFriendlyPath(u, g.gx, g.gy, gb ? gb.id : (u.buildTaskId || null));
+  if(!path || !path.length) return false;
+  // Settle onto the centre of the tile we are actually standing in before
+  // taking the new route. A unit stopped hard against an obstacle ends up ON
+  // the boundary — y=12.51 with a tower filling y=12 — but the route is
+  // planned from its ROUNDED tile (y=13). Leg one is legal from that tile
+  // centre and still clips the tower from the true position, so it re-blocks,
+  // the throttle swallows the retry, and the unit strands itself half a tile
+  // from open ground. Snapping keeps the plan and the body in agreement.
+  const sx = Math.round(u.gx), sy = Math.round(u.gy);
+  if(!friendlyBlocked(u, sx, sy, null)){ u.gx = sx; u.gy = sy; }
+  u.path = path;
+  // Step onto leg one immediately and STAY "moving". Going idle for even one
+  // frame invites an auto-behaviour to re-issue its straight line and clobber
+  // the route we just computed — which is exactly the loop that pinned
+  // workers against a tower face: stop, get re-sent into the same wall, stop.
+  const wp = u.path.shift();
+  u.tx = wp.gx; u.ty = wp.gy; u.moving = true;
+  return true;
+}
+
 function updateUnits(delta){
   const baseSpeed = 2.2; // tiles/sec
   for(const u of [...state.units]){
@@ -1029,10 +1077,26 @@ function updateUnits(delta){
         && u.buildTaskId !== nb.id // never blocked from reaching the very site you're walking over to build
         && nb !== curTile; // ...nor from leaving a blocking tile you're already standing on, for any reason
       if(nt==='water' || (u.type!=='villager' && nt==='stone_deposit') || wallBlocked){
-        u.moving = false; u.playerOrder = false;
-        u.path = null; // the world changed under a computed path — recompute from wherever we stopped
+        // Blocked. This used to stop dead and null the path, which threw the
+        // destination away entirely — the comment here claimed it would
+        // "recompute from wherever we stopped", but nothing ever recomputed.
+        // A worker whose farm sat behind a tower walked into the tower face,
+        // stopped, was re-sent along the identical line by the gather loop on
+        // the next tick, and stayed pinned there until dragged around by hand.
+        if(!repathAround(u)){
+          u.moving = false; u.playerOrder = false;
+          u.path = null; // genuinely unreachable — give up rather than spin
+        }
       } else if(willArrive){
         u.gx = u.tx; u.gy = u.ty; u.moving = false; u.playerOrder = false;
+        // Pick up the next leg in the SAME frame. Sitting idle between legs
+        // leaves a window for the gather commute (which re-targets on every
+        // economy tick) to overwrite the route with a fresh straight line
+        // back into the obstacle.
+        if(u.path && u.path.length){
+          const wp = u.path.shift();
+          u.tx = wp.gx; u.ty = wp.gy; u.moving = true;
+        }
       } else {
         u.gx = nx; u.gy = ny;
       }

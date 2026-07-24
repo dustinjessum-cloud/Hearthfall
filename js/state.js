@@ -62,6 +62,7 @@ const state = {
   wave: 0,
   waveTimerMs: 210000,   // 3.5 min before the first raid
   nextWaveInMs: 210000,
+  corridorOpen: false,   // set once RAIDS_BEFORE_CORRIDOR raids are survived
   gameOver: false,
   selected: null,        // {type:'building'|'unit', ref}
   selectedGroup: [],     // drag-box multi-selection of friendly units
@@ -85,6 +86,25 @@ const state = {
 function isRaidActive(){ return state.enemies.some(e=>e.hp>0 && e.kind!=='camp'); }
 function isRecalled(){ return state.manualRecall; }
 
+// ---- zones ----------------------------------------------------------
+// Which band a column falls in. Used to keep raid spawns, bandit camps and
+// resource density inside the right part of the world — on a 142-wide map
+// an edge spawn picked from the full width would drop raiders 120 tiles
+// away inside the enemy town.
+function zoneOf(gx){
+  for(const name in ZONES){ const z = ZONES[name]; if(gx >= z.x0 && gx <= z.x1) return name; }
+  return null;
+}
+function inZone(gx, name){ const z = ZONES[name]; return !!z && gx >= z.x0 && gx <= z.x1; }
+function zoneWidth(name){ const z = ZONES[name]; return z ? z.x1 - z.x0 + 1 : 0; }
+function zoneCenter(name){
+  const z = ZONES[name];
+  return z ? { gx: Math.floor((z.x0 + z.x1)/2), gy: Math.floor(MAP_H/2) } : null;
+}
+function isImpassableTile(t){ return IMPASSABLE_TILES.has(t); }
+// True while the passes are still plugged — the whole pre-corridor game.
+function corridorSealed(){ return !state.corridorOpen; }
+
 function inBounds(gx,gy){ return gx>=0 && gy>=0 && gx<MAP_W && gy<MAP_H; }
 function tileAt(gx,gy){ return inBounds(gx,gy) ? state.grid[gy][gx] : null; }
 function occAt(gx,gy){ return inBounds(gx,gy) ? state.occupied[gy][gx] : null; }
@@ -98,14 +118,22 @@ function generateMap(){
     for(let x=0;x<MAP_W;x++){ row.push('grass'); orow.push(null); qrow.push(null); srow.push(null); rrow.push(false); }
     state.grid.push(row); state.occupied.push(orow); state.resourceQty.push(qrow); state.tileSprites.push(srow); state.roads.push(rrow);
   }
-  const cx = Math.floor(MAP_W/2), cy = Math.floor(MAP_H/2);
+  // Your town sits at the middle of the HOME band, not the middle of the
+  // world — the world's midpoint is now the neutral zone.
+  const home = zoneCenter('home');
+  const cx = home.gx, cy = home.gy;
   function nearCenter(x,y,d){ return Math.abs(x-cx)<=d && Math.abs(y-cy)<=d; }
 
-  function blob(type, count, minD){
-    let x = Phaser.Math.Between(2, MAP_W-3);
+  // Resource blobs, confined to one band. Everything is generated per-zone
+  // now so the neutral middle can be made genuinely richer than home
+  // without also fattening the ground you start on.
+  function blob(zone, type, count, minD){
+    const z = ZONES[zone];
+    const lo0 = z.x0 + 1, hi0 = z.x1 - 1;
+    let x = Phaser.Math.Between(lo0, hi0);
     let y = Phaser.Math.Between(2, MAP_H-3);
     let tries=0;
-    while(nearCenter(x,y,minD) && tries<50){ x=Phaser.Math.Between(2,MAP_W-3); y=Phaser.Math.Between(2,MAP_H-3); tries++; }
+    while(nearCenter(x,y,minD) && tries<50){ x=Phaser.Math.Between(lo0,hi0); y=Phaser.Math.Between(2,MAP_H-3); tries++; }
     for(let i=0;i<count;i++){
       if(inBounds(x,y) && !nearCenter(x,y,5) && state.grid[y][x]==='grass'){
         state.grid[y][x]=type;
@@ -114,37 +142,82 @@ function generateMap(){
       }
       const dir = Phaser.Math.Between(0,3);
       if(dir===0) x++; else if(dir===1) x--; else if(dir===2) y++; else y--;
-      x = Phaser.Math.Clamp(x,1,MAP_W-2); y = Phaser.Math.Clamp(y,1,MAP_H-2);
+      x = Phaser.Math.Clamp(x, lo0, hi0); y = Phaser.Math.Clamp(y,1,MAP_H-2);
     }
   }
-  // map area is ~2.1x the old size, and stone gets an extra boost per the
-  // ask for more of it — more blobs, and each blob runs longer.
-  for(let i=0;i<9;i++) blob('forest', Phaser.Math.Between(9,15), 5);
-  for(let i=0;i<7;i++) blob('stone_deposit', Phaser.Math.Between(10,16), 5);
 
-  // Wildstone: rare, single-tile deposits — not blobs, by design. Pushed a
-  // little further out than forest/stone (radius 7 vs 5) since the whole
-  // point is that reaching it costs real exposure, not just a walk to the
-  // treeline. Each one gets its own auto-generated gathering site in
-  // startWorld — no player construction needed.
-  state._wildstoneSites = [];
-  let wsAttempts = 0;
-  while(state._wildstoneSites.length < 5 && wsAttempts < 300){
-    wsAttempts++;
-    const x = Phaser.Math.Between(2, MAP_W-3), y = Phaser.Math.Between(2, MAP_H-3);
-    if(nearCenter(x,y,7)) continue;
-    if(state.grid[y][x] !== 'grass') continue;
-    state.grid[y][x] = 'wildstone_deposit';
-    const [lo,hi] = RESOURCE_QTY_RANGE.wildstone_deposit;
-    state.resourceQty[y][x] = Phaser.Math.Between(lo,hi);
-    state._wildstoneSites.push({gx:x, gy:y});
+  function scatterWildstone(zone, n, minD){
+    const z = ZONES[zone];
+    let placed = 0, attempts = 0;
+    while(placed < n && attempts < 400){
+      attempts++;
+      const x = Phaser.Math.Between(z.x0+1, z.x1-1), y = Phaser.Math.Between(2, MAP_H-3);
+      if(nearCenter(x,y,minD)) continue;
+      if(state.grid[y][x] !== 'grass') continue;
+      state.grid[y][x] = 'wildstone_deposit';
+      const [lo,hi] = RESOURCE_QTY_RANGE.wildstone_deposit;
+      state.resourceQty[y][x] = Phaser.Math.Between(lo,hi);
+      state._wildstoneSites.push({gx:x, gy:y});
+      placed++;
+    }
   }
 
-  // small lake
-  const lx = Phaser.Math.Between(3, MAP_W-8), ly = Phaser.Math.Between(3, MAP_H-8);
+  state._wildstoneSites = [];
+
+  // -- home band: unchanged from the pre-corridor game, so the opening plays
+  //    exactly as it always has --
+  for(let i=0;i<9;i++) blob('home', 'forest', Phaser.Math.Between(9,15), 5);
+  for(let i=0;i<7;i++) blob('home', 'stone_deposit', Phaser.Math.Between(10,16), 5);
+  scatterWildstone('home', 5, 7);
+
+  // -- enemy band: mirrors home, so their start is as good as yours --
+  for(let i=0;i<9;i++) blob('enemy', 'forest', Phaser.Math.Between(9,15), 0);
+  for(let i=0;i<7;i++) blob('enemy', 'stone_deposit', Phaser.Math.Between(10,16), 0);
+  scatterWildstone('enemy', 5, 0);
+
+  // -- neutral middle: the prize. Denser blobs AND more of them, plus the
+  //    lion's share of the wildstone, so holding it is worth the exposure --
+  for(let i=0;i<11;i++) blob('neutral', 'forest', Phaser.Math.Between(14,22), 0);
+  for(let i=0;i<10;i++) blob('neutral', 'stone_deposit', Phaser.Math.Between(15,24), 0);
+  scatterWildstone('neutral', 9, 0);
+
+  // -- the two passes: solid rock with a narrow gap carved through the
+  //    middle. The gap starts plugged; surviving the raids clears it. The
+  //    surrounding rock is permanent, which is what makes the opened pass a
+  //    chokepoint rather than just more open ground. --
+  for(const passName of ['passWest','passEast']){
+    const z = ZONES[passName];
+    for(let y=0;y<MAP_H;y++){
+      for(let x=z.x0;x<=z.x1;x++) state.grid[y][x] = 'sealed_pass';
+    }
+  }
+
+  // small lake, home band only
+  const hz = ZONES.home;
+  const lx = Phaser.Math.Between(hz.x0+3, hz.x1-7), ly = Phaser.Math.Between(3, MAP_H-8);
   if(!nearCenter(lx,ly,7)){
     for(let y=ly;y<ly+3;y++) for(let x=lx;x<lx+4;x++) if(inBounds(x,y) && !nearCenter(x,y,5)) state.grid[y][x]='water';
   }
   return {cx, cy};
+}
+
+// Clear the gap through both passes. Called when the raids are survived;
+// only the gap rows become walkable, the rest of the rock stays forever.
+function openCorridor(){
+  if(state.corridorOpen) return [];
+  state.corridorOpen = true;
+  const midY = Math.floor(MAP_H/2);
+  const cleared = [];
+  for(const passName of ['passWest','passEast']){
+    const z = ZONES[passName];
+    for(let y=midY-PASS_GAP_HALF; y<=midY+PASS_GAP_HALF; y++){
+      for(let x=z.x0; x<=z.x1; x++){
+        if(!inBounds(x,y)) continue;
+        state.grid[y][x] = 'grass';
+        cleared.push({gx:x, gy:y});
+      }
+    }
+  }
+  return cleared;
 }
 

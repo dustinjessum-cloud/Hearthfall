@@ -21,7 +21,7 @@ const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker', 'garri
 // out-of-date. Additive fields (a new building property, say) do NOT need a
 // bump — restore overlays them onto freshly created objects, so anything
 // missing keeps its default.
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;   // v2: five-band world, corridor endgame
 
 // A save is only offered if it can actually be restored, so the "Continue
 // Your Game" button can't appear for one this build would choke on.
@@ -83,6 +83,7 @@ function serializeGame(){
     populationCap: state.population.cap,
     wave: state.wave,
     nextWaveInMs: state.nextWaveInMs,
+    corridorOpen: state.corridorOpen,
     nextSkirmishInMs: state.nextSkirmishInMs,
     nextCaravanInMs: state.nextCaravanInMs,
     caravanActiveMs: state.caravanActiveMs,
@@ -140,6 +141,11 @@ function restoreHpBar(entity, barWidthFull){
 // Rebuilds the whole world (map, buildings, units, enemies) from a
 // snapshot produced by serializeGame().
 function restoreGame(snapshot){
+  // MUST be set before drawMap(), which paints the unexplored veil over
+  // everything past your band when the corridor is shut. Restored later, a
+  // save taken AFTER the pass opened would be veiled again on load with
+  // nothing left to lift it.
+  state.corridorOpen = !!snapshot.corridorOpen;
   state.grid = snapshot.grid;
   state.resourceQty = snapshot.resourceQty;
   state.roads = snapshot.roads;

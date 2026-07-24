@@ -64,12 +64,15 @@ function spawnBanditCamps(){
   while(placed < n && tries < 200){
     tries++;
     // pick a tile within 3 of an edge
+    // frontier of the HOME band — camps belong on your borders, not scattered
+    // across the neutral zone and the enemy's back yard
+    const z = ZONES.home;
     const side = Phaser.Math.Between(0,3);
     let gx, gy;
-    if(side===0){ gx=Phaser.Math.Between(1,MAP_W-2); gy=Phaser.Math.Between(1,3); }
-    else if(side===1){ gx=Phaser.Math.Between(1,MAP_W-2); gy=Phaser.Math.Between(MAP_H-4,MAP_H-2); }
-    else if(side===2){ gx=Phaser.Math.Between(1,3); gy=Phaser.Math.Between(1,MAP_H-2); }
-    else { gx=Phaser.Math.Between(MAP_W-4,MAP_W-2); gy=Phaser.Math.Between(1,MAP_H-2); }
+    if(side===0){ gx=Phaser.Math.Between(z.x0+1,z.x1-1); gy=Phaser.Math.Between(1,3); }
+    else if(side===1){ gx=Phaser.Math.Between(z.x0+1,z.x1-1); gy=Phaser.Math.Between(MAP_H-4,MAP_H-2); }
+    else if(side===2){ gx=Phaser.Math.Between(z.x0+1,z.x0+3); gy=Phaser.Math.Between(1,MAP_H-2); }
+    else { gx=Phaser.Math.Between(z.x1-3,z.x1-1); gy=Phaser.Math.Between(1,MAP_H-2); }
     if(tileAt(gx,gy)!=='grass' || occAt(gx,gy)) continue;
     if(Phaser.Math.Distance.Between(gx,gy,th.gx,th.gy) < BANDIT_CAMP.minDistFromTC) continue;
     if(state.enemies.some(e=>e.kind==='camp' && Phaser.Math.Distance.Between(e.gx,e.gy,gx,gy) < 8)) continue;
@@ -86,13 +89,18 @@ function spawnBanditCamps(){
   if(placed>0) flashWaveBanner(`${placed} bandit camp${placed>1?'s':''} spotted on the frontier — destroy them to stop the skirmishers!`);
 }
 
+// Raiders come from the edges of the HOME band, never the full map width.
+// Picking from 0..MAP_W-1 would drop them 120 tiles away inside the enemy
+// town — they would spend the entire raid walking, and half of them would
+// spawn on the far side of a sealed pass they can never cross.
 function edgeSpawnPoint(){
+  const z = ZONES.home;
   const side = Phaser.Math.Between(0,3);
   let gx,gy;
-  if(side===0){ gx=Phaser.Math.Between(0,MAP_W-1); gy=0; }
-  else if(side===1){ gx=Phaser.Math.Between(0,MAP_W-1); gy=MAP_H-1; }
-  else if(side===2){ gx=0; gy=Phaser.Math.Between(0,MAP_H-1); }
-  else { gx=MAP_W-1; gy=Phaser.Math.Between(0,MAP_H-1); }
+  if(side===0){ gx=Phaser.Math.Between(z.x0,z.x1); gy=0; }
+  else if(side===1){ gx=Phaser.Math.Between(z.x0,z.x1); gy=MAP_H-1; }
+  else if(side===2){ gx=z.x0; gy=Phaser.Math.Between(0,MAP_H-1); }
+  else { gx=z.x1; gy=Phaser.Math.Between(0,MAP_H-1); }
   return {gx,gy};
 }
 
@@ -149,7 +157,7 @@ function spawnEnemy(hp, dmg, wave, kind, at, opts){
 
 function isBlocked(gx,gy, ignoreBuildings){
   const t = tileAt(gx,gy);
-  if(t==='water') return true;
+  if(isImpassableTile(t)) return true;
   if(t==='stone_deposit') return true; // enemies are never miners — stone is solid rock to them
   if(ignoreBuildings) return false;    // siege mode: buildings are obstacles to smash, not walls of the world
   const b = occAt(gx,gy);
@@ -228,7 +236,7 @@ function repathEnemy(e){
 // Terrain-only blocking test for the "smash through" path mode.
 function isBlockedForPath(gx, gy, ignoreBuildings){
   const t = tileAt(gx,gy);
-  if(t==='water' || t==='stone_deposit') return true;
+  if(isImpassableTile(t) || t==='stone_deposit') return true;
   if(ignoreBuildings) return false;
   return !!occAt(gx,gy);
 }

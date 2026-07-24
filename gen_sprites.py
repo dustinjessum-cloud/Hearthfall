@@ -860,72 +860,194 @@ def draw_corpse(d):
     rect(d, 8, 18, 9, 19, WOOD_D)
 
 def draw_troll(d):
-    # a hulking ogre-troll: broad hunched body of sickly green hide, small
-    # tusked head sunk into the shoulders, huge fists and a crude club.
-    # Drawn big to fill the frame (it's scaled up further in-game).
+    # A hulking ogre-troll. The old one was a flat green cutout: solid slabs
+    # of hide with no ground shadow (so it floated), a club that was a plain
+    # brown bar, and eyes painted onto a smooth face. It renders at 1.35x
+    # in-game — more pixels on screen than anything else in a wave — so it
+    # can carry real detail: warty mottled hide, a brow ridge that actually
+    # shadows the eyes, an underbite with tusks that jut from the LOWER jaw,
+    # knuckles on the fists, and iron studs hammered into the club.
     HIDE, HIDE_D, HIDE_L = (104, 132, 86), (78, 102, 64), (128, 156, 106)
-    LOIN = (86, 64, 44)
-    TUSK = (232, 228, 206)
-    CLUB, CLUB_D = (112, 84, 54), (84, 62, 40)
-    EYE = (150, 40, 34)
-    # a crude club raised in the right fist (drawn first, behind the arm)
-    rect(d, 25, 3, 29, 14, CLUB); rect(d, 25, 3, 29, 4, CLUB_D)
-    rect(d, 26, 12, 28, 22, CLUB_D)
-    # broad hunched torso
+    HIDE_XD = (58, 78, 48)               # deepest creases
+    WART = (88, 112, 70)
+    LOIN, LOIN_D = (86, 64, 44), (62, 46, 32)
+    ROPE = (140, 118, 80)
+    TUSK, TUSK_D = (238, 234, 214), (190, 184, 160)
+    CLUB, CLUB_D, CLUB_L = (112, 84, 54), (84, 62, 40), (140, 110, 74)
+    IRON, IRON_L = (96, 100, 108), (152, 156, 164)
+    EYE, EYE_L = (150, 40, 34), (214, 88, 66)
+    SCAR = (152, 172, 130)
+
+    ground_shadow(d, 4, 28, 28, 4)       # it used to float
+
+    # Crude studded club, raised in the right fist. Kept NARROW and clear of
+    # the body — a wide one merges with the shoulder into a single brown
+    # slab that reads as a door, and swallows the right arm with it.
+    rect(d, 26, 2, 30, 12, CLUB)         # head, tapering to the grip
+    rect(d, 27, 12, 30, 14, CLUB)
+    rect(d, 26, 2, 30, 2, CLUB_L)        # lit top
+    rect(d, 26, 2, 26, 12, CLUB_L)       # lit left
+    rect(d, 30, 2, 30, 14, CLUB_D)
+    for sx, sy in ((27, 4), (29, 7), (27, 10)):
+        rect(d, sx, sy, sx+1, sy+1, IRON)
+        rect(d, sx, sy, sx, sy, IRON_L)  # each stud catches the light
+    rect(d, 28, 14, 29, 23, CLUB_D)      # shaft, mostly hidden behind the arm
+    rect(d, 28, 14, 28, 23, CLUB)
+    for ry in (16, 18):
+        rect(d, 28, ry, 30, ry, ROPE)    # cord wrapped round the grip
+
+    # broad hunched torso: slab chest catching the light over a shadowed gut
     rect(d, 9, 12, 23, 25, HIDE)
     rect(d, 9, 12, 10, 25, HIDE_L)
     rect(d, 22, 12, 23, 25, HIDE_D)
-    rect(d, 12, 15, 20, 20, HIDE_D)      # belly shadow
-    # small head sunk between the shoulders
-    rect(d, 13, 6, 19, 12, HIDE)
-    rect(d, 13, 6, 19, 7, HIDE_D)
-    rect(d, 14, 9, 15, 10, EYE); rect(d, 17, 9, 18, 10, EYE)
-    rect(d, 14, 11, 15, 12, TUSK); rect(d, 17, 11, 18, 12, TUSK)  # jutting tusks
-    # huge arms
-    rect(d, 5, 13, 9, 23, HIDE); rect(d, 5, 13, 6, 23, HIDE_L)
-    rect(d, 23, 13, 27, 23, HIDE); rect(d, 26, 13, 27, 23, HIDE_D)
-    rect(d, 4, 21, 9, 26, HIDE_D)        # left fist
-    rect(d, 23, 21, 28, 26, HIDE_D)      # right fist (gripping the club)
-    # loincloth + stumpy legs
-    rect(d, 11, 24, 21, 28, LOIN)
-    rect(d, 11, 27, 15, 31, HIDE_D)
-    rect(d, 17, 27, 21, 31, HIDE_D)
+    rect(d, 10, 12, 22, 12, HIDE_L)      # lit shoulder ridge
+    rect(d, 11, 14, 20, 16, HIDE_L)
+    rect(d, 15, 14, 15, 17, HIDE_D)      # split between the pectorals
+    rect(d, 12, 19, 21, 23, HIDE_D)      # gut in shadow
+    rect(d, 13, 23, 20, 23, HIDE_XD)
+    for i in range(3):
+        rect(d, 17+i, 15+i, 17+i, 15+i, SCAR)   # old scar raked over the ribs
+
+    # huge arms, creased at the elbow
+    rect(d, 4, 13, 9, 23, HIDE)
+    rect(d, 4, 13, 5, 23, HIDE_L)
+    rect(d, 9, 13, 9, 23, HIDE_D)
+    rect(d, 4, 18, 9, 18, HIDE_D)
+    rect(d, 23, 13, 27, 23, HIDE)
+    rect(d, 26, 13, 27, 23, HIDE_D)
+    rect(d, 23, 18, 27, 18, HIDE_D)
+    # warts stippled over hide and arms
+    for wx, wy in ((11, 21), (19, 20), (13, 24), (6, 15), (7, 20), (25, 16), (24, 21)):
+        rect(d, wx, wy, wx, wy, WART)
+
+    # fists — knuckles picked out so they read as gripping, not as mittens
+    rect(d, 3, 21, 9, 27, HIDE_D)
+    rect(d, 3, 21, 9, 21, HIDE)
+    rect(d, 22, 21, 28, 27, HIDE_D)
+    rect(d, 22, 21, 28, 21, HIDE)
+    for kx in (4, 6, 8):
+        rect(d, kx, 23, kx, 24, HIDE)
+    for kx in (23, 25, 27):
+        rect(d, kx, 23, kx, 24, HIDE)
+
+    # loincloth slung on a rope belt
+    rect(d, 10, 24, 22, 25, ROPE)
+    rect(d, 11, 25, 21, 28, LOIN)
+    rect(d, 11, 25, 11, 28, shade(LOIN, 1.28))
+    rect(d, 21, 25, 21, 28, LOIN_D)
+    rect(d, 15, 26, 17, 28, LOIN_D)      # fold
+    # stumpy legs with splayed toes
+    rect(d, 11, 28, 15, 31, HIDE_D)
+    rect(d, 11, 28, 11, 31, HIDE)
+    rect(d, 17, 28, 21, 31, HIDE_D)
+    rect(d, 17, 28, 17, 31, HIDE)
+    for tx in (12, 14, 18, 20):
+        rect(d, tx, 31, tx, 31, HIDE_XD)
+
+    # small head sunk between the shoulders, heavy brow over sunken eyes
+    d.polygon([(11, 7), (7, 4), (11, 11)], fill=HIDE)     # ears
+    d.polygon([(21, 7), (25, 4), (21, 11)], fill=HIDE_D)
+    rect(d, 12, 5, 20, 12, HIDE)
+    rect(d, 12, 5, 20, 5, HIDE_L)        # lit crown
+    rect(d, 20, 5, 20, 12, HIDE_D)
+    rect(d, 12, 7, 20, 8, HIDE_XD)       # brow ridge, throwing the eyes into shade
+    rect(d, 13, 9, 14, 10, EYE); rect(d, 18, 9, 19, 10, EYE)
+    rect(d, 13, 9, 13, 9, EYE_L); rect(d, 18, 9, 18, 9, EYE_L)
+    rect(d, 16, 9, 17, 10, HIDE_D)       # flat snout
+    rect(d, 16, 9, 16, 9, HIDE_XD); rect(d, 17, 9, 17, 9, HIDE_XD)
+    # jaw shoved forward in an underbite, tusks growing UP out of it
+    rect(d, 13, 11, 19, 12, HIDE_D)
+    rect(d, 13, 12, 19, 12, HIDE_XD)
+    rect(d, 13, 11, 14, 12, TUSK); rect(d, 13, 10, 13, 10, TUSK)
+    rect(d, 18, 11, 19, 12, TUSK); rect(d, 19, 10, 19, 10, TUSK)
+    rect(d, 14, 12, 14, 12, TUSK_D); rect(d, 18, 12, 18, 12, TUSK_D)
 
 def draw_hobgoblin(d):
-    # Wiry goblinoid spear-thrower, snarling, spear cocked back to HURL —
-    # the old one angled the spear down-forward so it read as if it were
-    # stabbing the dirt, and was flat-shaded with no ground shadow.
+    # Wiry goblinoid spear-thrower. The last pass fixed the POSE (spear
+    # cocked back to hurl, rather than angled down as if stabbing dirt) but
+    # left the body plain: bare limbs, a smooth rag tunic, a spear that was
+    # one drawn line, and a single spear for a unit whose whole job is
+    # throwing them. Now it reads as a raider who throws for a living — a
+    # bundle of spare javelins strapped across its back, cord lashing the
+    # spearhead on, hide wraps on the throwing arm and shins, warpaint, and
+    # a string of teeth at its throat.
     SKN, SKN_D, SKN_L = (140, 132, 78), (104, 98, 54), (168, 160, 102)
+    SKN_XD = (74, 70, 38)
     RAG, RAG_D = (98, 78, 56), (72, 56, 40)
-    SHAFT, TIP = (122, 96, 60), (178, 178, 186)
-    EYE = (222, 72, 44)
+    RAG_L = shade(RAG, 1.28)
+    WRAP, WRAP_D = (132, 106, 74), (94, 74, 52)
+    SHAFT, SHAFT_D = (122, 96, 60), (92, 72, 44)
+    TIP, TIP_L = (178, 178, 186), (224, 224, 232)
+    CORD = (206, 194, 148)
+    BONE = (232, 228, 206)
+    EYE, PUPIL = (222, 72, 44), (54, 18, 10)
+    PAINT = (170, 54, 40)
+
     d.ellipse([10, 27, 22, 31], fill=(0, 0, 0, 70))          # ground shadow
-    # spear drawn back over the shoulder, head angled UP and forward
+
+    # spare javelins bundled across its back — drawn first so the torso and
+    # head cover them where they pass behind
+    for ox in (0, 2):
+        d.line([3 + ox, 24, 9 + ox, 4], fill=SHAFT, width=1)
+        rect(d, 9 + ox, 3, 9 + ox, 4, TIP)                   # tips over the shoulder
+        rect(d, 3 + ox, 24, 3 + ox, 25, SHAFT_D)             # butt ends below the hip
+
+    # main spear: shaft, cord-lashed head, iron tip
     d.line([5, 21, 27, 6], fill=SHAFT, width=1)
+    d.line([5, 22, 26, 7], fill=SHAFT_D, width=1)            # shaded underside
     d.polygon([(28, 3), (24, 8), (29, 8)], fill=TIP)
-    # bent legs
+    d.line([28, 3, 25, 7], fill=TIP_L)                       # lit edge of the blade
+    for cx, cy in ((22, 9), (23, 9)):
+        rect(d, cx, cy, cx, cy+1, CORD)                      # lashing binding it on
+
+    # bent legs, bound with hide strips below the knee
     rect(d, 12, 22, 14, 29, SKN_D); rect(d, 12, 22, 12, 29, SKN)
     rect(d, 17, 22, 19, 29, SKN_D); rect(d, 17, 22, 17, 29, SKN)
+    for ly in (25, 27):
+        rect(d, 12, ly, 14, ly, WRAP_D)
+        rect(d, 17, ly, 19, ly, WRAP_D)
     rect(d, 11, 29, 15, 30, RAG_D); rect(d, 16, 29, 20, 30, RAG_D)   # feet
+
     # hunched ragged torso
     rect(d, 12, 12, 19, 23, RAG)
-    rect(d, 12, 12, 13, 23, shade(RAG, 1.28))
+    rect(d, 12, 12, 13, 23, RAG_L)
     rect(d, 18, 12, 19, 23, RAG_D)
     for ry in (15, 19):
         rect(d, 12, ry, 19, ry, RAG_D)                       # rag ties
-    # rear arm cocked back on the spear, lead arm thrown forward
-    rect(d, 7, 17, 12, 19, SKN); rect(d, 7, 17, 12, 17, SKN_L)
+    rect(d, 13, 22, 13, 23, SKN_XD)                          # hem torn into points
+    rect(d, 16, 22, 16, 23, SKN_XD)
+    # strap holding the javelin bundle on, cutting across the chest
+    d.line([12, 18, 19, 13], fill=WRAP, width=1)
+    # string of teeth at the throat
+    rect(d, 13, 12, 18, 12, SKN_XD)
+    for bx in (14, 16, 18):
+        rect(d, bx, 13, bx, 13, BONE)
+
+    # rear arm hauling the spear back, lead arm flung forward for balance
+    rect(d, 6, 17, 12, 19, SKN); rect(d, 6, 17, 12, 17, SKN_L)
+    rect(d, 8, 17, 9, 19, WRAP)                              # wrap on the throwing arm
+    rect(d, 8, 17, 9, 17, shade(WRAP, 1.22))
+    rect(d, 5, 18, 6, 20, SKN_D)                             # fist round the shaft
+    rect(d, 5, 20, 5, 20, SKN_XD)
     rect(d, 19, 13, 23, 15, SKN); rect(d, 19, 13, 23, 13, SKN_L)
+    rect(d, 21, 13, 22, 15, WRAP)
+    rect(d, 23, 14, 23, 15, SKN_D)                           # splayed fingers
+
     # big-eared snarling head
     d.ellipse([12, 4, 20, 12], fill=SKN)
     rect(d, 12, 4, 16, 5, SKN_L)                             # lit brow
     d.polygon([(12, 6), (7, 2), (12, 10)], fill=SKN)         # left ear
     d.polygon([(20, 6), (25, 2), (20, 10)], fill=SKN)        # right ear
     d.polygon([(12, 7), (9, 4), (12, 9)], fill=SKN_D)        # inner-ear shadow
+    d.polygon([(20, 7), (23, 4), (20, 9)], fill=SKN_D)
+    rect(d, 23, 3, 23, 4, BONE)                              # bone ring through the ear
+    rect(d, 13, 6, 19, 6, SKN_XD)                            # brow shadow
     rect(d, 13, 7, 14, 8, EYE); rect(d, 17, 7, 18, 8, EYE)
+    rect(d, 13, 8, 13, 8, PUPIL); rect(d, 17, 8, 17, 8, PUPIL)
     rect(d, 14, 10, 18, 11, SKN_D)                           # snarl
     for tx in (15, 17):
-        rect(d, tx, 10, tx, 10, (232, 228, 206))             # teeth
+        rect(d, tx, 10, tx, 10, BONE)                        # teeth
+    rect(d, 12, 9, 12, 9, PAINT); rect(d, 19, 9, 19, 9, PAINT)   # warpaint daubed on the cheeks
 
 def draw_bandit(d):
     # a scruffy hooded outlaw with a knife — the drilled-soldier silhouette

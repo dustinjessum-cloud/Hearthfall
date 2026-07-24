@@ -657,7 +657,7 @@ function refreshWallNeighborhood(gx, gy){
 function isPlacementValid(type, gx, gy){
   if(!inBounds(gx,gy)) return false;
   const t = tileAt(gx,gy);
-  if(t==='water') return false;
+  if(isImpassableTile(t)) return false;
   // can't build on standing forest or solid stone — log/mine it out first
   // (depleted tiles revert to grass/dirt and become buildable land)
   if(t==='forest' || t==='stone_deposit') return false;

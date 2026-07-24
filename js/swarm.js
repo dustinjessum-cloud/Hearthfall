@@ -110,7 +110,7 @@ function frameForGroundTile(gx, gy){
 
 function claimCreepTile(gx, gy){
   if(!inBounds(gx,gy) || isCreeped(gx,gy)) return false;
-  if(tileAt(gx,gy) === 'water') return false; // creep won't cross open water
+  if(isImpassableTile(tileAt(gx,gy))) return false; // creep won't cross open water or solid rock
   state.creep[gy][gx] = true;
   state._creepCount++;
   const spr = state.tileSprites[gy] && state.tileSprites[gy][gx];
@@ -153,7 +153,7 @@ function findTumorSpreadSpot(px, py, reach){
       const gx = px+dx, gy = py+dy;
       if(!inBounds(gx,gy)) continue;
       const t = tileAt(gx,gy);
-      if(t==='water' || t==='forest' || t==='stone_deposit') continue; // same rules as normal placement
+      if(isImpassableTile(t) || t==='forest' || t==='stone_deposit') continue; // same rules as normal placement
       if(state.occupied[gy][gx]) continue;
       candidates.push({gx, gy});
     }
@@ -200,7 +200,7 @@ function updateCreep(){
   for(let y=0;y<MAP_H;y++){
     for(let x=0;x<MAP_W;x++){
       if(state.creep[y][x]) continue;
-      if(tileAt(x,y) === 'water') continue;
+      if(isImpassableTile(tileAt(x,y))) continue;
       const touching = isCreeped(x-1,y) || isCreeped(x+1,y) || isCreeped(x,y-1) || isCreeped(x,y+1);
       if(!touching) continue;
       // Euclidean distance to the NEAREST in-range source — a circular

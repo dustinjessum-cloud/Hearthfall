@@ -153,7 +153,7 @@ function blocksUnitMovement(b){
 function isTileFreeForUnit(gx, gy, mover){
   if(!inBounds(gx,gy)) return false;
   const t = tileAt(gx,gy);
-  if(t==='water') return false;
+  if(isImpassableTile(t)) return false;
   if(t==='stone_deposit' && !isMiner(mover)) return false;
   const b = occAt(gx,gy);
   if(b && !underConstruction(b)) return false; // foundations are walkable, finished buildings aren't
@@ -702,7 +702,7 @@ function speedMultiplierAt(gx, gy){
 function friendlyBlocked(u, gx, gy, goalBuildingId){
   if(!inBounds(gx, gy)) return true;
   const t = tileAt(gx, gy);
-  if(t==='water') return true;
+  if(isImpassableTile(t)) return true;
   if(t==='stone_deposit' && u.type!=='villager') return true;
   const b = occAt(gx, gy);
   if(!b || b.id===goalBuildingId) return false;
@@ -1076,7 +1076,7 @@ function updateUnits(delta){
       const wallBlocked = blocksUnitMovement(nb)   // unbuilt foundations don't block
         && u.buildTaskId !== nb.id // never blocked from reaching the very site you're walking over to build
         && nb !== curTile; // ...nor from leaving a blocking tile you're already standing on, for any reason
-      if(nt==='water' || (u.type!=='villager' && nt==='stone_deposit') || wallBlocked){
+      if(isImpassableTile(nt) || (u.type!=='villager' && nt==='stone_deposit') || wallBlocked){
         // Blocked. This used to stop dead and null the path, which threw the
         // destination away entirely — the comment here claimed it would
         // "recompute from wherever we stopped", but nothing ever recomputed.

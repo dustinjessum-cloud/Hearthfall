@@ -103,6 +103,8 @@ class MainScene extends Phaser.Scene {
     this.cameras.main.setBounds(0,0, MAP_W*TILE, MAP_H*TILE);
     this.cameras.main.centerOn(cx*TILE, cy*TILE);
     this.cameras.main.setZoom(1);
+    bindMinimap();
+    markMinimapDirty();
 
     // Without this, right-clicking the canvas opens the browser's native
     // context menu instead of reaching Phaser's pointerdown/rightButtonDown,
@@ -164,10 +166,48 @@ class MainScene extends Phaser.Scene {
       for(let x=0;x<MAP_W;x++){
         const t = state.grid[y][x];
         const img = this.add.image(x*TILE+TILE/2, y*TILE+TILE/2, 'tiles', FRAME[t]);
+        if(TILE_TINT[t] && img.setTint) img.setTint(TILE_TINT[t]);
         this.tileLayerGroup.add(img);
         state.tileSprites[y][x] = img;
       }
     }
+    this.drawUnexplored();
+  }
+
+  // There is no fog of war, so without this you can scroll east on turn one
+  // and read the enemy's whole layout before the corridor ever opens. One
+  // dark sheet over everything past your own band, lifted when it opens.
+  drawUnexplored(){
+    if(this.unexploredVeil){ this.unexploredVeil.destroy(); this.unexploredVeil = null; }
+    if(state.corridorOpen) return;
+    const x0 = ZONES.passWest.x0 * TILE;
+    this.unexploredVeil = this.add.rectangle(
+      x0, 0, (MAP_W*TILE) - x0, MAP_H*TILE, 0x0a0d12, 0.93
+    ).setOrigin(0,0).setDepth(40);
+  }
+
+  // The pass clears, the veil lifts, and the camera flies out to show what
+  // was behind it before returning to your town.
+  revealCorridor(){
+    const cleared = openCorridor();
+    for(const c of cleared){
+      const spr = state.tileSprites[c.gy] && state.tileSprites[c.gy][c.gx];
+      if(spr){ spr.setFrame(FRAME.grass); if(spr.clearTint) spr.clearTint(); }
+    }
+    if(this.unexploredVeil){
+      const veil = this.unexploredVeil;
+      this.unexploredVeil = null;
+      this.tweens.add({ targets: veil, alpha: 0, duration: 1400, onComplete: ()=> veil.destroy() });
+    }
+    const mid = zoneCenter('neutral');
+    const home = this.townHallPos || zoneCenter('home');
+    if(this.cameras.main.pan){
+      this.cameras.main.pan(mid.gx*TILE, mid.gy*TILE, 2200, 'Sine.easeInOut');
+      this.time.delayedCall(4200, ()=>{
+        this.cameras.main.pan(home.gx*TILE, home.gy*TILE, 1800, 'Sine.easeInOut');
+      });
+    }
+    flashWaveBanner('The raids are broken — the mountain pass lies open!');
   }
 
   screenToGrid(worldX, worldY){
@@ -349,16 +389,24 @@ class MainScene extends Phaser.Scene {
     // unit production timers (villagers at the TC, archers at the barracks)
     updateProduction(delta);
 
-    // wave timer
-    state.nextWaveInMs -= delta;
-    if(state.nextWaveInMs <= 0){
-      spawnWave();
-      state.wave++;
-      state.nextWaveInMs = 420000; // 7 min between raids
+    // Wave timer. Raids stop for good once RAIDS_BEFORE_CORRIDOR of them have
+    // been survived — "survived" meaning the last one has actually been
+    // cleared off the map, not merely spawned, so the pass can't open while
+    // you are still fighting in your own streets.
+    if(state.wave >= RAIDS_BEFORE_CORRIDOR){
+      if(!state.corridorOpen && !isRaidActive()) this.revealCorridor();
+    } else {
+      state.nextWaveInMs -= delta;
+      if(state.nextWaveInMs <= 0){
+        spawnWave();
+        state.wave++;
+        state.nextWaveInMs = 420000; // 7 min between raids
+      }
     }
     // skirmishes: random harassment between the big waves (only once the
-    // war has started — the pre-first-raid peace stays untouched)
-    if(state.wave >= 1 && !isRaidActive()){
+    // war has started — the pre-first-raid peace stays untouched). These
+    // stop with the raids; the enemy town takes over the pressure.
+    if(state.wave >= 1 && state.wave < RAIDS_BEFORE_CORRIDOR && !isRaidActive()){
       state.nextSkirmishInMs -= delta;
       if(state.nextSkirmishInMs <= 0){
         spawnSkirmish();
@@ -398,6 +446,11 @@ class MainScene extends Phaser.Scene {
     // job — neither of which routes through updateHUD, so poll for it
     this.lastIdleAt = (this.lastIdleAt || 0) + delta;
     if(this.lastIdleAt >= 250){ this.lastIdleAt = 0; refreshIdleBox(); }
+
+    // minimap: 8/sec is smooth enough to track a camera pan without
+    // repainting 4,544 tiles every frame
+    this.lastMiniAt = (this.lastMiniAt || 0) + delta;
+    if(this.lastMiniAt >= 125){ this.lastMiniAt = 0; updateMinimap(); }
     if(this.idleKey && Phaser.Input.Keyboard.JustDown(this.idleKey)){
       selectIdleWorkers(this.idleKey.ctrlKey);
     }

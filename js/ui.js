@@ -65,6 +65,114 @@ function updateHUD(){
   updateTowerGarrisonMarkers();
 }
 
+// ---- minimap --------------------------------------------------------
+// Drawn to a canvas rather than built from Phaser objects: it repaints every
+// few frames and a per-tile sprite layer for 4,544 tiles would be a second
+// copy of the whole map. Terrain is painted once into an offscreen buffer
+// and only redrawn when the world actually changes (the corridor opening);
+// the per-frame pass just blits that and stamps the moving pieces on top.
+const MINIMAP = {
+  px: 2,                       // screen pixels per tile
+  colors: {
+    grass:'#56a03d', forest:'#2f6b28', stone_deposit:'#8a8a92', water:'#2f5d8a',
+    dirt:'#6b543a', wildstone_deposit:'#c98ad6', sealed_pass:'#3b414d',
+    creep:'#6b5d7a', forest_corrupted:'#4a5b3a', stone_deposit_corrupted:'#5f5a6b',
+    wildstone_deposit_corrupted:'#8a6a96',
+  },
+  fallback:'#56a03d',
+};
+let _miniTerrain = null;       // offscreen buffer, repainted only on change
+let _miniDirty = true;
+
+function minimapCanvas(){ return document.getElementById('minimap'); }
+function markMinimapDirty(){ _miniDirty = true; }
+
+function paintMinimapTerrain(){
+  const px = MINIMAP.px;
+  if(!_miniTerrain){
+    _miniTerrain = document.createElement('canvas');
+    _miniTerrain.width = MAP_W*px; _miniTerrain.height = MAP_H*px;
+  }
+  const g = _miniTerrain.getContext('2d');
+  g.fillStyle = MINIMAP.fallback;
+  g.fillRect(0,0,_miniTerrain.width,_miniTerrain.height);
+  for(let y=0;y<MAP_H;y++){
+    for(let x=0;x<MAP_W;x++){
+      const t = state.grid[y] && state.grid[y][x];
+      const c = MINIMAP.colors[t];
+      if(!c) continue;
+      g.fillStyle = c;
+      g.fillRect(x*px, y*px, px, px);
+    }
+  }
+  _miniDirty = false;
+}
+
+function updateMinimap(){
+  const cv = minimapCanvas();
+  const wrap = document.getElementById('minimapWrap');
+  if(!cv || !wrap || !state.grid.length) return;
+  const px = MINIMAP.px;
+  if(cv.width !== MAP_W*px){ cv.width = MAP_W*px; cv.height = MAP_H*px; }
+  wrap.classList.add('open');
+  if(_miniDirty || !_miniTerrain) paintMinimapTerrain();
+
+  const g = cv.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(_miniTerrain, 0, 0);
+
+  // everything past your own band stays blacked out until the pass opens
+  if(!state.corridorOpen){
+    g.fillStyle = 'rgba(8,10,16,.93)';
+    g.fillRect(ZONES.passWest.x0*px, 0, (MAP_W-ZONES.passWest.x0)*px, MAP_H*px);
+  }
+
+  const dot = (gx, gy, color, size)=>{
+    g.fillStyle = color;
+    g.fillRect(Math.round(gx*px)-((size-px)/2), Math.round(gy*px)-((size-px)/2), size, size);
+  };
+  for(const b of state.buildings){
+    if(b.hp<=0) continue;
+    if(!state.corridorOpen && b.gx >= ZONES.passWest.x0) continue;
+    dot(b.gx, b.gy, isMine(b) ? '#ffd76b' : '#ff6b5a', Math.max(px, (b.size||1)*px));
+  }
+  for(const u of state.units){
+    if(u.hp<=0 || u.inTC || u.inTowerId) continue;
+    dot(u.gx, u.gy, '#e8f0ff', px);
+  }
+  for(const e of state.enemies){
+    if(e.hp<=0) continue;
+    if(!state.corridorOpen && e.gx >= ZONES.passWest.x0) continue;
+    dot(e.gx, e.gy, e.kind==='camp' ? '#c2410c' : '#ff3b30', px);
+  }
+
+  // viewport box
+  if(scene && scene.cameras && scene.cameras.main){
+    const cam = scene.cameras.main;
+    g.strokeStyle = '#ffffff'; g.lineWidth = 1;
+    g.strokeRect(
+      Math.round(cam.worldView.x/TILE*px)+0.5, Math.round(cam.worldView.y/TILE*px)+0.5,
+      Math.round(cam.worldView.width/TILE*px), Math.round(cam.worldView.height/TILE*px)
+    );
+  }
+}
+
+function bindMinimap(){
+  const wrap = document.getElementById('minimapWrap');
+  const cv = minimapCanvas();
+  if(!wrap || !cv || wrap._bound) return;
+  wrap._bound = true;
+  const jump = (ev)=>{
+    const r = cv.getBoundingClientRect();
+    const gx = (ev.clientX - r.left) / (r.width  / MAP_W);
+    const gy = (ev.clientY - r.top)  / (r.height / MAP_H);
+    if(scene && scene.cameras && scene.cameras.main) scene.cameras.main.centerOn(gx*TILE, gy*TILE);
+    ev.preventDefault(); ev.stopPropagation();
+  };
+  cv.addEventListener('mousedown', jump);
+  cv.addEventListener('contextmenu', e=>e.preventDefault());
+}
+
 // ---- idle workers ---------------------------------------------------
 // "Idle" means holding no job at all: not assigned to a resource building,
 // not on a build task, not repairing, not burying or raising a corpse, not
@@ -160,7 +268,7 @@ function toggleRecall(){ toggleRecallGarrison(); }
 function canRally(b){ return !!(b && (b.isCore || b.type==='barracks' || b.type==='mason')); }
 
 function setRallyPoint(b, gx, gy){
-  if(!inBounds(gx, gy) || tileAt(gx, gy)==='water') return false;
+  if(!inBounds(gx, gy) || isImpassableTile(tileAt(gx, gy))) return false;
   // right-clicking the building itself clears its rally
   const size = b.size || 1;
   if(gx>=b.gx && gx<b.gx+size && gy>=b.gy && gy<b.gy+size){
@@ -398,6 +506,14 @@ function fmtClock(ms){
 
 function updateWaveHUD(){
   const el = document.getElementById('waveInfo');
+  // Once the raids are broken the countdown is a lie — it keeps ticking in
+  // state but nothing spawns from it any more.
+  if(state.wave >= RAIDS_BEFORE_CORRIDOR){
+    el.textContent = state.corridorOpen
+      ? 'The raids are broken — the pass lies open'
+      : `Wave ${state.wave} survived — clear the last of them`;
+    return;
+  }
   if(state.wave===0 && state.nextWaveInMs>0){
     el.textContent = `Peace — first raid in ${fmtClock(state.nextWaveInMs)}`;
   } else {

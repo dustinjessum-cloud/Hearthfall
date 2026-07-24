@@ -149,6 +149,52 @@ def draw_stone_deposit(d):
         # lit top-left cap, sized proportionally so small rocks stay valid
         d.ellipse([x+2, y+2, x+2+max(2, w//3), y+2+max(2, h//3)], fill=STONE_L)
 
+def draw_sealed_pass(d):
+    # The cliff rock that plugs both mountain passes — and by a wide margin
+    # the most-repeated tile in the game: two bands ten wide by thirty-two
+    # tall, ~640 copies sitting edge to edge with each other.
+    #
+    # So everything here is deliberately small, low-contrast and
+    # NON-DIRECTIONAL. The grass-blade pass and the blight-crack pass both
+    # proved the same lesson the hard way: at this density any bold mark, any
+    # long line, any feature that shares an axis with its neighbours stops
+    # reading as texture and starts reading as wallpaper. Facets are lit on
+    # top and shadowed underneath so the surface still has form, but none of
+    # them is big enough to become a recognisable motif.
+    # Value range kept DELIBERATELY narrow. The first attempt spread these
+    # over ~80 levels and the band read as woven fabric: at 640 repeats the
+    # eye locks onto any facet it can actually distinguish. Compressing the
+    # range is what turns a repeating motif into plain rock.
+    ROCK    = (74, 79, 90)
+    ROCK_D  = (66, 71, 81)
+    ROCK_XD = (57, 61, 71)
+    ROCK_L  = (84, 89, 100)
+    ROCK_XL = (95, 100, 111)
+    rect(d, 0, 0, 31, 31, ROCK)
+
+    # blocky facets, positions drawn from the deterministic LCG so they never
+    # line up on an axis the way hand-placed marks do
+    g = _prng(9301)
+    for _ in range(14):
+        x = next(g) % 29
+        y = next(g) % 29
+        w = 2 + next(g) % 3
+        h = 2 + next(g) % 3
+        base = ROCK_D if (next(g) & 1) else ROCK_L
+        x2, y2 = min(31, x+w), min(31, y+h)
+        rect(d, x, y, x2, y2, base)
+        rect(d, x, y, x2, y, shade(base, 1.09))    # lit top edge
+        rect(d, x, y2, x2, y2, shade(base, 0.88))  # shadowed underside
+
+    # fine grain over the top, several passes so no single speckle pattern
+    # dominates
+    # heavier fine grain than facets: noise is what the eye reads as stone,
+    # and it masks whatever structure the facets leave behind
+    scatter(d, 9311, 150, ROCK_XD)
+    scatter(d, 9323, 140, ROCK_XL)
+    scatter(d, 9337, 70, ROCK_D, 2)
+    scatter(d, 9349, 60, ROCK_L, 2)
+
 def draw_water(d):
     # depth mottling + surface shimmer, then crests of VARYING length and
     # spacing — the old evenly-spaced rows read as banding once tiled
@@ -513,13 +559,45 @@ def draw_minotaur(d):
         rect(d, tx0, 0, tx0, 4, shade(HORN, 1.08))
 
 def draw_repairman(d):
-    # slate-blue overalls, leather apron, hammer, gold hard hat — reads as
-    # a tradesman at a glance, not another villager
+    # Slate-blue overalls, leather apron, hammer, gold hard hat. The BODY
+    # already came from the rewritten humanoid() — shaded, booted, with a
+    # face and a ground shadow — but the kit on top of it was four flat
+    # rectangles with no lighting at all, so the one thing that identifies
+    # him as a tradesman was the least finished part of the sprite.
+    APRON, APRON_D, APRON_L = (150, 110, 60), (114, 82, 43), (176, 134, 80)
+    HAFT, HAFT_L = WOOD_D, shade(WOOD_D, 1.3)
+    HEAD_I, HEAD_L = (96, 100, 108), (150, 155, 164)
+    HAT_D, HAT_L = shade(GOLD, 0.74), shade(GOLD, 1.2)
+    STRAP = (92, 66, 38)
+
     humanoid(d, (90, 110, 150))
-    rect(d, 13, 14, 18, 20, (150, 110, 60))   # apron
-    rect(d, 22, 8, 23, 19, WOOD_D)            # hammer handle
-    rect(d, 20, 6, 26, 9, STONE_D)            # hammer head
-    rect(d, 13, 4, 18, 6, GOLD)               # hard hat
+
+    # leather apron, hung from a neck strap, lit left and creased at the hem
+    # A BIB, not a shoulder strap. The strap ran from y5, and humanoid()
+    # puts the head ellipse at y3-12 — so it painted a brown smear straight
+    # down his cheek.
+    rect(d, 14, 12, 17, 13, APRON)             # bib, narrower than the skirt
+    rect(d, 14, 12, 14, 13, APRON_L)
+    rect(d, 13, 13, 19, 21, APRON)
+    rect(d, 13, 13, 13, 21, APRON_L)           # lit edge
+    rect(d, 19, 13, 19, 21, APRON_D)           # shadowed edge
+    rect(d, 13, 21, 19, 21, APRON_D)           # hem
+    rect(d, 15, 17, 17, 18, APRON_D)           # pocket
+
+    # hammer: bound haft, iron head with a lit top face
+    rect(d, 22, 9, 23, 20, HAFT)
+    rect(d, 22, 9, 22, 20, HAFT_L)
+    for wy in (13, 15):
+        rect(d, 22, wy, 23, wy, STRAP)         # binding at the grip
+    rect(d, 20, 6, 26, 9, HEAD_I)
+    rect(d, 20, 6, 26, 6, HEAD_L)              # struck face catches the light
+    rect(d, 20, 9, 26, 9, shade(HEAD_I, 0.72))
+    rect(d, 25, 6, 26, 9, shade(HEAD_I, 0.8))
+
+    # hard hat with a brim, so it reads as a hat rather than a gold bar
+    rect(d, 12, 4, 19, 6, GOLD)
+    rect(d, 12, 4, 19, 4, HAT_L)               # crown highlight
+    rect(d, 11, 6, 20, 7, HAT_D)               # brim, wider than the crown
 
 def draw_mill(d):
     # a proper windmill tower with four sails
@@ -1471,6 +1549,7 @@ DRAWERS = [
     ("caravan", draw_caravan),
     ("bandit", draw_bandit),
     ("bandit_camp", draw_bandit_camp),
+    ("sealed_pass", draw_sealed_pass),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

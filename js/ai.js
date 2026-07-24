@@ -155,3 +155,352 @@ function checkAiDefeated(){
   if(aiTownHall()) return;
   endGame(true);
 }
+
+// ---------------------------------------------------------------------
+// Phase 3: the economy
+//
+// A real one. Workers walk to real resource tiles, deplete the SAME
+// state.resourceQty your villagers draw from, haul the load home, and only
+// then does the enemy have anything to spend. That is what makes the race
+// real: strip a forest first and their workers find nothing there, kill
+// their workers and everything downstream slows.
+//
+// Everything tunable lives in this one block, so difficulty can be moved
+// without touching the logic below.
+// ---------------------------------------------------------------------
+const AI_TUNING = {
+  thinkMs: 1500,               // how often the brain re-evaluates
+  // Minimum gap between buildings going up. Affordability alone is far too
+  // loose a leash: once the economy balanced, the enemy could pay for a
+  // building nearly every think cycle and put up 163 of them in twelve
+  // minutes. This is the main difficulty dial — lower it for a fiercer
+  // opponent, raise it for a gentler one.
+  buildCooldownMs: 20000,
+  // Building costs are multiplied by this. AI_BUILD_DEFS mirrors the player's
+  // costs on purpose, but the enemy fields nine gatherers against your
+  // handful, so at face value it out-earned its own spending three to one and
+  // banked ~1400 of each resource. That made construction gated purely by the
+  // cooldown, which in turn made its workers decorative — killing all nine
+  // changed its 14-minute building count by zero. Scaling costs here (rather
+  // than editing the defs) keeps resources the binding constraint, and keeps
+  // the shared vocabulary with BUILD_DEFS intact.
+  costMult: 5,
+  start: { food:120, wood:90, stone:40 },   // enough to open, not to coast
+
+  workerTarget: 9,             // gatherers it wants before it stops training more
+  workerCost: { food:45 },
+  workerTrainMs: 12000,
+  workerHp: 22,
+  workerSpeed: 1.25,           // tiles/sec
+
+  soldierCost: { food:40, wood:20 },
+  soldierTrainMs: 13000,
+  armyTarget: 8,               // standing defenders it maintains
+
+  // Farms are only tended while the larder is below this. Without a ceiling
+  // every farm grabs a worker before anyone cuts wood, and the enemy sits on
+  // a mountain of food it cannot spend while its build order stalls waiting
+  // on timber (measured: 1537 food banked against 1 wood over six minutes).
+  foodComfort: 180,
+  haulAmount: 8,               // carried per trip
+  harvestMs: 2600,             // time spent cutting/mining before hauling
+  farmFoodPerTick: 3,          // per tended farm, per economy tick
+  searchRadius: 22,            // how far a worker will walk for a node
+
+  // Built in order, each when affordable and a spot exists. Adding an entry
+  // is the whole change — the loop reads costs off AI_BUILD_DEFS.
+  buildOrder: [
+    'ai_lumber','ai_farm','ai_house','ai_farm','ai_quarry','ai_barracks',
+    'ai_house','ai_lumber','ai_tower','ai_farm','ai_house','ai_barracks',
+    'ai_quarry','ai_tower','ai_farm','ai_house',
+  ],
+  // Once the opening order is spent the enemy cycles this forever, so it
+  // keeps growing instead of freezing the moment the list runs out (the
+  // opening is only ~6 minutes long).
+  repeatOrder: ['ai_house','ai_farm','ai_tower','ai_lumber','ai_house','ai_quarry','ai_barracks'],
+  // Once it has this many buildings at home it starts pushing into the
+  // neutral middle — the visible moment the race turns competitive.
+  expandAfterBuildings: 6,
+  expandChance: 0.45,          // of each build attempt, once expanding
+};
+
+function initAiEconomy(){
+  state.ai = {
+    resources: Object.assign({ food:0, wood:0, stone:0 }, AI_TUNING.start),
+    thinkMs: 0,
+    buildIdx: 0,
+    training: null,            // { what:'worker'|'soldier', msLeft }
+    buildCdMs: 0,              // throttles construction — see buildCooldownMs
+    expanding: false,
+    built: 0,
+  };
+}
+
+// Building costs scale by costMult; unit costs (already tuned directly in
+// AI_TUNING) do not, hence the flag.
+function aiScaled(cost, scaled){
+  if(!cost) return null;
+  if(!scaled) return cost;
+  const out = {};
+  for(const k in cost) out[k] = cost[k] * AI_TUNING.costMult;
+  return out;
+}
+function aiCan(cost, scaled){
+  const c = aiScaled(cost, scaled);
+  if(!c) return true;
+  for(const k in c) if((state.ai.resources[k]||0) < c[k]) return false;
+  return true;
+}
+function aiPay(cost, scaled){
+  const c = aiScaled(cost, scaled);
+  if(!c) return;
+  for(const k in c) state.ai.resources[k] = (state.ai.resources[k]||0) - c[k];
+}
+
+function aiWorkers(){ return state.enemies.filter(e=>e.kind==='ai_worker' && e.hp>0); }
+function aiSoldiers(){ return state.enemies.filter(e=>e.homeGuard && e.kind!=='ai_worker' && e.hp>0); }
+
+function spawnAiWorker(gx, gy){
+  const spot = findFreeSpotNear(gx, gy, 3) || {gx, gy};
+  const race = aiTownRace();
+  const e = {
+    id: enemyIdCounter++, gx:spot.gx, gy:spot.gy,
+    hp:AI_TUNING.workerHp, maxHp:AI_TUNING.workerHp, dmg:0,
+    kind:'ai_worker', race, ranged:false, speedMult:1,
+    path:null, pathIdx:0, lastMoveAt:0, lastAttackAt:0, target:null,
+    job:null, carrying:0, harvestMs:0, stuckMs:0,
+  };
+  // reuses the villager/ghoul frame — it is a worker, and reading as one at a
+  // glance is exactly the point when you are deciding what to raid
+  const frame = race === 'undead' ? 'ghoul' : 'villager';
+  e.sprite = scene.add.image(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2, 'tiles', FRAME[frame]);
+  e.baseTint = 0xff9a7a;   // hostile wash so they never read as your own
+  if(e.sprite.setTint) e.sprite.setTint(e.baseTint);
+  e.hpBarBg = scene.add.rectangle(e.gx*TILE+TILE/2, e.gy*TILE-2, TILE-8, 4, 0x2a1c10).setDepth(5);
+  e.hpBarFg = scene.add.rectangle(e.gx*TILE+4, e.gy*TILE-2, TILE-8, 4, 0xd85a3a).setOrigin(0,0.5).setDepth(6);
+  state.enemies.push(e);
+  return e;
+}
+
+// Where a hauled load gets dropped: their core.
+function aiDropPoint(){
+  const core = aiTownHall();
+  return core ? {gx:core.gx, gy:core.gy} : (state.aiTownCenter || aiTownCenter());
+}
+
+// Pick a job for an idle worker: tend an untended farm, else gather whatever
+// the stockpile is shortest of.
+function assignAiJob(w){
+  const farms = aiBuildings().filter(b=>(b.aiType==='ai_farm') && b.hp>0 && !underConstruction(b));
+  const tended = new Set(aiWorkers().map(x=>x.job && x.job.kind==='farm' ? x.job.buildingId : null));
+  if(state.ai.resources.food < AI_TUNING.foodComfort){
+    for(const f of farms){
+      if(!tended.has(f.id)){ w.job = {kind:'farm', buildingId:f.id, gx:f.gx, gy:f.gy, phase:'out'}; return; }
+    }
+  }
+  const r = state.ai.resources;
+  const want = (r.wood <= r.stone) ? 'wood' : 'stone';
+  const tileType = want === 'wood' ? 'forest' : 'stone_deposit';
+  const from = aiDropPoint();
+  const tile = findNearestResourceTile(from.gx, from.gy, tileType, AI_TUNING.searchRadius);
+  if(!tile){
+    // that resource is stripped out to the search radius — try the other one
+    const alt = want === 'wood' ? 'stone_deposit' : 'forest';
+    const t2 = findNearestResourceTile(from.gx, from.gy, alt, AI_TUNING.searchRadius);
+    if(!t2){ w.job = null; return; }   // nothing left within reach; idles
+    w.job = { kind:'gather', res: alt==='forest'?'wood':'stone', gx:t2.gx, gy:t2.gy, phase:'out' };
+    return;
+  }
+  w.job = { kind:'gather', res:want, gx:tile.gx, gy:tile.gy, phase:'out' };
+}
+
+function aiStepToward(w, tx, ty, delta){
+  const dx = tx - w.gx, dy = ty - w.gy;
+  const dist = Math.hypot(dx, dy);
+  const step = AI_TUNING.workerSpeed * (delta/1000);
+  if(dist <= step){ w.gx = tx; w.gy = ty; return true; }
+  w.gx += (dx/dist)*step;
+  w.gy += (dy/dist)*step;
+  return false;
+}
+
+function updateAiWorkers(delta){
+  if(!state.ai) return;
+  const drop = aiDropPoint();
+  for(const w of aiWorkers()){
+    if(!w.job) assignAiJob(w);
+    const job = w.job;
+    if(job){
+      if(job.kind === 'farm'){
+        const f = buildingById(job.buildingId);
+        if(!f || f.hp<=0){ w.job = null; }
+        else if(job.phase === 'out'){
+          if(aiStepToward(w, f.gx, f.gy, delta)) job.phase = 'tend';
+        } else if(job.phase === 'tend' && state.ai.resources.food > AI_TUNING.foodComfort * 1.6){
+          // Release a tender once the larder is genuinely full. The assign-side
+          // check alone was not enough: 'tend' never ended, so whoever started
+          // farming while food was low stayed on that farm for the rest of the
+          // run and the stockpile ran to 3838 while wood sat at 30. The release
+          // threshold is deliberately higher than the assign one — equal values
+          // make workers flip between farm and forest every few frames.
+          w.job = null;
+        }
+        // 'tend' is a standing job — the farm's yield is added in aiEconomyTick
+      } else if(job.kind === 'gather'){
+        if(job.phase === 'out'){
+          // the tile may have been stripped by YOUR villagers while it walked
+          const qty = (state.resourceQty[job.gy] && state.resourceQty[job.gy][job.gx]) || 0;
+          if(qty <= 0){ w.job = null; }
+          else if(aiStepToward(w, job.gx, job.gy, delta)){ job.phase = 'harvest'; w.harvestMs = 0; }
+        } else if(job.phase === 'harvest'){
+          w.harvestMs += delta;
+          if(w.harvestMs >= AI_TUNING.harvestMs){
+            const qty = (state.resourceQty[job.gy] && state.resourceQty[job.gy][job.gx]) || 0;
+            const take = Math.min(AI_TUNING.haulAmount, qty);
+            if(take > 0){
+              depleteResourceTile(job.gx, job.gy, take);   // the SAME tiles you draw from
+              w.carrying = take;
+              job.phase = 'home';
+            } else { w.job = null; }
+          }
+        } else if(job.phase === 'home'){
+          if(aiStepToward(w, drop.gx, drop.gy, delta)){
+            state.ai.resources[job.res] = (state.ai.resources[job.res]||0) + w.carrying;
+            w.carrying = 0;
+            w.job = null;    // re-evaluate: the nearest node may have moved
+          }
+        }
+      }
+    }
+    w.sprite.setPosition(w.gx*TILE+TILE/2, w.gy*TILE+TILE/2);
+    w.hpBarBg.setPosition(w.gx*TILE+TILE/2, w.gy*TILE-2);
+    w.hpBarFg.setPosition(w.gx*TILE+4, w.gy*TILE-2);
+    w.hpBarFg.width = (TILE-8)*Math.max(0, w.hp/w.maxHp);
+    const hurt = w.hp < w.maxHp;
+    w.hpBarBg.setVisible(hurt); w.hpBarFg.setVisible(hurt);
+  }
+}
+
+// Farm yield, on the same 3s cadence as your own economy.
+function aiEconomyTick(){
+  if(!state.ai) return;
+  let tended = 0;
+  for(const w of aiWorkers()) if(w.job && w.job.kind==='farm' && w.job.phase==='tend') tended++;
+  state.ai.resources.food += tended * AI_TUNING.farmFoodPerTick;
+}
+
+// Somewhere to put a new building: rings out from the core, and once the
+// enemy is expanding, sometimes into the neutral middle instead.
+function aiFindBuildSpot(size, intoNeutral){
+  const c = state.aiTownCenter || aiTownCenter();
+  const origin = intoNeutral
+    ? { gx: ZONES.neutral.x1 - 3, gy: Math.floor(MAP_H/2) }   // their side of the middle
+    : c;
+  const zone = intoNeutral ? 'neutral' : 'enemy';
+  for(let r=2; r<=14; r++){
+    for(let dy=-r; dy<=r; dy++){
+      for(let dx=-r; dx<=r; dx++){
+        if(Math.max(Math.abs(dx),Math.abs(dy)) !== r) continue;
+        const gx = origin.gx+dx, gy = origin.gy+dy;
+        let ok = true;
+        for(let sy=0; sy<size && ok; sy++) for(let sx=0; sx<size && ok; sx++){
+          const x=gx+sx, y=gy+sy;
+          if(!inBounds(x,y) || !inZone(x, zone) || isImpassableTile(tileAt(x,y)) || occAt(x,y)) ok = false;
+        }
+        if(ok) return {gx, gy};
+      }
+    }
+  }
+  return null;
+}
+
+function aiTryBuild(){
+  const ai = state.ai;
+  if(ai.buildCdMs > 0) return false;
+  const order = AI_TUNING.buildOrder;
+  const rep = AI_TUNING.repeatOrder;
+  const type = ai.buildIdx < order.length
+    ? order[ai.buildIdx]
+    : rep[(ai.buildIdx - order.length) % rep.length];
+  const def = aiDef(type);
+  if(!def) { ai.buildIdx++; return false; }
+  if(!aiCan(def.cost, true)) return false;
+  const intoNeutral = ai.expanding && Math.random() < AI_TUNING.expandChance && state.corridorOpen;
+  const spot = aiFindBuildSpot(def.size||1, intoNeutral);
+  if(!spot) return false;
+  // placed straight up rather than as a foundation a builder must reach:
+  // "a worker must walk over first" is a PLAYER rule, and the cost is what
+  // the economy actually gates on
+  const b = placeAiBuildingAt(type, spot.gx, spot.gy);
+  if(!b) return false;
+  aiPay(def.cost, true);
+  ai.buildIdx++;
+  ai.built++;
+  ai.buildCdMs = AI_TUNING.buildCooldownMs;
+  if(ai.built >= AI_TUNING.expandAfterBuildings) ai.expanding = true;
+  return true;
+}
+
+// placeAiBuilding refuses outside the enemy band; expansion needs the
+// neutral zone too, so this is the zone-agnostic version.
+function placeAiBuildingAt(type, gx, gy){
+  const def = aiDef(type);
+  if(!def) return null;
+  const size = def.size || 1;
+  for(let dy=0; dy<size; dy++) for(let dx=0; dx<size; dx++){
+    const x=gx+dx, y=gy+dy;
+    if(!inBounds(x,y) || isImpassableTile(tileAt(x,y)) || occAt(x,y)) return null;
+  }
+  clearGroundFor(gx, gy, size);
+  const b = createBuilding(type, gx, gy, def, OWNER_AI);
+  b.aiType = type;
+  if(def.isCore) b.isCore = true;
+  return b;
+}
+
+function aiTryTrain(delta){
+  const ai = state.ai;
+  if(ai.training){
+    ai.training.msLeft -= delta;
+    if(ai.training.msLeft > 0) return;
+    const c = state.aiTownCenter || aiTownCenter();
+    if(ai.training.what === 'worker'){
+      spawnAiWorker(c.gx, c.gy);
+    } else {
+      const race = aiTownRace()==='undead' ? 'undead' : 'human';
+      const spot = findFreeSpotNear(c.gx, c.gy, 4) || c;
+      const e = spawnEnemy(34, 7, 4, 'swordsman', {gx:spot.gx, gy:spot.gy}, {race});
+      if(e){ e.homeGuard = true; e.homeGx = e.gx; e.homeGy = e.gy; }
+    }
+    ai.training = null;
+    return;
+  }
+  if(aiWorkers().length < AI_TUNING.workerTarget && aiCan(AI_TUNING.workerCost) && aiTownHall()){
+    aiPay(AI_TUNING.workerCost);
+    ai.training = { what:'worker', msLeft: AI_TUNING.workerTrainMs };
+    return;
+  }
+  const hasBarracks = aiBuildings().some(b=>b.aiType==='ai_barracks' && b.hp>0 && !underConstruction(b));
+  if(hasBarracks && aiSoldiers().length < AI_TUNING.armyTarget && aiCan(AI_TUNING.soldierCost)){
+    aiPay(AI_TUNING.soldierCost);
+    ai.training = { what:'soldier', msLeft: AI_TUNING.soldierTrainMs };
+  }
+}
+
+function aiThink(delta){
+  if(!state.ai || state.gameOver) return;
+  if(!aiTownHall()) return;   // headless: no core, no orders
+  // The race starts when BOTH sides can reach the middle. Their economy runs
+  // from world creation otherwise, and since the pass stays shut until five
+  // raids are survived, the enemy would spend ~25 uncontested minutes
+  // colonising the neutral zone before you could set foot in it — arriving
+  // to a finished map is not a race. Until then the town is what Phase 2
+  // made it: static infrastructure that defends itself.
+  if(!state.corridorOpen) return;
+  aiTryTrain(delta);
+  if(state.ai.buildCdMs > 0) state.ai.buildCdMs -= delta;
+  state.ai.thinkMs += delta;
+  if(state.ai.thinkMs < AI_TUNING.thinkMs) return;
+  state.ai.thinkMs = 0;
+  aiTryBuild();
+}

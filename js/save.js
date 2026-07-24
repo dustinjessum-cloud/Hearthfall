@@ -86,6 +86,7 @@ function serializeGame(){
     corridorOpen: state.corridorOpen,
     aiTownSpawned: state.aiTownSpawned,
     aiTownCenter: state.aiTownCenter,
+    ai: state.ai,   // their stockpile, build index and training timer
     nextSkirmishInMs: state.nextSkirmishInMs,
     nextCaravanInMs: state.nextCaravanInMs,
     caravanActiveMs: state.caravanActiveMs,
@@ -189,6 +190,11 @@ function restoreGame(snapshot){
   // aiTownHall() is momentarily null before the buildings are rebuilt
   state.aiTownSpawned = !!snapshot.aiTownSpawned;
   state.aiTownCenter = snapshot.aiTownCenter || null;
+  // Rebuild the economy from the snapshot, or from scratch for a save taken
+  // before it existed — a null state.ai would make aiThink() a no-op and
+  // leave the enemy frozen for the rest of the run.
+  if(typeof initAiEconomy === 'function') initAiEconomy();
+  if(snapshot.ai && state.ai) Object.assign(state.ai, snapshot.ai);
   state.nextSkirmishInMs = snapshot.nextSkirmishInMs;
   state.nextCaravanInMs = snapshot.nextCaravanInMs;
   state.caravanActiveMs = snapshot.caravanActiveMs || 0;
@@ -259,11 +265,27 @@ function restoreGame(snapshot){
   state.enemyProjectiles = []; // in-flight shots are transient — not saved
   for(const se of snapshot.enemies){
     if(se.kind==='camp'){ restoreCamp(se); continue; }
+    // AI workers have their own creation path — spawnEnemy knows nothing of
+    // the kind and would rebuild each one as a raider, complete with a
+    // raider sprite and a march order toward your Town Hall
+    if(se.kind==='ai_worker'){
+      const w = spawnAiWorker(se.gx, se.gy);
+      if(w){
+        w.gx = se.gx; w.gy = se.gy;
+        w.hp = se.hp; w.maxHp = se.maxHp;
+        w.job = se.job || null; w.carrying = se.carrying || 0; w.harvestMs = se.harvestMs || 0;
+        restoreHpBar(w, TILE-8);
+      }
+      continue;
+    }
     spawnEnemy(se.maxHp, se.dmg, snapshot.wave, se.kind, {gx: se.gx, gy: se.gy}, {race: se.race, ranged: se.ranged});
     const e = state.enemies[state.enemies.length-1];
     // spawnEnemy re-derives hp/dmg from the race multipliers, but the saved
     // values are authoritative — stamp them back so nothing double-scales
     e.hp = se.hp; e.maxHp = se.maxHp; e.dmg = se.dmg;
+    // the town's standing defenders must stay defenders — without this they
+    // reload as ordinary raiders and march across the map at you
+    if(se.homeGuard){ e.homeGuard = true; e.homeGx = se.homeGx; e.homeGy = se.homeGy; }
     restoreHpBar(e, TILE-8);
   }
 

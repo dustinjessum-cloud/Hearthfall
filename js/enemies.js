@@ -354,6 +354,11 @@ function updateEnemies(delta){
       e.hpBarFg.width = (TILE-8)*Math.max(0,e.hp/e.maxHp);
       continue;
     }
+    // AI workers are civilians driven entirely by updateAiWorkers — they
+    // gather, they don't march or fight. They stay in state.enemies so your
+    // soldiers can target and kill them through code that already works,
+    // which is the whole point: raiding their economy has to be possible.
+    if(e.kind==='ai_worker') continue;
     // ranged raiders (hobgoblins, plaguebearers, enemy archers) hold at
     // range and loose. If a target is within reach, stop and fire; otherwise
     // fall through to the normal advance until something comes into range.

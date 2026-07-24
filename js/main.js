@@ -108,6 +108,8 @@ class MainScene extends Phaser.Scene {
       // unconditionally means a town that failed to place its core reads as
       // "already razed" and wins the run on the first frame.
       state.aiTownSpawned = !!aiTownHall();
+      initAiEconomy();
+      for(let i=0;i<3;i++) spawnAiWorker(state.aiTownCenter.gx, state.aiTownCenter.gy);
     }
 
     this.cameras.main.setBounds(0,0, MAP_W*TILE, MAP_H*TILE);
@@ -377,6 +379,7 @@ class MainScene extends Phaser.Scene {
     if(this.lastTickAt >= 3000){
       this.lastTickAt = 0;
       economyTick();
+      aiEconomyTick();
     }
 
     // silent autosave
@@ -449,6 +452,8 @@ class MainScene extends Phaser.Scene {
     updateEnemyProjectiles(delta);
     updateCombat(delta, time);
 
+    aiThink(delta);         // their economy: train, gather, build, expand
+    updateAiWorkers(delta);
     checkAiDefeated();      // razing their core wins the run
     updateSelectionRings(); // range/aura rings follow the selection as it moves
     if(state.selected || (state.selectedGroup && state.selectedGroup.length)) refreshInfoPanel();

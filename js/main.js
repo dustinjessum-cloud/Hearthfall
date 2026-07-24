@@ -110,6 +110,7 @@ class MainScene extends Phaser.Scene {
       state.aiTownSpawned = !!aiTownHall();
       initAiEconomy();
       for(let i=0;i<3;i++) spawnAiWorker(state.aiTownCenter.gx, state.aiTownCenter.gy);
+      seedAiBlight();   // an undead enemy town starts ON blight, not on grass
     }
 
     this.cameras.main.setBounds(0,0, MAP_W*TILE, MAP_H*TILE);
@@ -463,6 +464,7 @@ class MainScene extends Phaser.Scene {
     updateCombat(delta, time);
 
     aiThink(delta);         // their economy: train, gather, build, expand
+    updateAiBlight(delta);  // an undead enemy town spreads its own blight
     updateAiWar(delta);     // muster war parties and send them at you
     updateAiDefence(delta); // defenders answer alarms, then drift back
     updateAiWorkers(delta);

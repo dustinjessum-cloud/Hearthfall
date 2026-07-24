@@ -193,8 +193,10 @@ function updateTumorSpread(delta){
   }
 }
 
-function updateCreep(){
-  const sources = creepSources();
+// `sources` is optional: the enemy town passes its own list so the undead AI
+// can spread blight through exactly this code rather than a parallel copy.
+function updateCreep(sources){
+  sources = sources || creepSources();
   if(!sources.length) return;
   const candidates = [];
   for(let y=0;y<MAP_H;y++){

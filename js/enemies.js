@@ -218,13 +218,21 @@ function repathEnemy(e){
   // building you own without a glance.
   let oppGoal = null;
   if(e.aiAttacker){
-    let best=null, bd=Infinity;
-    for(const b of myBuildings()){
-      if(b.hp<=0) continue;
-      const d = Phaser.Math.Distance.Between(e.gx, e.gy, b.gx, b.gy);
-      if(d < bd){ bd = d; best = b; }
+    // The party's SHARED objective, set once when it formed. Resolving
+    // "nearest of yours" per unit on every repath is what turned a war band
+    // into a trickle: units a tile apart pick different buildings and peel
+    // away from each other over a 100-tile march.
+    if(e.partyGx !== undefined){
+      oppGoal = {gx:e.partyGx, gy:e.partyGy};
+    } else {
+      let best=null, bd=Infinity;
+      for(const b of myBuildings()){
+        if(b.hp<=0) continue;
+        const d = Phaser.Math.Distance.Between(e.gx, e.gy, b.gx, b.gy);
+        if(d < bd){ bd = d; best = b; }
+      }
+      if(best) oppGoal = {gx:best.gx, gy:best.gy};
     }
-    if(best) oppGoal = {gx:best.gx, gy:best.gy};
   }
   // A guard answering an alarm goes THERE, not home and not at you.
   if(e.homeGuard && e.respondingTo && e.alarmGx !== undefined){

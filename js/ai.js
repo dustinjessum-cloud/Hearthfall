@@ -148,6 +148,56 @@ function spawnAiGarrison(){
   return out;
 }
 
+// ---- the enemy's blight -------------------------------------------------
+// When the enemy town is UNDEAD it should sit on blight, the same as an
+// undead player's town does. It never did: the town wore crypt and
+// bone-spire sprites on bare grass, which reads as a human town in fancy
+// dress rather than a necropolis.
+//
+// This reuses state.creep and the whole existing spread system rather than
+// running a parallel one, which is safe because the two can never collide:
+// the enemy is undead exactly when the PLAYER is human, and a human player
+// never seeds, spreads or reads creep. (The one gameplay check that consults
+// it, build placement, is gated on state.faction === 'swarm'.) Creep has no
+// effect on movement — only roads and forest do — so the player's units are
+// unaffected walking over it.
+function aiBlightSources(){
+  if(aiTownRace() !== 'undead') return [];
+  const out = [];
+  for(const b of aiBuildings()){
+    if(b.hp <= 0 || underConstruction(b)) continue;
+    // the core anchors a wide field; outposts carry a little with them, which
+    // is what makes their push into the neutral zone visible from a distance
+    const r = b.isCore ? 7 : (b.aiType === 'ai_tower' || b.aiType === 'ai_barracks' ? 3 : 2);
+    out.push({ gx: b.gx, gy: b.gy, r });
+  }
+  return out;
+}
+
+// Instant field around the town at world creation, so it never looks like the
+// blight only started when you turned up to watch.
+function seedAiBlight(){
+  if(aiTownRace() !== 'undead') return 0;
+  const c = state.aiTownCenter || aiTownCenter();
+  let n = 0;
+  const R = 7;
+  for(let dy=-R; dy<=R; dy++){
+    for(let dx=-R; dx<=R; dx++){
+      if(Math.hypot(dx, dy) > R) continue;
+      if(claimCreepTile(c.gx+dx, c.gy+dy)) n++;
+    }
+  }
+  return n;
+}
+
+function updateAiBlight(delta){
+  if(aiTownRace() !== 'undead') return;
+  state._aiBlightMs = (state._aiBlightMs || 0) + delta;
+  if(state._aiBlightMs < SWARM.creep.spreadMs) return;
+  state._aiBlightMs = 0;
+  updateCreep(aiBlightSources());
+}
+
 // Razing the core ends the run. Checked once per frame rather than hooked
 // into removeBuilding so it cannot be missed by a future death path.
 function checkAiDefeated(){
@@ -204,7 +254,10 @@ const AI_TUNING = {
   soldierHardCap: 22,          // stops a runaway economy fielding an endless horde
   attackPartySize: 7,          // musters this many, then marches
   attackCooldownMs: 60000,     // minimum gap between parties leaving
-  firstAttackDelayMs: 90000,   // grace after the pass opens before the first one
+  // A full 3:30 of peace after the pass opens. You have just fought five
+  // raids and the world has tripled in size; the first war party arriving
+  // while you are still reading the map is not a fight, it is an ambush.
+  firstAttackDelayMs: 210000,
   // Defending the expansion: damage to ANY of their buildings raises an alarm
   // that nearby defenders answer, then drift home from.
   alarmMs: 25000,
@@ -568,6 +621,40 @@ function updateAiDefence(delta){
   }
 }
 
+// One objective for a whole war party: your nearest building to THEIR town,
+// so the party commits to a single approach instead of each soldier drifting
+// toward whatever happens to be closest to it personally.
+function aiPartyTarget(){
+  const from = state.aiTownCenter || aiTownCenter();
+  let best = null, bd = Infinity;
+  for(const b of myBuildings()){
+    if(b.hp <= 0) continue;
+    const d = Phaser.Math.Distance.Between(from.gx, from.gy, b.gx, b.gy);
+    if(d < bd){ bd = d; best = b; }
+  }
+  return best ? { gx: best.gx, gy: best.gy } : null;
+}
+
+// If a party's objective is razed (by them, or by you salvaging it) the whole
+// party picks the next one TOGETHER — otherwise they revert to individual
+// nearest-target and scatter at the worst possible moment.
+function retargetSpentParties(){
+  const live = aiAttackers();
+  if(!live.length) return;
+  const byParty = {};
+  for(const a of live){ (byParty[a.partyId || 0] = byParty[a.partyId || 0] || []).push(a); }
+  for(const id in byParty){
+    const members = byParty[id];
+    const g = members[0];
+    if(g.partyGx === undefined) continue;
+    const stillThere = occAt(g.partyGx, g.partyGy);
+    if(stillThere && stillThere.hp > 0 && isMine(stillThere)) continue;
+    const next = aiPartyTarget();
+    if(!next) continue;
+    for(const m of members){ m.partyGx = next.gx; m.partyGy = next.gy; m.path = null; }
+  }
+}
+
 // Muster, then march. The party only forms once enough soldiers exist BEYOND
 // the home garrison, so pressure scales with what their economy actually
 // afforded rather than with a clock.
@@ -576,6 +663,7 @@ function updateAiWar(delta){
   if(!ai || state.gameOver) return;
   if(!state.corridorOpen) return;   // no route to you until the pass opens
 
+  retargetSpentParties();
   ai.warMs = (ai.warMs || 0) + delta;
   if(ai.warMs < AI_TUNING.firstAttackDelayMs) return;   // grace after it opens
   if(ai.attackCdMs > 0){ ai.attackCdMs -= delta; return; }
@@ -583,9 +671,22 @@ function updateAiWar(delta){
   const muster = aiMustering();
   if(muster.length < AI_TUNING.attackPartySize) return;
 
+  // ONE objective for the whole party, fixed when it forms.
+  //
+  // Each attacker used to pick its own nearest target every time it
+  // re-pathed. Over a 100-tile march that fragments the party immediately:
+  // two units a tile apart resolve different "nearest" buildings, peel off
+  // toward them, and what left as a war band arrives as a trickle of
+  // individuals that your towers kill one at a time. Sharing the goal is
+  // what makes it land as a force.
+  const goal = aiPartyTarget();
+  if(!goal) return;                       // nothing of yours standing
+  ai.partySeq = (ai.partySeq || 0) + 1;
   for(const m of muster){
     m.mustering = false;
-    m.aiAttacker = true;     // repathEnemy now sends them at the nearest of yours
+    m.aiAttacker = true;
+    m.partyId = ai.partySeq;
+    m.partyGx = goal.gx; m.partyGy = goal.gy;
     m.path = null;
     m.homeGuard = false;
   }

@@ -289,7 +289,10 @@ function restoreGame(snapshot){
     // war roles must survive a reload, or a party mid-march reloads as an
     // ordinary raider and a mustering soldier is forgotten entirely
     if(se.mustering) e.mustering = true;
-    if(se.aiAttacker) e.aiAttacker = true;
+    if(se.aiAttacker){
+      e.aiAttacker = true;
+      e.partyId = se.partyId; e.partyGx = se.partyGx; e.partyGy = se.partyGy;
+    }
     restoreHpBar(e, TILE-8);
   }
 

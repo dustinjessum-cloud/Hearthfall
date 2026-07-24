@@ -409,7 +409,15 @@ class MainScene extends Phaser.Scene {
     // cleared off the map, not merely spawned, so the pass can't open while
     // you are still fighting in your own streets.
     if(state.wave >= RAIDS_BEFORE_CORRIDOR){
-      if(!state.corridorOpen && !isRaidActive()) this.revealCorridor();
+      if(!state.corridorOpen){
+        // Grace timer. Gating purely on "no raiders left" means ONE raider
+        // stuck somewhere unreachable costs the player the entire endgame,
+        // with no way to tell what is wrong — which is exactly the softlock
+        // shape that shipped. After the grace period the pass opens anyway;
+        // a straggler is not worth locking the rest of the game behind.
+        state.corridorGraceMs = (state.corridorGraceMs || 0) + delta;
+        if(!isRaidActive() || state.corridorGraceMs >= CORRIDOR_GRACE_MS) this.revealCorridor();
+      }
     } else {
       state.nextWaveInMs -= delta;
       if(state.nextWaveInMs <= 0){

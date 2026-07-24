@@ -541,9 +541,15 @@ function updateWaveHUD(){
   // Once the raids are broken the countdown is a lie — it keeps ticking in
   // state but nothing spawns from it any more.
   if(state.wave >= RAIDS_BEFORE_CORRIDOR){
-    el.textContent = state.corridorOpen
-      ? 'The raids are broken — the pass lies open'
-      : `Wave ${state.wave} survived — clear the last of them`;
+    if(state.corridorOpen){ el.textContent = 'The raids are broken — the pass lies open'; return; }
+    // Say HOW MANY are left, and where. "Clear the last of them" on its own
+    // is unfalsifiable: when it was wrongly counting the enemy town's
+    // garrison there was no way to tell a real straggler from a bug.
+    const left = state.enemies.filter(e =>
+      e.hp > 0 && e.kind !== 'camp' && e.kind !== 'ai_worker' && !e.homeGuard);
+    if(left.length === 0){ el.textContent = `Wave ${state.wave} survived — the pass is opening...`; return; }
+    const n = left.length;
+    el.textContent = `Wave ${state.wave} survived — ${n} raider${n===1?'':'s'} still afoot`;
     return;
   }
   if(state.wave===0 && state.nextWaveInMs>0){

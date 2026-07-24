@@ -110,6 +110,10 @@ const ZONES = {
   enemy:    { x0:98,  x1:141 },
 };
 const RAIDS_BEFORE_CORRIDOR = 5;
+// If the last raid somehow can't be finished off (a raider stuck behind
+// terrain), open the pass anyway after this long rather than stranding the
+// player in an endgame that never starts.
+const CORRIDOR_GRACE_MS = 120000;
 const PASS_GAP_HALF = 1;   // gap is 2*this+1 tiles tall — a real chokepoint
 
 // Terrain nothing can walk through. Kept as one set so a new impassable

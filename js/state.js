@@ -85,7 +85,22 @@ const state = {
 // Raids NO LONGER auto-pause gathering — sheltering workers is the
 // player's call. Toggle Recall Workers to pull everyone near the TC, or
 // garrison individual villagers INSIDE the Town Hall (right-click it).
-function isRaidActive(){ return state.enemies.some(e=>e.hp>0 && e.kind!=='camp'); }
+// "Is a raid happening TO YOU right now." Deliberately narrow.
+//
+// state.enemies holds more than raiders: bandit camps, the enemy town's
+// standing garrison, and its workers all live here so they can be rendered,
+// targeted and killed by code that already works. Counting those meant this
+// returned true from the moment the enemy town existed and never went false
+// again — which permanently blocked the corridor from opening, left the HUD
+// insisting you "clear the last of them" about defenders behind a sealed
+// pass you cannot cross, and disabled Ready for Raid for the rest of the run.
+//
+// A Phase 4 attack party is neither a homeGuard nor a worker, so it will
+// still count here — which is exactly what we want.
+function isRaidActive(){
+  return state.enemies.some(e =>
+    e.hp > 0 && e.kind !== 'camp' && e.kind !== 'ai_worker' && !e.homeGuard);
+}
 function isRecalled(){ return state.manualRecall; }
 
 // ---- zones ----------------------------------------------------------

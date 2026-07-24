@@ -250,6 +250,12 @@ function refreshHud2Buttons(){
     recallBtn.classList.toggle('toggled-on', sheltering);
     recallBtn.textContent = sheltering ? 'Release Workers' : 'Recall Workers';
   }
+  const ringBtn = document.getElementById('ringBtn');
+  if(ringBtn){
+    const on = rangeRingsOn();
+    ringBtn.classList.toggle('toggled-on', on);
+    ringBtn.textContent = on ? 'Rings: On' : 'Rings: Off';
+  }
 }
 
 function callRaidNow(){
@@ -350,8 +356,34 @@ function foodWord(){ return state.faction==='swarm' ? 'carrion' : 'food'; }
 // you an archer has 3.5 range; a ring tells you whether that wall is actually
 // covered. Rebuilt lazily and just toggled/moved after that, so this is cheap
 // enough to run every frame (it has to — the rings follow moving units).
+// Range rings are a display preference, not part of the run, so they live in
+// their own localStorage key rather than the save — turning them off should
+// stick across games instead of resetting with every new town.
+const RING_PREF_KEY = 'hearthfall_range_rings';
+function rangeRingsOn(){
+  if(state._rangeRingsOn === undefined){
+    let saved = null;
+    try { saved = localStorage.getItem(RING_PREF_KEY); } catch(err){ /* private mode */ }
+    state._rangeRingsOn = (saved === null) ? true : (saved === '1');
+  }
+  return state._rangeRingsOn;
+}
+function toggleRangeRings(){
+  state._rangeRingsOn = !rangeRingsOn();
+  try { localStorage.setItem(RING_PREF_KEY, state._rangeRingsOn ? '1' : '0'); } catch(err){ /* ignore */ }
+  updateSelectionRings();   // apply immediately rather than on the next selection
+  refreshHud2Buttons();
+}
+
 function updateSelectionRings(){
   if(!scene || !scene.add) return;
+  // Hidden: drop both circles and stop. The rings are created lazily, so when
+  // they have never been shown there is nothing to hide yet.
+  if(!rangeRingsOn()){
+    if(scene._rangeRing) scene._rangeRing.setVisible(false);
+    if(scene._auraRing) scene._auraRing.setVisible(false);
+    return;
+  }
   const sel = state.selected;
   const u = (sel && sel.type==='unit') ? sel.ref : null;
   const b = (sel && sel.type==='building') ? sel.ref : null;

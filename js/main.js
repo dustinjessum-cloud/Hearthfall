@@ -144,6 +144,7 @@ class MainScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-J', ()=> heroThrowJavelin());
     this.input.keyboard.on('keydown-K', ()=> heroSlash());
     this.input.keyboard.on('keydown-P', ()=> togglePause());
+    this.input.keyboard.on('keydown-R', ()=> toggleRangeRings());
     this.input.keyboard.on('keydown-ESC', ()=>{
       this.cancelBuildMode();
       clearGroupSelection();
@@ -169,6 +170,7 @@ class MainScene extends Phaser.Scene {
     updateHUD();
     buildBuildBar();
     refreshBuildBar();
+    refreshHud2Buttons();   // the ring button reflects the saved preference on boot
 
     this.worldReady = true;
   }
@@ -576,6 +578,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   document.getElementById('raidBtn').addEventListener('click', callRaidNow);
   document.getElementById('recallBtn').addEventListener('click', toggleRecall);
+  document.getElementById('ringBtn').addEventListener('click', toggleRangeRings);
   document.getElementById('pauseBtn').addEventListener('click', togglePause);
   const hintCloseBtn = document.getElementById('hintClose');
   if(hintCloseBtn){

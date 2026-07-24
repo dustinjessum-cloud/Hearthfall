@@ -1243,6 +1243,7 @@ function updateResourceRates(){
 }
 
 function economyTick(){
+  if(typeof sandboxTopUp === 'function') sandboxTopUp();  // testing mode: refill first
   snapshotResourceRates(); // bracket the tick — see updateResourceRates
   const recalled = isRecalled();
   // the honor of a burial fades with time — mourning isn't forever

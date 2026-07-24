@@ -256,6 +256,16 @@ function refreshHud2Buttons(){
     ringBtn.classList.toggle('toggled-on', on);
     ringBtn.textContent = on ? 'Rings: On' : 'Rings: Off';
   }
+  const sbBtn = document.getElementById('sandboxBtn');
+  if(sbBtn){
+    sbBtn.classList.toggle('toggled-on', sandboxOn());
+    sbBtn.textContent = sandboxOn() ? 'Sandbox: On' : 'Sandbox: Off';
+  }
+  const skBtn = document.getElementById('skipBtn');
+  if(skBtn){
+    skBtn.disabled = !!state.corridorOpen;
+    skBtn.textContent = state.corridorOpen ? 'Pass Open' : 'Skip to Corridor';
+  }
 }
 
 function callRaidNow(){
@@ -373,6 +383,64 @@ function toggleRangeRings(){
   try { localStorage.setItem(RING_PREF_KEY, state._rangeRingsOn ? '1' : '0'); } catch(err){ /* ignore */ }
   updateSelectionRings();   // apply immediately rather than on the next selection
   refreshHud2Buttons();
+}
+
+// ---- testing tools ---------------------------------------------------
+// Both of these exist to reach the endgame without playing 25 minutes of
+// raids first. Neither is part of normal play; they're styled apart in the
+// HUD so they can't be mistaken for it.
+
+// "Free build" is implemented as INFINITE RESOURCES, not as zero cost.
+// Costs are checked and deducted in fifteen separate places across four
+// files; special-casing each one is how you end up with a mode that's free
+// for buildings but not for upgrades, or free for archers but not for
+// repairmen. Topping the stockpile back to its cap every tick makes every
+// affordability check pass and every deduction refill itself, with exactly
+// one place to get wrong.
+//
+// Population cap is deliberately NOT touched — build houses for free and it
+// rises through the normal path, so nothing about the accounting diverges
+// from a real game.
+const SANDBOX_KEYS = ['food','wheat','flour','wood','stone','gold','wildstone'];
+function sandboxOn(){ return !!state.sandbox; }
+function toggleSandbox(){
+  state.sandbox = !state.sandbox;
+  if(state.sandbox) sandboxTopUp();
+  refreshHud2Buttons();
+  updateHUD();
+  flashWaveBanner(state.sandbox
+    ? 'Sandbox ON — resources stay full. Testing only.'
+    : 'Sandbox OFF — resources spend normally again.');
+}
+function sandboxTopUp(){
+  if(!state.sandbox) return;
+  for(const k of SANDBOX_KEYS){
+    if(state.resources[k] === undefined) continue;
+    const cap = storageCapFor(k);
+    if(state.resources[k] < cap) state.resources[k] = cap;
+  }
+  state.starving = false;   // a full larder can't be starving
+}
+
+// Jump to the endgame. Marks the raids survived, clears anything still
+// fighting (so the corridor gate is satisfied honestly rather than bypassed),
+// then opens the pass through the normal reveal so the veil, tiles, camera
+// and banner all behave exactly as they would in a real run.
+function skipToCorridor(){
+  if(state.gameOver) return;
+  if(state.corridorOpen){ flashWaveBanner('The pass is already open.'); return; }
+  state.wave = Math.max(state.wave, RAIDS_BEFORE_CORRIDOR);
+  state.nextWaveInMs = 0;
+  // wipe live raiders only — bandit camps, the enemy town's garrison and its
+  // workers are not part of "the raids" and must survive this
+  let cleared = 0;
+  for(const e of state.enemies){
+    if(e.hp > 0 && e.kind !== 'camp' && e.kind !== 'ai_worker' && !e.homeGuard){ e.hp = 0; cleared++; }
+  }
+  if(scene && scene.revealCorridor) scene.revealCorridor();
+  refreshHud2Buttons();
+  updateHUD();
+  if(cleared) console.log(`skipToCorridor: cleared ${cleared} raider(s)`);
 }
 
 function updateSelectionRings(){

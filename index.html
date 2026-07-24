@@ -44,6 +44,12 @@
   #hud2 button:hover:not(:disabled) { background: #5c4327; }
   #hud2 button:disabled { opacity: .4; cursor: not-allowed; }
   #hud2 button.toggled-on { background: #6b2f2f; border-color: #d87a6b; }
+  /* testing tools — visually separated so they never read as normal play */
+  #hud2 button.devBtn {
+    background: #2b2438; border-color: #6b5a8a; color: #cbbde8; font-weight: normal;
+  }
+  #hud2 button.devBtn:hover:not(:disabled) { background: #3a3049; }
+  #hud2 button.devBtn.toggled-on { background: #5a3f8a; border-color: #b9a0e8; color: #fff; }
   #gameWrap { position: relative; width: 100%; max-width: 960px; min-height: 560px; }
   /* minimap: the world is ~5 screens wide once the corridor opens, so this
      is navigation, not decoration. Overlaid on the canvas rather than added
@@ -168,6 +174,8 @@
     <button id="recallBtn" title="Garrison every worker inside the Town Hall (they add capped defense damage). Press again to send them back to their previous tasks.">Recall Workers</button>
     <button id="ringBtn" title="Show or hide the attack-range circle on selected units and towers, and the Minotaur's banner radius (or press R)">Rings: On</button>
     <button id="pauseBtn" title="Pause/resume the game (or press P)">Pause</button>
+    <button id="sandboxBtn" class="devBtn" title="TESTING: keeps every resource topped to its cap, so building and training are effectively free. Build houses to raise your population cap as usual.">Sandbox: Off</button>
+    <button id="skipBtn" class="devBtn" title="TESTING: jump straight to the endgame — marks the raids survived, clears any raiders still on the map, and opens the mountain pass.">Skip to Corridor</button>
   </div>
   <div id="gameWrap">
     <div id="minimapWrap" title="Click to jump the camera"><canvas id="minimap"></canvas></div>

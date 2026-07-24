@@ -472,6 +472,8 @@ class MainScene extends Phaser.Scene {
 
     // a villager goes idle the instant it finishes a haul or arrives with no
     // job — neither of which routes through updateHUD, so poll for it
+    if(state.sandbox) sandboxTopUp();   // between economy ticks, so placing
+                                        // several buildings never stalls
     this.lastIdleAt = (this.lastIdleAt || 0) + delta;
     if(this.lastIdleAt >= 250){ this.lastIdleAt = 0; refreshIdleBox(); }
 
@@ -590,6 +592,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('recallBtn').addEventListener('click', toggleRecall);
   document.getElementById('ringBtn').addEventListener('click', toggleRangeRings);
   document.getElementById('pauseBtn').addEventListener('click', togglePause);
+  const sbBtn = document.getElementById('sandboxBtn');
+  if(sbBtn) sbBtn.addEventListener('click', toggleSandbox);
+  const skBtn = document.getElementById('skipBtn');
+  if(skBtn) skBtn.addEventListener('click', skipToCorridor);
   const hintCloseBtn = document.getElementById('hintClose');
   if(hintCloseBtn){
     hintCloseBtn.addEventListener('click', ()=>{

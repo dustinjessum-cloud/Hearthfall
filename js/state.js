@@ -62,6 +62,7 @@ const state = {
   wave: 0,
   waveTimerMs: 210000,   // 3.5 min before the first raid
   nextWaveInMs: 210000,
+  sandbox: false,        // TESTING: keeps resources at cap (see toggleSandbox)
   corridorOpen: false,   // set once RAIDS_BEFORE_CORRIDOR raids are survived
   aiTownSpawned: false,  // guards the victory check before the town exists
   aiTownCenter: null,

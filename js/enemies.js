@@ -595,6 +595,11 @@ function updateCombat(delta, time){
     if(u.hp<=0 || u.inTowerId) continue; // garrisoned archers fire THROUGH the tower's bonus, not their own bow
     if(u.type==='archer') attackers.push({ent:u, atk:ARCHER_ATTACK, gx:u.gx, gy:u.gy, soldier:true});
     else if(u.type==='swordsman') attackers.push({ent:u, atk:SWORDSMAN_ATTACK, gx:u.gx, gy:u.gy, melee:true, soldier:true});
+    // Villagers fight back when something is already on top of them. NOT
+    // flagged `soldier`, so the Minotaur's banner does not buff them, and the
+    // 1.2 reach means they can only ever hit what has closed to arm's length —
+    // they never leave their work to go looking for a fight.
+    else if(u.type==='villager' && !u.inTC) attackers.push({ent:u, atk:VILLAGER_ATTACK, gx:u.gx, gy:u.gy, melee:true});
     // the Minotaur attacks only via his manual javelin (J) and slash (K)
   }
 

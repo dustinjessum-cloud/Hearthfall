@@ -338,17 +338,20 @@ function refreshRallyMarkers(){
 // Returns null for non-combatants (villagers, repairmen).
 function unitAttack(u){
   const atk = u.type==='archer' ? ARCHER_ATTACK
-            : (u.type==='swordsman' ? SWORDSMAN_ATTACK : null);
+            : (u.type==='swordsman' ? SWORDSMAN_ATTACK
+            : (u.type==='villager' ? VILLAGER_ATTACK : null));
   if(!atk) return null;
+  // villagers are not soldiers: no banner buff, and the panel says so
+  const isSoldier = (u.type === 'archer' || u.type === 'swordsman');
   const cap = livingCaptain();
-  const inAura = !!(cap && cap !== u &&
+  const inAura = !!(isSoldier && cap && cap !== u &&
     Phaser.Math.Distance.Between(cap.gx, cap.gy, u.gx, u.gy) <= CAPTAIN.auraRange);
   const dmg = inAura ? Math.round(atk.damage * CAPTAIN.auraMult) : atk.damage;
   const secs = atk.cooldownMs / 1000;
   return {
     dmg, base: atk.damage, inAura, range: atk.range,
     secs: secs.toFixed(1), dps: (dmg / secs).toFixed(1),
-    inTower: !!u.inTowerId,
+    inTower: !!u.inTowerId, selfDefence: !isSoldier,
   };
 }
 
@@ -947,6 +950,8 @@ function refreshInfoPanel(){
       panel.innerHTML = `<h3 style="color:#ff8a6b;">${enemyName(ref)}</h3>
         <div>HP: <span id="infoHpText"></span></div>
         <div class="hpbar"><div class="hpfill" id="infoHpFill" style="background:#d85a3a;"></div></div>
+        <div id="infoEnemyAtk" style="margin-top:4px;color:#e8dcc0;"></div>
+        <div id="infoEnemyAtkNote" style="color:#d8c79a;"></div>
         <div style="margin-top:6px;color:#d8c79a;">${enemyDesc(ref)}</div>`;
     }
   }
@@ -1210,6 +1215,26 @@ function refreshInfoPanel(){
       cdEl.textContent = `Javelin ${heroJavelinDmg()}dmg: ${jav} — Slash ${heroSlashDmg()}dmg: ${sl}`;
     }
   }
+  if(type==='enemy'){
+    // Enemy stats were HP and a sentence — nothing about what it hits for,
+    // which is exactly what you want to know before deciding to engage.
+    const ae = document.getElementById('infoEnemyAtk');
+    const an = document.getElementById('infoEnemyAtkNote');
+    if(ae){
+      if(ref.kind === 'camp'){
+        ae.textContent = 'Unarmed — it spawns raiders rather than fighting';
+        if(an) an.textContent = '';
+      } else if(ref.kind === 'ai_worker'){
+        ae.textContent = 'Unarmed labourer';
+        if(an) an.textContent = 'Killing it slows their whole economy';
+      } else {
+        const rng = ref.ranged ? ENEMY_RANGED.range : 1.6;
+        const secs = (ref.ranged ? ENEMY_RANGED.cooldownMs : 1000)/1000;
+        ae.textContent = `${ref.dmg} dmg · ${rng} range · ${(ref.dmg/secs).toFixed(1)}/s`;
+        if(an) an.textContent = `every ${secs.toFixed(1)}s${ref.ranged ? ' — holds at range and looses' : ' — melee'}`;
+      }
+    }
+  }
   if(type==='unit'){
     const a = unitAttack(ref);
     const atkEl = document.getElementById('infoAtk');
@@ -1217,8 +1242,9 @@ function refreshInfoPanel(){
     const noteEl = document.getElementById('infoAtkNote');
     if(a && noteEl){
       noteEl.textContent = a.inTower ? 'Manning the tower — fires through it, not their own bow'
+        : (a.selfDefence ? `every ${a.secs}s — self-defence only, no banner bonus`
         : (a.inAura ? `+25% under the banner (base ${a.base}, every ${a.secs}s)`
-                    : `every ${a.secs}s`);
+                    : `every ${a.secs}s`));
       noteEl.style.color = a.inTower ? '#9fc4ff' : (a.inAura ? '#ffd76b' : '#d8c79a');
     }
     const actEl = document.getElementById('infoActivity');

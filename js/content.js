@@ -301,6 +301,12 @@ const SWORDSMAN_COST = { food:30, wood:10, stone:5 };
 const SWORDSMAN_TRAIN_MS = 45000;
 let SWORDSMAN_HP = 70;
 const SWORDSMAN_ATTACK = { range:1.3, damage:12, cooldownMs:800 };
+// Villagers defend themselves — badly. A pitchfork, not a sword: about a
+// tenth of a swordsman's damage per second, and a reach barely past arm's
+// length so they can never CHASE anything, only swing at what has already
+// closed on them. The point is that a cornered worker is no longer free
+// damage for a lone raider, not that massed villagers are an army.
+const VILLAGER_ATTACK = { range:1.2, damage:2, cooldownMs:1400 };
 
 // ---- unit evolutions: permanent, faction-wide upgrades funded by Wildstone ----
 // Applies to every unit of that type — existing AND future — the moment it

@@ -401,6 +401,16 @@ function updateEnemies(delta){
         continue; // held position and fired — no advance, no melee
       }
     }
+    // Formation march: this member has pulled ahead of its party's rearguard
+    // and waits for it. Placed before movement but AFTER the ranged block, so
+    // a halted unit still shoots at whatever wanders into range.
+    if(e._holdMarch && e.aiAttacker){
+      e.sprite.setPosition(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2);
+      e.hpBarBg.setPosition(e.gx*TILE+TILE/2, e.gy*TILE-2);
+      e.hpBarFg.setPosition(e.gx*TILE+4, e.gy*TILE-2);
+      e.hpBarFg.width = (TILE-8)*Math.max(0,e.hp/e.maxHp);
+      continue;
+    }
     if(e.homeGuard && !e.respondingTo){
       // The enemy town's standing defenders hold their posts. Without this
       // they would path at YOUR Town Hall the moment the world loads and
@@ -563,7 +573,8 @@ function updateCombat(delta, time){
         const g = towerGarrison(b);
         dmg = def.attack.damageLow + g.archers*TOWER_GARRISON_DMG.archer + g.villagers*TOWER_GARRISON_DMG.villager;
       }
-      attackers.push({ent:b, atk:{range:def.attack.range, damage:dmg, cooldownMs:def.attack.cooldownMs}, gx:b.gx, gy:b.gy});
+      // range comes from towerAttackRange(): garrisoned archers extend it
+      attackers.push({ent:b, atk:{range:towerAttackRange(b), damage:dmg, cooldownMs:def.attack.cooldownMs}, gx:b.gx, gy:b.gy});
     }
     // a fully upgraded Town Hall mans its own battlements
     if(b.isCore){

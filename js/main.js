@@ -459,6 +459,8 @@ class MainScene extends Phaser.Scene {
     updateCorpses(delta);
 
     updateUnits(delta);
+    updateAiFormations();   // MUST precede updateEnemies — it sets the
+                            // hold flags that the mover reads this frame
     updateEnemies(delta);
     updateEnemyProjectiles(delta);
     updateCombat(delta, time);

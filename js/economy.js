@@ -1004,6 +1004,19 @@ function findProductionBuildingFor(gx, gy){
 // code, so the clamps here are belt-and-braces.
 const TOWER_GARRISON_CAP = 3;
 const TOWER_GARRISON_DMG = { archer: 3, villager: 2 };
+// An archer up the tower shoots FURTHER than the tower's own arrow slits —
+// they have height and a longbow, where the base tower is just murder holes.
+// Per archer, capped, so three archers is a meaningfully longer reach and not
+// an unbounded sniper nest. Villagers add damage (they work the machine) but
+// no range: they aren't the ones aiming.
+const TOWER_GARRISON_RANGE = { perArcher: 0.4, max: 1.2 };
+function towerAttackRange(b){
+  const def = BUILD_DEFS[b.type];
+  const base = (def && def.attack) ? def.attack.range : 0;
+  if(b.type !== 'tower') return base;
+  const g = towerGarrison(b);
+  return base + Math.min(g.archers * TOWER_GARRISON_RANGE.perArcher, TOWER_GARRISON_RANGE.max);
+}
 function towerGarrison(tower){
   let archers = 0, villagers = 0;
   for(const u of state.units){

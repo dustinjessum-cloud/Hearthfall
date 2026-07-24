@@ -263,6 +263,16 @@ const AI_TUNING = {
   alarmMs: 25000,
   alarmResponseRange: 26,
   alarmMaxResponders: 5,
+  // How far ahead of its own rearguard a marching party will get before the
+  // leaders stop and wait. Sharing an objective was not enough on its own:
+  // members still walk their own paths at their own speeds, ranged troops
+  // halt to shoot while melee keeps going, and over ~100 tiles that strings
+  // the party into single file — which is what "attacking individually"
+  // actually looked like. They now advance at the pace of the slowest.
+  cohesionRadius: 6,
+  // Once this close to the objective, cohesion is released and everyone
+  // commits — otherwise the front rank politely waits at the wall.
+  commitRange: 10,
 
   // Farms are only tended while the larder is below this. Without a ceiling
   // every farm grabs a worker before anyone cuts wood, and the enemy sits on
@@ -652,6 +662,37 @@ function retargetSpentParties(){
     const next = aiPartyTarget();
     if(!next) continue;
     for(const m of members){ m.partyGx = next.gx; m.partyGy = next.gy; m.path = null; }
+  }
+}
+
+// Formation march: hold the leaders back so the party arrives as a body.
+// Recomputed once per frame into e._holdMarch, which updateEnemies() reads —
+// doing it there per unit would be O(n^2) against every other attacker.
+function updateAiFormations(){
+  const live = aiAttackers();
+  if(!live.length) return;
+  const byParty = {};
+  for(const a of live){ (byParty[a.partyId || 0] = byParty[a.partyId || 0] || []).push(a); }
+  for(const id in byParty){
+    const p = byParty[id];
+    for(const a of p) a._holdMarch = false;
+    if(p.length < 2) continue;
+    const gx = p[0].partyGx, gy = p[0].partyGy;
+    if(gx === undefined) continue;
+    // distance-to-objective per member; the LARGEST is the rearguard
+    let rear = -Infinity, lead = Infinity;
+    for(const a of p){
+      a._toGoal = Phaser.Math.Distance.Between(a.gx, a.gy, gx, gy);
+      if(a._toGoal > rear) rear = a._toGoal;
+      if(a._toGoal < lead) lead = a._toGoal;
+    }
+    // close enough to the objective? release everyone and let them commit
+    if(lead <= AI_TUNING.commitRange) continue;
+    for(const a of p){
+      // a member that has pulled more than cohesionRadius ahead of the
+      // rearguard waits for it to catch up
+      if(rear - a._toGoal > AI_TUNING.cohesionRadius) a._holdMarch = true;
+    }
   }
 }
 

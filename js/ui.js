@@ -476,7 +476,10 @@ function updateSelectionRings(){
     if(a && !a.inTower){ r = a.range; rx = u.gx; ry = u.gy; }
   } else if(b && b.hp > 0 && !underConstruction(b)){
     const def = BUILD_DEFS[b.type];
-    if(def && def.attack){ r = def.attack.range; rx = b.gx; ry = b.gy; }
+    // towerAttackRange, not def.attack.range — the ring has to show the range
+    // the tower ACTUALLY fires at, garrison bonus included, or the indicator
+    // contradicts the thing it is indicating
+    if(def && def.attack){ r = towerAttackRange(b); rx = b.gx; ry = b.gy; }
   }
   if(r > 0){
     if(!scene._rangeRing){
@@ -1147,9 +1150,14 @@ function refreshInfoPanel(){
     if(gEl){
       const g = towerGarrison(ref);
       const dmgNow = BUILD_DEFS.tower.attack.damageLow + g.archers*TOWER_GARRISON_DMG.archer + g.villagers*TOWER_GARRISON_DMG.villager;
+      // Range is called out separately from damage: archers extend it, so
+      // the panel has to say WHY stacking archers differs from villagers.
+      const rNow = towerAttackRange(ref);
+      const rBase = BUILD_DEFS.tower.attack.range;
+      const rTxt = rNow > rBase ? `, ${rNow.toFixed(1)} range (+${(rNow-rBase).toFixed(1)})` : `, ${rBase.toFixed(1)} range`;
       gEl.textContent = g.total > 0
-        ? `Garrison: ${g.total}/${TOWER_GARRISON_CAP} inside (${g.archers} archer${g.archers!==1?'s':''}, ${g.villagers} villager${g.villagers!==1?'s':''}) — ${dmgNow} damage${g.total<TOWER_GARRISON_CAP ? '' : ' (full)'}`
-        : `No garrison — ${BUILD_DEFS.tower.attack.damageLow} damage only. Right-click here with villagers or archers (up to ${TOWER_GARRISON_CAP}); they climb inside, safe from harm.`;
+        ? `Garrison: ${g.total}/${TOWER_GARRISON_CAP} inside (${g.archers} archer${g.archers!==1?'s':''}, ${g.villagers} villager${g.villagers!==1?'s':''}) — ${dmgNow} damage${rTxt}${g.total<TOWER_GARRISON_CAP ? '' : ' (full)'}`
+        : `No garrison — ${BUILD_DEFS.tower.attack.damageLow} damage, ${rBase.toFixed(1)} range. Right-click here with villagers or archers (up to ${TOWER_GARRISON_CAP}); they climb inside, safe from harm. Archers also shoot further.`;
       const rb = document.getElementById('towerReleaseBtn');
       if(rb) rb.disabled = g.total === 0;
     }

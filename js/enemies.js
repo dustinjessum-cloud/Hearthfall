@@ -212,8 +212,26 @@ function repathEnemy(e){
     }
     // fall through to standard TC-march below
   }
+  // Attack parties from the enemy town hunt whatever of YOURS is nearest,
+  // rather than beelining the Town Hall like edge-spawned raiders. On a
+  // 142-wide map a blind TC-march would walk them past every forward
+  // building you own without a glance.
+  let oppGoal = null;
+  if(e.aiAttacker){
+    let best=null, bd=Infinity;
+    for(const b of myBuildings()){
+      if(b.hp<=0) continue;
+      const d = Phaser.Math.Distance.Between(e.gx, e.gy, b.gx, b.gy);
+      if(d < bd){ bd = d; best = b; }
+    }
+    if(best) oppGoal = {gx:best.gx, gy:best.gy};
+  }
+  // A guard answering an alarm goes THERE, not home and not at you.
+  if(e.homeGuard && e.respondingTo && e.alarmGx !== undefined){
+    oppGoal = {gx:Math.round(e.alarmGx), gy:Math.round(e.alarmGy)};
+  }
   const threat = findNearbyThreat(e);
-  const goal = threat ? {gx:Math.round(threat.gx), gy:Math.round(threat.gy)} : scene.townHallPos;
+  const goal = oppGoal || (threat ? {gx:Math.round(threat.gx), gy:Math.round(threat.gy)} : scene.townHallPos);
   // First try a clean route around defenses…
   let path = bfsPath(Math.round(e.gx), Math.round(e.gy), goal.gx, goal.gy, false);
   // …but if the town is fully walled in, plan a route straight THROUGH the
@@ -375,12 +393,23 @@ function updateEnemies(delta){
         continue; // held position and fired — no advance, no melee
       }
     }
-    if(e.homeGuard){
+    if(e.homeGuard && !e.respondingTo){
       // The enemy town's standing defenders hold their posts. Without this
       // they would path at YOUR Town Hall the moment the world loads and
       // pile up against a sealed pass forever. They still fall through to
       // the attack logic below, so they fight whatever comes to them.
+      // A guard ANSWERING AN ALARM is exempt — it walks to the trouble.
       e.path = null;
+      if(!e.path && (Math.round(e.gx)!==e.homeGx || Math.round(e.gy)!==e.homeGy)){
+        // drifted off post answering an earlier alarm — stroll back
+        const dx = e.homeGx - e.gx, dy = e.homeGy - e.gy;
+        const d = Math.hypot(dx, dy);
+        if(d > 0.4){
+          const step = baseSpeed * 0.6 * (delta/1000);
+          e.gx += (dx/d)*Math.min(step, d);
+          e.gy += (dy/d)*Math.min(step, d);
+        }
+      }
     } else if(e.path && e.pathIdx < e.path.length){
       const node = e.path[e.pathIdx];
       // something (probably a wall) stands on the next step of the route —
@@ -395,7 +424,13 @@ function updateEnemies(delta){
         const dist = Math.hypot(dx,dy);
         if(dist < 0.06){
           e.gx = node.gx; e.gy = node.gy; e.pathIdx++;
-          if(e.pathIdx % 4 === 0) repathEnemy(e); // re-evaluate periodically (walls may have changed)
+          // Re-evaluate periodically (walls may have changed). Every 4 tiles
+          // was fine on the old 44-wide map with a short walk to your gate;
+          // on a 142-wide map an attack party crossing the world would run
+          // ~25 full-map floods PER UNIT. Marchers from the enemy town
+          // re-check far less often — nothing changes out in the open.
+          const every = e.aiAttacker ? 16 : 4;
+          if(e.pathIdx % every === 0) repathEnemy(e);
         } else {
           e.gx += (dx/dist)*speed*(delta/1000);
           e.gy += (dy/dist)*speed*(delta/1000);

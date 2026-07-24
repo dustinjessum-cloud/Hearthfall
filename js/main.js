@@ -463,6 +463,8 @@ class MainScene extends Phaser.Scene {
     updateCombat(delta, time);
 
     aiThink(delta);         // their economy: train, gather, build, expand
+    updateAiWar(delta);     // muster war parties and send them at you
+    updateAiDefence(delta); // defenders answer alarms, then drift back
     updateAiWorkers(delta);
     checkAiDefeated();      // razing their core wins the run
     updateSelectionRings(); // range/aura rings follow the selection as it moves

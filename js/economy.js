@@ -806,6 +806,10 @@ function damageBuilding(b, dmg){
     return;
   }
   b.hp -= dmg;
+  // Their expansion is worth defending: any hit on an enemy structure calls
+  // nearby defenders to it, so taking the middle costs a fight rather than
+  // being free demolition.
+  if(isEnemyBuilding(b) && typeof aiRaiseAlarm === 'function') aiRaiseAlarm(b.gx, b.gy);
   b.hpBarBg.setVisible(true); b.hpBarFg.setVisible(true);
   const pct = Math.max(0, b.hp/b.maxHp);
   b.hpBarFg.width = ((b.size||1)*TILE-6)*pct;

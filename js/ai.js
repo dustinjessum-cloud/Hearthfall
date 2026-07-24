@@ -195,7 +195,21 @@ const AI_TUNING = {
 
   soldierCost: { food:40, wood:20 },
   soldierTrainMs: 13000,
-  armyTarget: 8,               // standing defenders it maintains
+  // ---- war (Phase 4) ----
+  // Army size is NOT on a difficulty curve — it is paid for out of what the
+  // enemy actually gathered. Cripple their economy and fewer soldiers get
+  // trained, so the pressure you face genuinely falls. That is the loop the
+  // real-economy choice was for; a fixed schedule would have severed it.
+  homeGarrisonTarget: 6,       // defenders that never leave the town
+  soldierHardCap: 22,          // stops a runaway economy fielding an endless horde
+  attackPartySize: 7,          // musters this many, then marches
+  attackCooldownMs: 60000,     // minimum gap between parties leaving
+  firstAttackDelayMs: 90000,   // grace after the pass opens before the first one
+  // Defending the expansion: damage to ANY of their buildings raises an alarm
+  // that nearby defenders answer, then drift home from.
+  alarmMs: 25000,
+  alarmResponseRange: 26,
+  alarmMaxResponders: 5,
 
   // Farms are only tended while the larder is below this. Without a ceiling
   // every farm grabs a worker before anyone cuts wood, and the enemy sits on
@@ -258,7 +272,13 @@ function aiPay(cost, scaled){
 }
 
 function aiWorkers(){ return state.enemies.filter(e=>e.kind==='ai_worker' && e.hp>0); }
+// Defenders: pinned to the town, answer alarms, never march on you.
 function aiSoldiers(){ return state.enemies.filter(e=>e.homeGuard && e.kind!=='ai_worker' && e.hp>0); }
+// Trained and waiting for a party to fill out.
+function aiMustering(){ return state.enemies.filter(e=>e.mustering && e.hp>0); }
+// On the march. These count as an active raid, which is exactly right.
+function aiAttackers(){ return state.enemies.filter(e=>e.aiAttacker && e.hp>0); }
+function aiTroopCount(){ return aiSoldiers().length + aiMustering().length + aiAttackers().length; }
 
 function spawnAiWorker(gx, gy){
   const spot = findFreeSpotNear(gx, gy, 3) || {gx, gy};
@@ -469,8 +489,19 @@ function aiTryTrain(delta){
     } else {
       const race = aiTownRace()==='undead' ? 'undead' : 'human';
       const spot = findFreeSpotNear(c.gx, c.gy, 4) || c;
-      const e = spawnEnemy(34, 7, 4, 'swordsman', {gx:spot.gx, gy:spot.gy}, {race});
-      if(e){ e.homeGuard = true; e.homeGx = e.gx; e.homeGy = e.gy; }
+      const ranged = Math.random() < 0.35;
+      const e = spawnEnemy(34, 7, 4, ranged ? 'raider' : 'swordsman',
+                           {gx:spot.gx, gy:spot.gy}, {race, ranged});
+      if(e){
+        // The town keeps its garrison staffed FIRST; only the surplus musters
+        // for an attack. Otherwise a fresh party leaves an undefended town and
+        // the player can simply walk past the outgoing army into the core.
+        if(aiSoldiers().length < AI_TUNING.homeGarrisonTarget){
+          e.homeGuard = true; e.homeGx = e.gx; e.homeGy = e.gy;
+        } else {
+          e.mustering = true;
+        }
+      }
     }
     ai.training = null;
     return;
@@ -480,11 +511,86 @@ function aiTryTrain(delta){
     ai.training = { what:'worker', msLeft: AI_TUNING.workerTrainMs };
     return;
   }
+  // Soldiers are trained whenever there is a barracks and the resources to
+  // pay — no schedule, no difficulty curve. Their army is literally what
+  // their economy could afford, so starving that economy is what makes the
+  // war quieter. The cap only exists to stop a runaway game fielding a horde.
   const hasBarracks = aiBuildings().some(b=>b.aiType==='ai_barracks' && b.hp>0 && !underConstruction(b));
-  if(hasBarracks && aiSoldiers().length < AI_TUNING.armyTarget && aiCan(AI_TUNING.soldierCost)){
+  if(hasBarracks && aiTroopCount() < AI_TUNING.soldierHardCap && aiCan(AI_TUNING.soldierCost)){
     aiPay(AI_TUNING.soldierCost);
     ai.training = { what:'soldier', msLeft: AI_TUNING.soldierTrainMs };
   }
+}
+
+// ---------------------------------------------------------------------
+// Phase 4: the war
+// ---------------------------------------------------------------------
+
+// Something of theirs took a hit. Raise an alarm that nearby defenders
+// answer — this is what gives their neutral-zone expansion real weight
+// instead of leaving it free demolition.
+function aiRaiseAlarm(gx, gy){
+  if(!state.ai) return;
+  state.ai.alarm = { gx, gy, msLeft: AI_TUNING.alarmMs };
+}
+
+// Defenders answer the nearest alarm, then drift back to their posts.
+function updateAiDefence(delta){
+  const ai = state.ai;
+  if(!ai) return;
+  if(ai.alarm){
+    ai.alarm.msLeft -= delta;
+    if(ai.alarm.msLeft <= 0){ ai.alarm = null; }
+  }
+  const guards = aiSoldiers();
+  if(!ai.alarm){
+    // no alarm: anyone who answered one heads home
+    for(const g of guards){
+      if(g.respondingTo){ g.respondingTo = null; g.path = null; }
+    }
+    return;
+  }
+  // closest few respond; the rest hold their posts so the town is never
+  // stripped bare by a feint on the far side of the map
+  const sorted = guards
+    .map(g=>({g, d: Phaser.Math.Distance.Between(g.gx, g.gy, ai.alarm.gx, ai.alarm.gy)}))
+    .filter(x=> x.d <= AI_TUNING.alarmResponseRange)
+    .sort((a,b)=> a.d - b.d)
+    .slice(0, AI_TUNING.alarmMaxResponders);
+  const chosen = new Set(sorted.map(x=>x.g));
+  for(const g of guards){
+    if(chosen.has(g)){
+      if(!g.respondingTo){ g.respondingTo = true; g.path = null; }
+      g.alarmGx = ai.alarm.gx; g.alarmGy = ai.alarm.gy;
+    } else if(g.respondingTo){
+      g.respondingTo = null; g.path = null;
+    }
+  }
+}
+
+// Muster, then march. The party only forms once enough soldiers exist BEYOND
+// the home garrison, so pressure scales with what their economy actually
+// afforded rather than with a clock.
+function updateAiWar(delta){
+  const ai = state.ai;
+  if(!ai || state.gameOver) return;
+  if(!state.corridorOpen) return;   // no route to you until the pass opens
+
+  ai.warMs = (ai.warMs || 0) + delta;
+  if(ai.warMs < AI_TUNING.firstAttackDelayMs) return;   // grace after it opens
+  if(ai.attackCdMs > 0){ ai.attackCdMs -= delta; return; }
+
+  const muster = aiMustering();
+  if(muster.length < AI_TUNING.attackPartySize) return;
+
+  for(const m of muster){
+    m.mustering = false;
+    m.aiAttacker = true;     // repathEnemy now sends them at the nearest of yours
+    m.path = null;
+    m.homeGuard = false;
+  }
+  ai.attackCdMs = AI_TUNING.attackCooldownMs;
+  flashWaveBanner(`A war party marches out of the enemy town — ${muster.length} strong!`);
 }
 
 function aiThink(delta){

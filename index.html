@@ -51,24 +51,60 @@
   #hud2 button.devBtn:hover:not(:disabled) { background: #3a3049; }
   #hud2 button.devBtn.toggled-on { background: #5a3f8a; border-color: #b9a0e8; color: #fff; }
   #gameWrap { position: relative; width: 100%; max-width: 960px; min-height: 560px; }
-  /* minimap: the world is ~5 screens wide once the corridor opens, so this
-     is navigation, not decoration. Overlaid on the canvas rather than added
-     to the bottom bar, which is already full. */
-  #minimapWrap {
-    position: absolute; top: 8px; right: 8px; z-index: 5;
-    background: rgba(20,14,8,.82); border: 2px solid #7a5a34; border-radius: 5px;
-    padding: 3px; line-height: 0; cursor: crosshair; display: none;
-  }
-  #minimap { display: block; image-rendering: pixelated; }
-  #minimapWrap.open { display: block; }
+  /* ---- bottom bar: fixed slots ----------------------------------------
+     The bar is a row of slots at FIXED widths, and the bar itself has a
+     fixed height. Every slot is always rendered, empty or not. Previously
+     the info panel and idle box were display:none when unused, so the bar's
+     contents jumped sideways whenever you selected something or a villager
+     went idle. Reserving the space costs a little screen area and buys a
+     layout that never moves. */
   #bottomBar {
     width: 100%; max-width: 960px; box-sizing: border-box;
     background: #241a10; border-top: 3px solid #6b4a26;
-    display: flex; gap: 8px; padding: 8px; align-items: flex-start;
+    display: flex; gap: 8px; padding: 8px; align-items: stretch;
+    /* Fixed height: the bar never grows or shrinks with content. Sized to
+       hold the build panel (its tabs + a full row of buttons) without an
+       internal scrollbar, since that is the tallest thing shown here. The
+       info panel, which can be longer, keeps its own overflow-y scroll. */
+    height: 224px;   /* holds the tallest build tab (2 rows of buttons) */
   }
+  .barSlot {
+    display: flex; flex-direction: column; gap: 4px; min-width: 0;
+    flex: 0 0 auto;
+  }
+  .slotLabel {
+    font-size: 9px; letter-spacing: .09em; text-transform: uppercase;
+    color: #8a7a5c; padding-left: 2px; flex: 0 0 auto; user-select: none;
+  }
+  .slotEmpty { font-size: 11px; color: #6b5c44; font-style: italic; }
+
+  #mapSlot   { flex: 0 0 176px; }
+  #selSlot   { flex: 0 0 168px; }
+  #buildSlot { flex: 1 1 auto; min-width: 120px; }
+  #sideSlot  { flex: 0 0 84px; }
+
+  #minimapWrap {
+    background: rgba(20,14,8,.82); border: 2px solid #7a5a34; border-radius: 5px;
+    padding: 3px; line-height: 0; cursor: crosshair;
+    flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
+  }
+  /* native canvas is 284x64 (142x32 tiles at 2px); scale the DISPLAY down to
+     the slot without touching the backing resolution, so it stays crisp */
+  #minimap { display: block; image-rendering: pixelated; width: 100%; height: auto; }
+
+  /* Reserved for command groups — claimed now so adding the feature later
+     cannot shove the rest of the bar sideways. */
+  #groupBar {
+    flex: 0 0 auto; min-height: 46px;
+    background: rgba(20,14,8,.5); border: 1px dashed #5a4a30; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 4px;
+  }
+
   #buildBar {
-    flex: 1 1 auto; min-width: 0;
+    flex: 1 1 auto; min-width: 0; min-height: 0;
     display: flex; flex-direction: column; gap: 6px; align-items: center;
+    overflow-y: auto;
   }
   #buildTabs { display: flex; gap: 4px; justify-content: center; }
   .buildTab {
@@ -91,10 +127,10 @@
   .buildBtn:disabled { opacity: .4; cursor: not-allowed; transform:none; }
   .buildBtn .cost { font-size: 10px; color: #d8c79a; }
   #infoPanel {
-    flex: 0 0 190px; box-sizing: border-box; align-self: stretch;
+    flex: 1 1 auto; box-sizing: border-box; min-height: 0;
     background: rgba(20,14,8,.5); border: 1px solid #7a5a34; border-radius: 6px;
-    padding: 8px; font-size: 12px; display: none;
-    max-height: 240px; overflow-y: auto;
+    padding: 8px; font-size: 12px;
+    overflow-y: auto;      /* NOT display:none when empty — see #bottomBar */
   }
   #infoPanel h3 { margin: 0 0 6px 0; font-size: 13px; color: #ffd76b; }
   #infoPanel .hpbar { background:#3a2a18; border:1px solid #7a5a34; height:8px; border-radius:3px; overflow:hidden; margin-top:4px;}
@@ -102,13 +138,16 @@
   /* idle-worker button: only appears when someone is standing around doing
      nothing, so an empty bar means everyone is employed */
   #idleBox {
-    flex: 0 0 auto; box-sizing: border-box;
-    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-    min-width: 58px; padding: 6px 8px;
-    background: rgba(20,14,8,.5); border: 1px solid #c9a227; border-radius: 6px;
+    flex: 1 1 auto; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    padding: 6px 8px;
+    background: rgba(20,14,8,.5); border: 1px solid #7a5a34; border-radius: 6px;
     color: #f0e6d2; cursor: pointer; user-select: none;
-    animation: idleNudge 2.2s ease-in-out infinite;
   }
+  /* only nudges for attention when there is actually someone standing idle */
+  #idleBox.hasIdle { border-color: #c9a227; animation: idleNudge 2.2s ease-in-out infinite; }
+  #idleBox.noIdle  { opacity: .45; cursor: default; }
+  #idleBox.noIdle .idleN { color: #8a7a5c; }
   #idleBox:hover { background: #4a3520; border-color: #ffd76b; animation: none; }
   #idleBox:active { transform: translateY(1px); }
   #idleBox canvas { width: 28px; height: 28px; image-rendering: pixelated; }
@@ -178,7 +217,6 @@
     <button id="skipBtn" class="devBtn" title="TESTING: jump straight to the endgame — marks the raids survived, clears any raiders still on the map, and opens the mountain pass.">Skip to Corridor</button>
   </div>
   <div id="gameWrap">
-    <div id="minimapWrap" title="Click to jump the camera"><canvas id="minimap"></canvas></div>
     <div id="hint"><button id="hintClose" title="Dismiss">✕</button>Click a building below, then click the map to place it. Right-click or Esc cancels. Arrow keys/WASD to pan, wheel to zoom. Click a villager, then right-click a Farm/Lumber Camp/Quarry to put them to work there (or an empty tile to send them off, unassigning them). Click a Barracks to convert a villager into an Archer (ranged, fragile) or Swordsman (tough melee — auto-charges nearby raiders). Select the Town Hall, Barracks or Mason and right-click the map to set a RALLY POINT — new units march there automatically (right-click the building to clear it). P pauses the game. Damaged walls &amp; towers are fixed by REPAIRMEN (trained at the Mason, from a villager): right-click damage with one selected; they only work on your orders. Buildings take time to construct, and any building can be salvaged for 15% of its cost (3 gold fee). NEW: placing a building only reserves the site — a villager must physically walk over before construction actually starts (the game auto-sends an idle one; the faint "foundation" look means nobody's arrived yet). Walls (and Towers) now block your OWN units' movement too, just like they block raiders — build a GATE into a wall line to let your people through while still stopping the enemy. Water is impassable to everyone, no exceptions. Lumber camps &amp; quarries employ up to 3 villagers each. NEW: a few remote deposits of WILDSTONE dot the map (pinkish crystal) — once your Town Hall reaches level 3, build a REFINERY directly on one to start extracting it (same idea as a lumber camp, just built right on the vein). Not required for anything basic, but it funds permanent EVOLUTIONS at the Barracks — Veteran Training and Masterwork Bows upgrade every Swordsman/Archer you have, forever, once researched. Click the Town Hall to upgrade it: more HP, storage, population, faster settlers — and at level 3 it shoots back. NEW: upgrades (Town Hall and storage buildings alike) now take real time to complete once started, not just resources — the cost is paid up front, then a countdown runs before the bonus actually lands. Raids no longer pause your economy — workers keep toiling unless YOU act: Recall Workers garrisons every worker INSIDE the Town Hall (each adds defense damage, capped, at any TC level); press it again and they walk back to the exact jobs they left. Single villagers can also be garrisoned by right-clicking the TC. NEW: Farms grow wheat → staffed Mills grind flour → staffed Bakeries bake food (1.5x). Houses pay gold taxes; Wells &amp; Taverns raise happiness. Soldiers eat double rations and buildings sip wood upkeep — keep the woodpile stocked or things decay. Bandit camps on the frontier send PILLAGERS (orange) who ignore your walls' purpose — they hunt farms, camps, mills and markets directly; from wave 2 raids bring them too. Raze camps with soldiers for loot. Recruit a Minotaur hero at the Town Hall (gold) — nearby soldiers fight 25% harder, but HE fights only on your command: J hurls a javelin toward the mouse, K slashes adjacent foes. He levels up from kills near him and keeps his level through revival. NEW: the fallen leave CORPSES — right-click one with any of your living selected — villager, soldier, or hero — to BURY them; honoring the dead lifts the town's spirits for a while. Unburied corpses fade away on their own.</div>
     <div id="overlay">
       <h1>Hearthfall</h1>
@@ -189,14 +227,38 @@
       <button id="startSwarmBtn" style="border-color:#9fb877; background:#2f3a24;">Raise the Dead</button>
     </div>
   </div>
+  <!-- FIXED SLOTS. Every slot is always present and always the same width.
+       Nothing in this bar is ever display:none — the idle box and the info
+       panel used to be, and each time one appeared or vanished it reflowed
+       every other control, which is what made the bar feel unstable. Empty
+       slots now show a placeholder instead of collapsing. -->
   <div id="bottomBar">
-    <div id="idleBox">
-      <canvas id="idleIcon" width="32" height="32"></canvas>
-      <span class="idleN" id="idleCount">0</span>
-      <span class="idleLabel" id="idleLabel">idle</span>
+    <div class="barSlot" id="mapSlot">
+      <div class="slotLabel">Map</div>
+      <div id="minimapWrap" title="Click to jump the camera"><canvas id="minimap"></canvas></div>
     </div>
-    <div id="infoPanel"></div>
-    <div id="buildBar"></div>
+
+    <div class="barSlot" id="selSlot">
+      <div class="slotLabel">Selection</div>
+      <div id="infoPanel"></div>
+    </div>
+
+    <div class="barSlot" id="buildSlot">
+      <div class="slotLabel">Build</div>
+      <div id="buildBar"></div>
+    </div>
+
+    <div class="barSlot" id="sideSlot">
+      <!-- Reserved for command groups. Space is claimed now so adding the
+           feature later cannot shift the rest of the bar around. -->
+      <div class="slotLabel">Groups</div>
+      <div id="groupBar"><span class="slotEmpty">none</span></div>
+      <div id="idleBox" title="Idle villagers">
+        <canvas id="idleIcon" width="32" height="32"></canvas>
+        <span class="idleN" id="idleCount">0</span>
+        <span class="idleLabel" id="idleLabel">idle</span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -209,7 +271,7 @@
 <script src="js/enemies.js?v=ebe57d79"></script>
 <script src="js/ai.js?v=3087f92e"></script>
 <script src="js/save.js?v=8e6d5cfa"></script>
-<script src="js/ui.js?v=59389ed1"></script>
+<script src="js/ui.js?v=9bc72069"></script>
 <script src="js/main.js?v=911562b2"></script>
 </body>
 </html>

@@ -114,7 +114,6 @@ function updateMinimap(){
   if(!cv || !wrap || !state.grid.length) return;
   const px = MINIMAP.px;
   if(cv.width !== MAP_W*px){ cv.width = MAP_W*px; cv.height = MAP_H*px; }
-  wrap.classList.add('open');
   if(_miniDirty || !_miniTerrain) paintMinimapTerrain();
 
   const g = cv.getContext('2d');
@@ -197,8 +196,23 @@ function refreshIdleBox(){
   const box = document.getElementById('idleBox');
   if(!box) return;
   const list = idleWorkers();
-  if(!list.length){ box.style.display = 'none'; _idleCycle = 0; return; }
-  box.style.display = 'flex';
+  // Dimmed at zero rather than hidden. Hiding it collapsed the slot and
+  // shifted every other control in the bar each time the last villager
+  // picked up a job.
+  box.classList.toggle('hasIdle', list.length > 0);
+  box.classList.toggle('noIdle',  list.length === 0);
+  if(!list.length){
+    _idleCycle = 0;
+    document.getElementById('idleCount').textContent = '0';
+    document.getElementById('idleLabel').textContent = 'idle';
+    box.title = 'No idle villagers — everyone is working';
+    const f0 = state.faction === 'swarm' ? FRAME.ghoul : FRAME.villager;
+    if(_idleIconFrame !== f0 && SPRITESHEET_IMG){
+      drawIconCanvas(document.getElementById('idleIcon'), f0);
+      _idleIconFrame = f0;
+    }
+    return;
+  }
 
   const noun = state.faction === 'swarm' ? 'ghoul' : 'villager';
   const word = list.length === 1 ? noun : noun + 's';
@@ -785,7 +799,6 @@ function refreshInfoPanel(){
   const panel = document.getElementById('infoPanel');
   if(!state.selected){
     if(state.selectedGroup && state.selectedGroup.length > 1){
-      panel.style.display='block';
       if(panel._boundRef !== 'group'){
         panel._boundRef = 'group';
         panel.innerHTML = `<h3>Group</h3><div id="groupCount"></div>
@@ -813,9 +826,14 @@ function refreshInfoPanel(){
       }
       return;
     }
-    panel.style.display='none'; panel._boundRef=null; return;
+    // Placeholder rather than display:none. An empty panel that collapses
+    // reflows the whole bar every time you deselect.
+    if(panel._boundRef !== 'empty'){
+      panel._boundRef = 'empty';
+      panel.innerHTML = '<span class="slotEmpty">Nothing selected</span>';
+    }
+    return;
   }
-  panel.style.display='block';
   const {type, ref} = state.selected;
 
   if(panel._boundRef !== ref){

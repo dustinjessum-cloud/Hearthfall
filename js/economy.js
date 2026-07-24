@@ -208,7 +208,7 @@ function updateConstruction(delta){
           b.buildMs = 0;
           if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(1);
           const def = BUILD_DEFS[b.type];
-          if(def && def.popCap) state.population.cap += def.popCap;
+          if(def && def.popCap && isMine(b)) state.population.cap += def.popCap;
           if(builder){ builder.buildTaskId = null; builder.path = null; } // done — free to become a worker
           // a production building's own builder gets first claim on working it
           if(def && def.needsWorker && builder) assignVillagerToBuilding(builder, b);
@@ -624,7 +624,10 @@ function createBuilding(type, gx, gy, override, owner){
     b.buildMs = BUILD_TIME[type];
     if(b.sprite.setAlpha) b.sprite.setAlpha(0.55);
   }
-  if(def.popCap && !underConstruction(b)) state.population.cap += def.popCap;
+  // isMine: population is YOUR headcount. The enemy town ships seven
+  // dwellings (popCap 4) and a core (popCap 8), so without this their
+  // housing silently raised your cap by 36 the instant the world loaded.
+  if(def.popCap && !underConstruction(b) && isMine(b)) state.population.cap += def.popCap;
   if(type==='wall') refreshWallNeighborhood(gx, gy);
   if(def.needsWorker && !underConstruction(b)) autoAssignIdleVillagers();
   updateHUD();
@@ -778,10 +781,15 @@ function removeBuilding(b){
   if(b.garrisonMarker){ b.garrisonMarker.destroy(); b.garrisonMarker = null; }
   b.sprite.destroy(); b.hpBarBg.destroy(); b.hpBarFg.destroy();
   const def = BUILD_DEFS[b.type];
-  if(def && def.popCap) state.population.cap = Math.max(3, state.population.cap - def.popCap);
+  // and symmetrically: razing one of THEIR houses must not shrink your cap
+  if(def && def.popCap && isMine(b)) state.population.cap = Math.max(3, state.population.cap - def.popCap);
   if(state.selected && state.selected.ref===b) selectEntity(null,null);
   if(b.type==='wall') refreshWallNeighborhood(b.gx, b.gy);
-  if(b.isCore){
+  // Losing YOUR core ends the run. Theirs is the win condition, handled by
+  // checkAiDefeated — and this fires synchronously from combat, well before
+  // that runs, so without the ownership test razing their Town Hall showed
+  // "Your Town Has Fallen" at the exact moment you won.
+  if(b.isCore && isMine(b)){
     endGame(false);
   }
   updateHUD();

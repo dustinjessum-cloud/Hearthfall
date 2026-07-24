@@ -588,14 +588,35 @@ window.addEventListener('DOMContentLoaded', ()=>{
     });
   }
 
-  document.getElementById('raidBtn').addEventListener('click', callRaidNow);
-  document.getElementById('recallBtn').addEventListener('click', toggleRecall);
-  document.getElementById('ringBtn').addEventListener('click', toggleRangeRings);
-  document.getElementById('pauseBtn').addEventListener('click', togglePause);
-  const sbBtn = document.getElementById('sandboxBtn');
-  if(sbBtn) sbBtn.addEventListener('click', toggleSandbox);
-  const skBtn = document.getElementById('skipBtn');
-  if(skBtn) skBtn.addEventListener('click', skipToCorridor);
+  // Bind by NAME and resolve at click time, not at bind time.
+  //
+  // `addEventListener('click', someUndefinedFn)` binds nothing and throws
+  // nothing — you get a button that silently does absolutely nothing, with
+  // no way to tell a dead handler from a broken feature. That is exactly how
+  // the Sandbox and Skip buttons presented when a browser served a cached
+  // js/ui.js from before those functions existed: the markup was current, so
+  // the buttons appeared and looked fine, and every click went nowhere.
+  // Resolving late turns that into a specific, actionable console error.
+  const bindBtn = (id, fnName)=>{
+    const el = document.getElementById(id);
+    if(!el){ console.error(`HUD button #${id} is missing from the page.`); return; }
+    el.addEventListener('click', (ev)=>{
+      const fn = window[fnName];
+      if(typeof fn !== 'function'){
+        console.error(
+          `#${id} did nothing: ${fnName}() is not loaded. This is almost always a ` +
+          `stale cached script — hard-reload the page (Ctrl+F5 / Cmd+Shift+R).`);
+        return;
+      }
+      fn(ev);
+    });
+  };
+  bindBtn('raidBtn',    'callRaidNow');
+  bindBtn('recallBtn',  'toggleRecall');
+  bindBtn('ringBtn',    'toggleRangeRings');
+  bindBtn('pauseBtn',   'togglePause');
+  bindBtn('sandboxBtn', 'toggleSandbox');
+  bindBtn('skipBtn',    'skipToCorridor');
   const hintCloseBtn = document.getElementById('hintClose');
   if(hintCloseBtn){
     hintCloseBtn.addEventListener('click', ()=>{

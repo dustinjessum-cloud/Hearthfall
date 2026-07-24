@@ -46,7 +46,7 @@ function exitTower(u){
 // from updateHUD, which fires on every garrison change and economy tick.
 function updateTowerGarrisonMarkers(){
   if(!scene || !scene.add) return;
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(b.type!=='tower' || b.hp<=0){
       if(b.garrisonMarker){ b.garrisonMarker.destroy(); b.garrisonMarker = null; }
       continue;
@@ -188,7 +188,7 @@ function builderPresent(u, b){
 const BUILDER_CHAIN_RADIUS = 12;
 function nearestUnbuiltFoundation(u, radius){
   let best = null, bd = Infinity;
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(!underConstruction(b) || b.hp<=0) continue;
     if(assignedBuilder(b)) continue; // someone's already on it (or walking over)
     const d = Phaser.Math.Distance.Between(u.gx, u.gy, b.gx, b.gy);
@@ -198,7 +198,7 @@ function nearestUnbuiltFoundation(u, radius){
 }
 
 function updateConstruction(delta){
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(underConstruction(b) && !b.awaitingBuilder){
       const builder = state.faction==='swarm' ? null : assignedBuilder(b);
       const ready = state.faction==='swarm' || builderPresent(builder, b);
@@ -298,13 +298,13 @@ const GOLD_BUY_AMT = 10;
 const CARAVAN_EVERY_MS = [240000, 360000]; // 4-6 min between visits
 const CARAVAN_STAY_MS = 45000;
 function caravanActive(){ return state.caravanActiveMs > 0; }
-function hasBuilding(type){ return state.buildings.some(b=>b.type===type && b.hp>0 && !(b.buildMs>0)); }
+function hasBuilding(type){ return myBuildings().some(b=>b.type===type && b.hp>0 && !(b.buildMs>0)); }
 
 // The caravan is a real wagon on the map: it rolls in from the map edge,
 // parks beside the market while the deals last, then rolls away again.
 function spawnCaravanVisual(){
   if(!scene || !scene.add) return;
-  const market = state.buildings.find(b=>b.type==='market' && b.hp>0);
+  const market = myBuildings().find(b=>b.type==='market' && b.hp>0);
   if(!market) return;
   if(state.caravan && state.caravan.sprite) state.caravan.sprite.destroy();
   const {gx, gy} = edgeSpawnPoint();
@@ -404,8 +404,8 @@ function updateCorpses(delta){
 
 function computeHappiness(){
   let h = 70;
-  const wells = state.buildings.filter(b=>b.type==='well' && b.hp>0 && !underConstruction(b)).length;
-  const taverns = state.buildings.filter(b=>b.type==='tavern' && b.hp>0 && !underConstruction(b)).length;
+  const wells = myBuildings().filter(b=>b.type==='well' && b.hp>0 && !underConstruction(b)).length;
+  const taverns = myBuildings().filter(b=>b.type==='tavern' && b.hp>0 && !underConstruction(b)).length;
   h += Math.min(wells, 3) * 5;    // up to +15
   h += Math.min(taverns, 2) * 10; // up to +20
   h += Math.min(state.burialBoost || 0, CORPSE.buryHappyCap); // the honored dead — recent burials
@@ -438,7 +438,7 @@ function storageCapFor(key){
   // Town Hall levels raise the base cap for every resource
   const lvl = tcLevel();
   for(let i=0; i<lvl-1; i++) cap += TC_LEVELS.storageBonus[i];
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(b.hp<=0 || underConstruction(b)) continue;
     const lvl = (b.level||1) - 1;
     if(b.type==='granary' && (key==='food'||key==='wheat'||key==='flour')) cap += STORAGE_LEVELS.granary.bonus[lvl];
@@ -595,13 +595,14 @@ function completeTownCenterUpgrade(th){
 // Buildings
 // ---------------------------------------------------------------------
 let buildingIdCounter = 1;
-function createBuilding(type, gx, gy, override){
+function createBuilding(type, gx, gy, override, owner){
   const def = override || BUILD_DEFS[type];
   const size = def.size || 1; // the Town Center is 2x2; everything else 1x1
   const b = {
     id: buildingIdCounter++,
     type, gx, gy, size, hp: def.hp, maxHp: def.hp,
     frame: def.frame, isCore: false,
+    owner: owner || OWNER_PLAYER,   // see the ownership helpers in state.js
     lastAttackAt: 0,
   };
   if(STORAGE_LEVELS[type]) b.level = 1;
@@ -1120,7 +1121,7 @@ function autoAssignIdleVillagers(){
   // Swarm is simpler: its drone dissolves into the structure the instant
   // it arrives, so "no living builder" is the NORMAL state mid-construction
   // — only truly-unstarted (awaitingBuilder) growths need a fresh drone.
-  const unbuilt = state.buildings.filter(b=>{
+  const unbuilt = myBuildings().filter(b=>{
     if(!underConstruction(b) || b.hp<=0) return false;
     if(state.faction==='swarm') return b.awaitingBuilder;
     return !assignedBuilder(b);
@@ -1132,7 +1133,7 @@ function autoAssignIdleVillagers(){
     builder.tx = b.gx; builder.ty = b.gy; builder.moving = true;
   }
 
-  const needy = state.buildings.filter(b=> BUILD_DEFS[b.type] && BUILD_DEFS[b.type].needsWorker
+  const needy = myBuildings().filter(b=> BUILD_DEFS[b.type] && BUILD_DEFS[b.type].needsWorker
     && !(b.buildMs>0) && workersOf(b).length < workerCapOf(b));
   for(const b of needy){
     while(workersOf(b).length < workerCapOf(b)){
@@ -1238,7 +1239,7 @@ function economyTick(){
   const hm = state.happiness / 100; // output multiplier
 
   // farms grow WHEAT now (production chain) — output scaled by happiness
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(b.type!=='farm' || b.hp<=0 || underConstruction(b)) continue;
     const worker = assignedWorkerOf(b);
     if(!worker || recalled) continue;
@@ -1264,7 +1265,7 @@ function economyTick(){
   // MILLS: grind wheat into flour 1:1 (needs a worker at the millstone)
   let wheat = state.resources.wheat;
   if(wheat > 0.5){
-    for(const m of state.buildings){
+    for(const m of myBuildings()){
       if(m.type!=='mill' || m.hp<=0 || wheat<=0) continue;
       if(!staffedAndWorking(m)) continue;
       const flourRoom = Math.max(0, storageCapFor('flour') - state.resources.flour);
@@ -1278,7 +1279,7 @@ function economyTick(){
 
   // BAKERIES: bake flour into food at 1.5x (needs a worker at the oven)
   if(state.resources.flour > 0.5 && state.resources.food < storageCapFor('food')){
-    for(const bk of state.buildings){
+    for(const bk of myBuildings()){
       if(bk.type!=='bakery' || bk.hp<=0 || state.resources.flour<=0) continue;
       if(!staffedAndWorking(bk)) continue;
       const foodRoom = Math.max(0, storageCapFor('food') - state.resources.food);
@@ -1303,11 +1304,11 @@ function economyTick(){
   state.resources.wheat = wheat;
 
   // taxes: every standing house pays a trickle of gold, scaled by happiness
-  const houses = state.buildings.filter(b=>b.type==='house' && b.hp>0 && !underConstruction(b)).length;
+  const houses = myBuildings().filter(b=>b.type==='house' && b.hp>0 && !underConstruction(b)).length;
   if(houses > 0) state.resources.gold += houses * TAX_GOLD_PER_HOUSE * hm;
 
   // apothecaries: any wounded unit within the herb garden slowly mends
-  for(const ap of state.buildings){
+  for(const ap of myBuildings()){
     if(ap.type!=='apothecary' || ap.hp<=0 || underConstruction(ap)) continue;
     for(const u of state.units){
       if(u.hp<=0 || u.hp>=u.maxHp) continue;
@@ -1334,7 +1335,7 @@ function economyTick(){
   // weathers instead — decay until you restock.
   const upkeepKey = state.faction==='swarm' ? 'food' : 'wood';
   const upkeepRate = state.faction==='swarm' ? SWARM.upkeepPerBuildingPerTick : UPKEEP.woodPerBuildingPerTick;
-  const structures = state.buildings.filter(b=>b.hp>0 && !b.isCore);
+  const structures = myBuildings().filter(b=>b.hp>0 && !b.isCore);
   const upkeepNeeded = structures.length * upkeepRate;
   if(upkeepNeeded > 0){
     if(state.resources[upkeepKey] >= upkeepNeeded){
@@ -1384,7 +1385,7 @@ function trainVillager(th){
 }
 
 function updateProduction(delta){
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(!b.production || b.hp<=0) continue;
     b.production.remainingMs -= delta;
     if(b.production.remainingMs > 0) continue;

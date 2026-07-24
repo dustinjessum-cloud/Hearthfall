@@ -163,7 +163,7 @@ const ENEMY_AGGRO_RANGE = 6;
 function findNearbyThreat(e){
   if(e.kind==='ram' || e.kind==='pillager') return null; // single-minded — buildings only
   let best=null, bestD=Infinity;
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(b.type!=='tower' || b.hp<=0) continue;
     const d = Phaser.Math.Distance.Between(e.gx,e.gy,b.gx,b.gy);
     if(d<=ENEMY_AGGRO_RANGE && d<bestD){ bestD=d; best=b; }
@@ -182,7 +182,7 @@ function findNearbyThreat(e){
 const PILLAGE_TARGETS = { farm:1, lumber_camp:1, quarry:1, mill:1, bakery:1, market:1, granary:1, warehouse:1, wildstone_refinery:1 };
 function nearestEconomyBuilding(e){
   let best=null, bestD=Infinity;
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(b.hp<=0 || !PILLAGE_TARGETS[b.type]) continue;
     const d = Phaser.Math.Distance.Between(e.gx, e.gy, b.gx, b.gy);
     if(d<bestD){ bestD=d; best=b; }
@@ -217,7 +217,7 @@ function repathEnemy(e){
     // truly unreachable (terrain-sealed) — camp on the nearest building
     e.path = null;
     let best=null, bestD=Infinity;
-    for(const b of state.buildings){
+    for(const b of myBuildings()){
       const d = Phaser.Math.Distance.Between(e.gx,e.gy,b.gx,b.gy);
       if(d<bestD){ bestD=d; best=b; }
     }
@@ -284,7 +284,7 @@ function rangedFireTarget(e){
   }
   if(best) return best;
   let bb=null, bd=ENEMY_RANGED.range;
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(b.hp<=0) continue;
     const d = Phaser.Math.Distance.Between(e.gx, e.gy, b.gx, b.gy);
     if(d <= bd){ bd = d; bb = b; }
@@ -486,7 +486,7 @@ function updateEnemies(delta){
 // ---------------------------------------------------------------------
 function updateCombat(delta, time){
   const attackers = [];
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     const def = BUILD_DEFS[b.type];
     if(underConstruction(b)) continue;
     if(def && def.attack){

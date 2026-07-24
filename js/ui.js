@@ -186,7 +186,7 @@ function clearRallyPoint(b){
 // flags are private: you only see a building's rally flag while that
 // building is selected
 function refreshRallyMarkers(){
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(!b.rallyMarker) continue;
     const shown = !!(state.selected && state.selected.type==='building' && state.selected.ref===b);
     b.rallyMarker.setVisible(shown);

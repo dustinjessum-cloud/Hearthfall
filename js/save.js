@@ -17,8 +17,16 @@ const SAVE_INTERVAL_MS = 20000;
 // are recreated from live state on restore, so drop them here too.
 const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker', 'garrisonMarker', 'queueMarkers']);
 
+// Bump when a change makes older saves unloadable rather than merely
+// out-of-date. Additive fields (a new building property, say) do NOT need a
+// bump — restore overlays them onto freshly created objects, so anything
+// missing keeps its default.
+const SAVE_VERSION = 1;
+
+// A save is only offered if it can actually be restored, so the "Continue
+// Your Game" button can't appear for one this build would choke on.
 function hasSavedGame(){
-  try { return !!localStorage.getItem(SAVE_KEY); } catch(err){ return false; }
+  return loadSavedGame() !== null;
 }
 
 function clearSavedGame(){
@@ -28,7 +36,31 @@ function clearSavedGame(){
 function loadSavedGame(){
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if(!raw) return null;
+    const snap = JSON.parse(raw);
+    // version has been WRITTEN into every save since the beginning but never
+    // READ, so nothing stopped a save from an incompatible build being
+    // restored onto a mismatched world.
+    // Explicit undefined/null test, NOT `snap.version || 1` — version 0 is
+    // falsy, so that form quietly reads a v0 save as "legacy, assume 1" and
+    // waves it straight through the check meant to stop it.
+    const ver = (snap.version === undefined || snap.version === null) ? 1 : snap.version;
+    if(ver !== SAVE_VERSION){
+      console.warn(`Save is version ${snap.version}, this build reads ${SAVE_VERSION} — discarding.`);
+      clearSavedGame();
+      return null;
+    }
+    // Belt and braces on the dimension that actually corrupts: the grid is
+    // stored as raw [y][x] arrays, so restoring a 44-wide save into a wider
+    // world leaves every tile past column 44 undefined — a silently broken
+    // map rather than an honest "this save is too old". Checked explicitly
+    // instead of relying on remembering to bump the version.
+    if(snap.mapW !== undefined && (snap.mapW !== MAP_W || snap.mapH !== MAP_H)){
+      console.warn(`Save is ${snap.mapW}x${snap.mapH}, this build is ${MAP_W}x${MAP_H} — discarding.`);
+      clearSavedGame();
+      return null;
+    }
+    return snap;
   } catch(err){
     console.error('Save data unreadable, discarding:', err);
     clearSavedGame();
@@ -38,7 +70,8 @@ function loadSavedGame(){
 
 function serializeGame(){
   return {
-    version: 1,
+    version: SAVE_VERSION,
+    mapW: MAP_W, mapH: MAP_H,   // validated on load — see loadSavedGame
     savedAt: Date.now(),
     faction: state.faction,
     resources: state.resources,

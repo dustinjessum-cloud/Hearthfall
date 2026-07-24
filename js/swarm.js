@@ -128,7 +128,7 @@ function creepSources(){
   const out = [];
   const th = townHall();
   if(th && th.hp > 0) out.push({ gx: th.gx, gy: th.gy, r: SWARM.creep.hiveRadius[(th.level||1)-1] });
-  for(const b of state.buildings){
+  for(const b of myBuildings()){
     if(b.type === 'creep_tumor' && b.hp > 0 && !underConstruction(b)) out.push({ gx: b.gx, gy: b.gy, r: SWARM.creep.tumorGenRadius[b.creepGen||0] });
   }
   return out;
@@ -186,7 +186,7 @@ function updateTumorSpread(delta){
   // to spread again in the same pass, which could otherwise cascade an
   // entire generation chain in one large tick (e.g. after a backgrounded
   // tab resumes with a big delta) instead of one generation per tick
-  for(const b of [...state.buildings]){
+  for(const b of myBuildings()){
     if(b.type!=='creep_tumor' || b.hp<=0 || underConstruction(b) || b.spreadDone) continue;
     b.spreadAgeMs = (b.spreadAgeMs||0) + delta;
     if(b.spreadAgeMs >= SWARM.creep.tumorSpreadDelayMs) trySpreadTumor(b);

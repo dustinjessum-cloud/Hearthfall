@@ -1,4 +1,38 @@
-function townHall(){ return state.buildings.find(b=>b.isCore) || null; }
+// ---------------------------------------------------------------------
+// Building ownership
+//
+// state.buildings holds EVERY structure on the map, yours and the enemy
+// town's alike, because occupancy and pathing have to see all of them —
+// their wall blocks your villager exactly like your own does.
+//
+// Almost nothing else wants that. Your economy tick, storage caps,
+// population, happiness and build bar must count only what you own, or
+// the enemy's granary silently raises your food cap and their houses
+// raise your population. So ownership is stamped at creation and every
+// consumer goes through one of these helpers rather than touching
+// state.buildings directly. Reaching for the raw array is the bug.
+//
+// Buildings default to 'player': every existing call site created a
+// player building, so an un-migrated one keeps working rather than
+// quietly becoming neutral.
+const OWNER_PLAYER = 'player';
+const OWNER_AI = 'ai';
+
+function buildingsOf(owner){
+  const list = [];
+  for(const b of state.buildings) if((b.owner || OWNER_PLAYER) === owner) list.push(b);
+  return list;
+}
+function myBuildings(){ return buildingsOf(OWNER_PLAYER); }
+function aiBuildings(){ return buildingsOf(OWNER_AI); }
+function isMine(b){ return !!b && (b.owner || OWNER_PLAYER) === OWNER_PLAYER; }
+function isEnemyBuilding(b){ return !!b && b.owner === OWNER_AI; }
+
+// The player's own Town Hall. The enemy core is found via aiTownHall() so
+// the two can never be confused — losing yours ends the run, razing theirs
+// wins it, and a mixed-up lookup would invert both.
+function townHall(){ return state.buildings.find(b=>b.isCore && isMine(b)) || null; }
+function aiTownHall(){ return state.buildings.find(b=>b.isCore && isEnemyBuilding(b)) || null; }
 function tcLevel(){ const th = townHall(); return th ? (th.level||1) : 1; }
 
 

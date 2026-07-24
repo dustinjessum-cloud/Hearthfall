@@ -98,6 +98,16 @@ class MainScene extends Phaser.Scene {
 
       // bandit camps take root on the frontier from day one
       spawnBanditCamps();
+
+      // The enemy town is built at world creation, not when the pass opens —
+      // it is meant to have been there all along, and the veil is what keeps
+      // you from reading its layout before you can reach it.
+      generateAiTown();
+      spawnAiGarrison();
+      // Arm the victory check ONLY if their core actually stands. Setting it
+      // unconditionally means a town that failed to place its core reads as
+      // "already razed" and wins the run on the first frame.
+      state.aiTownSpawned = !!aiTownHall();
     }
 
     this.cameras.main.setBounds(0,0, MAP_W*TILE, MAP_H*TILE);
@@ -439,6 +449,7 @@ class MainScene extends Phaser.Scene {
     updateEnemyProjectiles(delta);
     updateCombat(delta, time);
 
+    checkAiDefeated();      // razing their core wins the run
     updateSelectionRings(); // range/aura rings follow the selection as it moves
     if(state.selected || (state.selectedGroup && state.selectedGroup.length)) refreshInfoPanel();
 

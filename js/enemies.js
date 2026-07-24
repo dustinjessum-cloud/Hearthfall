@@ -153,6 +153,7 @@ function spawnEnemy(hp, dmg, wave, kind, at, opts){
   e.hpBarFg = scene.add.rectangle(gx*TILE+4, gy*TILE-2, TILE-8, 4, 0xd85a3a).setOrigin(0,0.5).setDepth(6);
   state.enemies.push(e);
   repathEnemy(e);
+  return e;
 }
 
 function isBlocked(gx,gy, ignoreBuildings){
@@ -369,7 +370,13 @@ function updateEnemies(delta){
         continue; // held position and fired — no advance, no melee
       }
     }
-    if(e.path && e.pathIdx < e.path.length){
+    if(e.homeGuard){
+      // The enemy town's standing defenders hold their posts. Without this
+      // they would path at YOUR Town Hall the moment the world loads and
+      // pile up against a sealed pass forever. They still fall through to
+      // the attack logic below, so they fight whatever comes to them.
+      e.path = null;
+    } else if(e.path && e.pathIdx < e.path.length){
       const node = e.path[e.pathIdx];
       // something (probably a wall) stands on the next step of the route —
       // stop and bash it down before continuing the march
@@ -414,7 +421,9 @@ function updateEnemies(delta){
       const adj = [[1,0],[-1,0],[0,1],[0,-1]];
       for(const [dx,dy] of adj){
         const b = occAt(Math.round(e.gx)+dx, Math.round(e.gy)+dy);
-        if(b && b.hp>0){ target = b; break; }
+        // isMine: the enemy town's own walls and towers are adjacent to its
+        // garrison constantly — without this they would besiege themselves
+        if(b && b.hp>0 && isMine(b)){ target = b; break; }
       }
     }
     if(!target && e.kind!=='ram'){
@@ -529,16 +538,47 @@ function updateCombat(delta, time){
     else if(u.type==='swordsman') attackers.push({ent:u, atk:SWORDSMAN_ATTACK, gx:u.gx, gy:u.gy, melee:true, soldier:true});
     // the Minotaur attacks only via his manual javelin (J) and slash (K)
   }
+
+  // The enemy town's towers shoot back. Without this, razing it is a
+  // demolition job with no risk attached.
+  for(const b of aiBuildings()){
+    if(b.hp<=0 || underConstruction(b)) continue;
+    const def = AI_BUILD_DEFS[b.aiType || b.type];
+    if(!def || !def.attack) continue;
+    b.lastAttackAt = (b.lastAttackAt || 0) + delta;
+    if(b.lastAttackAt < def.attack.cooldownMs) continue;
+    let best=null, bestD=Infinity;
+    for(const u of state.units){
+      if(u.hp<=0 || u.inTC || u.inTowerId) continue;
+      const d = Phaser.Math.Distance.Between(b.gx, b.gy, u.gx, u.gy);
+      if(d <= def.attack.range && d < bestD){ bestD = d; best = u; }
+    }
+    if(best){
+      b.lastAttackAt = 0;
+      fireProjectile(b.gx, b.gy, best);
+      damageUnit(best, def.attack.damage);
+    }
+  }
   // the Captain's banner: soldiers within his aura strike 25% harder
   const captain = livingCaptain();
   for(const a of attackers){
     a.ent.lastAttackAt += delta;
     if(a.ent.lastAttackAt < a.atk.cooldownMs) continue;
-    let best=null, bestD=Infinity;
+    let best=null, bestD=Infinity, bestIsBuilding=false;
     for(const e of state.enemies){
       if(e.hp<=0) continue;
       const d = Phaser.Math.Distance.Between(a.gx,a.gy,e.gx,e.gy);
-      if(d<=a.atk.range && d<bestD){ bestD=d; best=e; }
+      if(d<=a.atk.range && d<bestD){ bestD=d; best=e; bestIsBuilding=false; }
+    }
+    // The enemy town's structures are legitimate targets too — they live in
+    // state.buildings rather than state.enemies, so the loop above cannot
+    // see them and an army would walk into their base swinging at nothing.
+    // Live enemies still win ties: something shooting you matters more than
+    // the wall behind it.
+    for(const b of aiBuildings()){
+      if(b.hp<=0) continue;
+      const d = Phaser.Math.Distance.Between(a.gx,a.gy,b.gx,b.gy);
+      if(d<=a.atk.range && d<bestD){ bestD=d; best=b; bestIsBuilding=true; }
     }
     if(best){
       a.ent.lastAttackAt = 0;
@@ -556,6 +596,9 @@ function updateCombat(delta, time){
       if(a.soldier && captain && Phaser.Math.Distance.Between(captain.gx, captain.gy, a.gx, a.gy) <= CAPTAIN.auraRange){
         dmg = Math.round(dmg * CAPTAIN.auraMult);
       }
+      // buildings go through damageBuilding so their HP bar updates and
+      // removal (occupancy, rally flags, garrison eviction) actually runs
+      if(bestIsBuilding){ damageBuilding(best, dmg); continue; }
       best.hp -= dmg;
       best.lastHitBy = 'other';
     }

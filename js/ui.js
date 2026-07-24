@@ -714,7 +714,19 @@ function refreshInfoPanel(){
 
   if(panel._boundRef !== ref){
     panel._boundRef = ref;
-    if(type==='building'){
+    if(type==='building' && isEnemyBuilding(ref)){
+      // Enemy structures get a plain readout — no train/upgrade/salvage
+      // buttons, because every one of those acts on a building it assumes
+      // you own. BUILD_DEFS has no ai_ types either, so the normal panel
+      // would render an untitled shell of dead controls.
+      const adef = AI_BUILD_DEFS[ref.aiType || ref.type] || {name:'Enemy Structure'};
+      panel.innerHTML = `<h3 style="color:#ff8a6b;">${adef.name}</h3>
+        <div>HP: <span id="infoHpText"></span></div>
+        <div class="hpbar"><div class="hpfill" id="infoHpFill"></div></div>
+        <div style="margin-top:6px;color:#d8c79a;">${ref.isCore
+          ? 'Their seat of power. Raze it to win the war.'
+          : 'Enemy holding — right-click it with soldiers to attack.'}</div>`;
+    } else if(type==='building'){
       const def = BUILD_DEFS[ref.type] || {name:'Town Hall'};
       panel.innerHTML = `<h3>${def.name}</h3>
         <div>HP: <span id="infoHpText"></span></div>

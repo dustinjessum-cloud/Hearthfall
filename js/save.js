@@ -84,6 +84,8 @@ function serializeGame(){
     wave: state.wave,
     nextWaveInMs: state.nextWaveInMs,
     corridorOpen: state.corridorOpen,
+    aiTownSpawned: state.aiTownSpawned,
+    aiTownCenter: state.aiTownCenter,
     nextSkirmishInMs: state.nextSkirmishInMs,
     nextCaravanInMs: state.nextCaravanInMs,
     caravanActiveMs: state.caravanActiveMs,
@@ -183,6 +185,10 @@ function restoreGame(snapshot){
   state.happiness = snapshot.happiness;
   state.wave = snapshot.wave;
   state.nextWaveInMs = snapshot.nextWaveInMs;
+  // must be restored or checkAiDefeated would declare victory on load, when
+  // aiTownHall() is momentarily null before the buildings are rebuilt
+  state.aiTownSpawned = !!snapshot.aiTownSpawned;
+  state.aiTownCenter = snapshot.aiTownCenter || null;
   state.nextSkirmishInMs = snapshot.nextSkirmishInMs;
   state.nextCaravanInMs = snapshot.nextCaravanInMs;
   state.caravanActiveMs = snapshot.caravanActiveMs || 0;
@@ -204,13 +210,20 @@ function restoreGame(snapshot){
 
   // ---- buildings ----
   for(const sb of snapshot.buildings){
-    const override = sb.isCore
-      ? (state.faction==='swarm'
-          ? {name:'Necropolis', hp:sb.maxHp, frame:'crypt', size:sb.size||2}
-          : {name:'Town Hall', hp:sb.maxHp, frame:'town_hall', size:sb.size||2})
-      : Object.assign({}, BUILD_DEFS[sb.type], {hp: sb.maxHp});
-    if(!override.frame){ console.error('Skipping unknown building type on restore:', sb.type); continue; }
-    const b = createBuilding(sb.type, sb.gx, sb.gy, override);
+    // The enemy town's types live in AI_BUILD_DEFS, not BUILD_DEFS — looked
+    // up first, and BEFORE the isCore branch, because THEIR core is isCore
+    // too and would otherwise be rebuilt as a second copy of your own Town
+    // Hall. Ownership decides which roster to read.
+    const aiOwned = sb.owner === OWNER_AI;
+    const override = aiOwned
+      ? Object.assign({}, aiDef(sb.aiType || sb.type), {hp: sb.maxHp})
+      : (sb.isCore
+        ? (state.faction==='swarm'
+            ? {name:'Necropolis', hp:sb.maxHp, frame:'crypt', size:sb.size||2}
+            : {name:'Town Hall', hp:sb.maxHp, frame:'town_hall', size:sb.size||2})
+        : Object.assign({}, BUILD_DEFS[sb.type], {hp: sb.maxHp}));
+    if(!override || !override.frame){ console.error('Skipping unknown building type on restore:', sb.type); continue; }
+    const b = createBuilding(sb.type, sb.gx, sb.gy, override, sb.owner || OWNER_PLAYER);
     Object.assign(b, sb); // overlay every saved field (sprite/hpBar refs are absent from sb, so the live ones survive)
     if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(underConstruction(b) ? (b.awaitingBuilder ? 0.3 : 0.55) : 1);
     refreshEvolution(b);

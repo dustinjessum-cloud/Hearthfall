@@ -32,6 +32,69 @@ const FRAME = {
 // frame while still reading as its own thing.
 const TILE_TINT = { sealed_pass: 0x5d6472 };
 
+// ---------------------------------------------------------------------
+// The enemy town
+//
+// A PRIVATE roster. applyFaction() destructively rewrites BUILD_DEFS — it
+// reassigns entries, splices BUILD_CATEGORIES and deletes cost keys — for
+// whichever faction YOU picked, so exactly one player roster can exist in
+// memory at a time. The enemy is always the OPPOSITE race, so it cannot
+// share that table; it needs its own.
+//
+// Field names deliberately mirror BUILD_DEFS: cost, hp, size, popCap,
+// produces, trains, attack and blocksPath all mean precisely what they mean
+// there. That is what makes this extensible — adding `popCap` to an entry
+// changes AI behaviour with no AI code change, because the think-loop reads
+// capabilities off these fields rather than switching on type. A building
+// can also be promoted to player-buildable by copying the entry across.
+//
+// `frames` carries both skins so one entry serves either race. Costs are
+// already here even though nothing spends them yet — Phase 3's economy
+// reads them, and putting them in now means no schema change then.
+const AI_BUILD_DEFS = {
+  // isCore is what aiTownHall() looks for, and razing it is the win
+  // condition — without the flag the lookup returns null and the victory
+  // check fires on frame one, before you have seen the enemy town at all
+  ai_core:     { name:'Enemy Town Hall',   hp:600, size:2, blocksPath:true, popCap:8,
+                 isCore:true, cost:{}, trains:'ai_worker',
+                 frames:{ human:'town_hall',   undead:'crypt' } },
+  ai_house:    { name:'Enemy Dwelling',    hp:60,  popCap:4,
+                 cost:{wood:20},
+                 frames:{ human:'house',       undead:'headstone' } },
+  ai_farm:     { name:'Enemy Farm',        hp:50,  produces:{food:4}, needsWorker:true,
+                 cost:{wood:15},
+                 frames:{ human:'farm',        undead:'lumber_camp' } },
+  ai_lumber:   { name:'Enemy Lumber Camp', hp:50,  produces:{wood:4}, needsWorker:true, bonusNear:'forest',
+                 cost:{wood:15},
+                 frames:{ human:'lumber_camp', undead:'lumber_camp' } },
+  ai_quarry:   { name:'Enemy Quarry',      hp:60,  produces:{stone:3}, needsWorker:true, bonusNear:'stone_deposit',
+                 cost:{wood:20,stone:10},
+                 frames:{ human:'quarry',      undead:'quarry' } },
+  ai_barracks: { name:'Enemy Barracks',    hp:100, trains:'ai_soldier',
+                 cost:{wood:35},
+                 frames:{ human:'barracks',    undead:'graveyard' } },
+  ai_tower:    { name:'Enemy Tower',       hp:150, blocksPath:true, garrison:true,
+                 cost:{wood:10,stone:25},
+                 attack:{ range:4.2, damage:7, cooldownMs:900 },
+                 frames:{ human:'tower',       undead:'bone_spire' } },
+  ai_wall:     { name:'Enemy Wall',        hp:120, blocksPath:true,
+                 cost:{stone:5},
+                 frames:{ human:'wall',        undead:'wall' } },
+};
+
+// The enemy town is always the opposite race. state.faction is the PLAYER's
+// ('human' or 'swarm'); this is the skin the enemy wears.
+function aiTownRace(){ return state.faction === 'swarm' ? 'human' : 'undead'; }
+
+function aiDef(type){
+  const d = AI_BUILD_DEFS[type];
+  if(!d) return null;
+  // resolve the per-race sprite into a plain `frame`, so the returned object
+  // is shaped exactly like a BUILD_DEFS entry and createBuilding needs no
+  // special case for AI structures
+  return Object.assign({}, d, { frame: d.frames[aiTownRace()] || d.frames.human });
+}
+
 const TILE = 32;
 // The world is five vertical bands. Your town and the enemy town are the
 // same size; the neutral middle is the prize both sides expand into. The

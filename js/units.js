@@ -428,6 +428,13 @@ function commandUnitMove(u, gx, gy){
 // single tile happens to be occupied by a groupmate.
 function resolveBuildingOrder(u, gx, gy){
   const bAt = occAt(gx, gy);
+  // An ENEMY structure is a target, never a job. Checked before anything
+  // else because every branch below assumes the building is yours — without
+  // it, right-clicking their Town Hall reads as `isCore` and orders your
+  // villager to walk across the map and garrison inside it.
+  if(bAt && isEnemyBuilding(bAt) && bAt.hp>0){
+    return {kind:'attackBuilding', buildingId: bAt.id};
+  }
   if(u.type==='villager'){
     if(bAt && bAt.isCore) return {kind:'garrisonTC'};
     if(bAt && bAt.hp>0 && underConstruction(bAt) && (bAt.awaitingBuilder || state.faction!=='swarm')){
@@ -492,6 +499,18 @@ function executeOrder(u, order){
     if(!b || b.hp<=0 || b.hp>=b.maxHp) return;
     u.repairTargetId = b.id;
     flashWaveBanner('Repairman heads to the damage.');
+  } else if(order.kind==='attackBuilding'){
+    // March on an enemy structure. There is no dedicated "attacking" state:
+    // walk adjacent and the normal auto-attack in updateCombat, which now
+    // sees AI buildings, does the rest. Villagers get sent too — they cannot
+    // hurt it, but refusing the order silently would just look broken.
+    const b = buildingById(order.buildingId);
+    if(!b || b.hp<=0 || !isEnemyBuilding(b)) return;
+    if(u.inTowerId) exitTower(u);
+    if(u.type==='villager') unassignVillager(u);
+    const spot = findFreeSpotNear(b.gx, b.gy, 2) || {gx:b.gx, gy:b.gy};
+    commandUnitMove(u, spot.gx, spot.gy);
+    u.playerOrder = true;
   } else if(order.kind==='garrisonTower'){
     const b = buildingById(order.buildingId);
     if(!b || b.hp<=0 || b.type!=='tower') return;

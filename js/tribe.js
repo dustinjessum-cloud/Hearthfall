@@ -28,28 +28,28 @@ function applyTribeFaction(){
   // Hunting Camp replaces the farm. bonusNear:'forest' is the whole design
   // difference in one field — food now comes from the treeline, not from
   // open ground, so food and timber compete for the same territory.
-  BUILD_DEFS.farm        = { name:'Hunting Camp', cost:{wood:15}, hp:50, frame:'tribe_hut',
-                             tint:0xb08858, produces:{food:5}, needsWorker:true, bonusNear:'forest' };
+  BUILD_DEFS.farm        = { name:'Hunting Camp', cost:{wood:15}, hp:50, frame:'tribe_hunt',
+                             produces:{food:5}, needsWorker:true, bonusNear:'forest' };
 
-  BUILD_DEFS.lumber_camp = { name:'Timber Fell', cost:{wood:15}, hp:50, frame:'lumber_camp',
-                             tint:0xc0a070, produces:{wood:4}, needsWorker:true, bonusNear:'forest' };
-  BUILD_DEFS.quarry      = { name:'Stone Pit', cost:{wood:20, stone:10}, hp:60, frame:'quarry',
-                             tint:0xc0a070, produces:{stone:3}, needsWorker:true, bonusNear:'stone_deposit' };
-  BUILD_DEFS.barracks    = { name:'War Lodge', cost:{wood:35}, hp:100, frame:'tribe_lodge',
-                             tint:0xd8b088, trains:'archer' };
+  BUILD_DEFS.lumber_camp = { name:'Timber Fell', cost:{wood:15}, hp:50, frame:'tribe_timber',
+                             produces:{wood:4}, needsWorker:true, bonusNear:'forest' };
+  BUILD_DEFS.quarry      = { name:'Stone Pit', cost:{wood:20, stone:10}, hp:60, frame:'tribe_pit',
+                             produces:{stone:3}, needsWorker:true, bonusNear:'stone_deposit' };
+  BUILD_DEFS.barracks    = { name:'War Lodge', cost:{wood:35}, hp:100, frame:'tribe_warlodge',
+                             trains:'archer' };
   BUILD_DEFS.tower       = { name:'Watch Totem', cost:{wood:14, stone:18}, hp:140, frame:'tribe_totem',
                              blocksPath:true, garrison:true,
                              attack:{ range:4.0, damage:7, damageLow:4, cooldownMs:950 } };
-  BUILD_DEFS.granary     = { name:'Cache', cost:{wood:25}, hp:80, frame:'granary',
-                             tint:0xc0a070, nearTC:true };
-  BUILD_DEFS.warehouse   = { name:'Stockpile', cost:{wood:30}, hp:80, frame:'warehouse',
-                             tint:0xc0a070, nearTC:true };
+  BUILD_DEFS.granary     = { name:'Cache', cost:{wood:25}, hp:80, frame:'tribe_cache',
+                             nearTC:true };
+  BUILD_DEFS.warehouse   = { name:'Stockpile', cost:{wood:30}, hp:80, frame:'tribe_stock',
+                             nearTC:true };
   // its own palisade art — a brown TINT on the masonry wall still read as
   // stone, because the coursing and merlons were still there
   BUILD_DEFS.wall        = { name:'Stake Wall', cost:{wood:6}, hp:100, frame:'stake_wall',
                              blocksPath:true };
-  BUILD_DEFS.gate        = { name:'Stake Gate', cost:{wood:8}, hp:100, frame:'wall_gate',
-                             tint:0xc0a070, blocksPath:true, friendlyPassable:true };
+  BUILD_DEFS.gate        = { name:'Stake Gate', cost:{wood:8}, hp:100, frame:'tribe_gate',
+                             blocksPath:true, friendlyPassable:true };
   BUILD_DEFS.road        = { name:'Trail', cost:{wood:2}, frame:'dirt', tint:0xc4a578, isRoad:true };
 
   BUILD_TIME.farm = 8000;
@@ -161,6 +161,12 @@ function updateSaplings(delta){
     if(s.msLeft <= 0) done.push(s);
   }
   if(!done.length) return;
+  // Drop the matured saplings from the list BEFORE testing the ground.
+  // canPlantAt() refuses a tile that already holds a sapling, so calling it
+  // while these are still listed made every tree fail its OWN check: the
+  // grid was never set to forest, the ghost sprite was destroyed, and the
+  // tree simply disappeared at the moment it finished growing.
+  state.saplings = state.saplings.filter(s => !done.includes(s));
   for(const s of done){
     // the ground may have been built on or corrupted while it grew
     if(canPlantAt(s.gx, s.gy)){
@@ -172,7 +178,6 @@ function updateSaplings(delta){
     }
     if(s.sprite) s.sprite.destroy();
   }
-  state.saplings = state.saplings.filter(s => !done.includes(s));
   markMinimapDirty();
 }
 
@@ -311,4 +316,61 @@ function updateSeedGhost(gx, gy){
   scene._seedArea.setRadius(FORESTER.areaRadius * TILE);
   scene._seedArea.setFillStyle(col, 0.18);
   scene._seedArea.setStrokeStyle(2, col, 0.9);
+}
+
+// ---- hunting: work the treeline, do not stand on the hut ---------------
+// The farm harvest requires its worker to be standing ON the building tile.
+// That is right for a human farmer tending a field, and wrong for a hunter:
+// the Hunting Camp draws from FOREST, so the worker should be out among the
+// trees. This lets them count as working while on any forest tile near the
+// camp, and walks them between tiles so the camp reads as a hunting ground
+// rather than someone standing still on a hut.
+const HUNT = {
+  radius: 4,        // how far from the camp a hunter will range
+  moveEveryMs: 5200, // how long they work one spot before moving on
+};
+
+function isHuntCamp(b){
+  const d = BUILD_DEFS[b.type];
+  return !!(state.faction === 'tribe' && b.type === 'farm' && d && d.bonusNear === 'forest');
+}
+
+// True if this worker is close enough to its Hunting Camp, and standing on
+// forest, to count as hunting. Used by the harvest tick in place of the
+// stand-exactly-on-the-building test.
+function huntingInPlace(u, b){
+  if(u.moving) return false;
+  const gx = Math.round(u.gx), gy = Math.round(u.gy);
+  if(Math.max(Math.abs(gx-b.gx), Math.abs(gy-b.gy)) > HUNT.radius) return false;
+  return tileAt(gx, gy) === 'forest' || (gx === b.gx && gy === b.gy);
+}
+
+// Send hunters to a fresh nearby tree every few seconds. Picks randomly
+// among the tiles in range rather than always the closest, so two hunters
+// on one camp do not stack on the same trunk.
+function updateHunters(delta){
+  if(state.faction !== 'tribe') return;
+  for(const u of state.units){
+    if(u.type !== 'villager' || u.hp <= 0 || u.inTC || !u.assignedBuildingId) continue;
+    const b = buildingById(u.assignedBuildingId);
+    if(!b || !isHuntCamp(b) || underConstruction(b)) continue;
+    u.huntMs = (u.huntMs || 0) + delta;
+    if(u.moving || u.huntMs < HUNT.moveEveryMs) continue;
+    u.huntMs = 0;
+    const spots = [];
+    for(let dy = -HUNT.radius; dy <= HUNT.radius; dy++){
+      for(let dx = -HUNT.radius; dx <= HUNT.radius; dx++){
+        const x = b.gx+dx, y = b.gy+dy;
+        if(!inBounds(x, y) || tileAt(x, y) !== 'forest') continue;
+        if((state.resourceQty[y] && state.resourceQty[y][x] || 0) <= 0) continue;
+        if(Math.round(u.gx) === x && Math.round(u.gy) === y) continue;  // already here
+        if(state.units.some(o => o !== u && o.hp > 0 && Math.round(o.gx) === x && Math.round(o.gy) === y)) continue;
+        spots.push({gx:x, gy:y});
+      }
+    }
+    if(!spots.length) continue;   // no trees left in range — stay put
+    const t = spots[Math.floor(Math.random() * spots.length)];
+    commandUnitMove(u, t.gx, t.gy);
+    u.playerOrder = false;        // this is work, not an order to obey
+  }
 }

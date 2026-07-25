@@ -1161,6 +1161,148 @@ POLE_T, POLE_TD = (104, 78, 50), (74, 54, 34)
 TUSK_T = (232, 226, 202)
 WARPAINT = (168, 52, 40)
 
+
+def draw_tribe_hunt(d):
+    # Hunting Camp: a drying rack hung with meat and hides beside a fire pit.
+    # It was reusing the Hide Hut sprite, so food and housing looked identical.
+    MEAT, MEAT_D = (146, 74, 62), (110, 52, 44)
+    FIRE, FIRE_C = (232, 146, 48), (255, 226, 170)
+    draw_grass(d)
+    ground_shadow(d, 3, 29, 29, 3)
+    rect(d, 5, 8, 6, 26, POLE_T);  rect(d, 5, 8, 5, 26, shade(POLE_T, 1.25))
+    rect(d, 24, 8, 25, 26, POLE_T); rect(d, 25, 8, 25, 26, POLE_TD)
+    d.polygon([(4, 8), (6, 5), (7, 8)], fill=POLE_TD)
+    d.polygon([(23, 8), (25, 5), (26, 8)], fill=POLE_TD)
+    rect(d, 4, 8, 26, 9, POLE_TD)
+    for hx in (8, 12, 20):
+        rect(d, hx, 10, hx+1, 17, MEAT); rect(d, hx, 10, hx, 17, shade(MEAT, 1.25))
+        rect(d, hx, 17, hx+1, 17, MEAT_D)
+    rect(d, 15, 10, 18, 18, HIDE_T); rect(d, 15, 10, 15, 18, HIDE_TL)
+    rect(d, 15, 18, 18, 18, HIDE_TD)
+    d.ellipse([11, 22, 21, 28], fill=(62, 54, 44))
+    for sx, sy in ((10,24),(13,22),(18,22),(21,24),(12,27),(19,27)):
+        rect(d, sx, sy, sx+1, sy+1, (108, 104, 98))
+    d.polygon([(14, 27), (16, 22), (18, 27)], fill=FIRE)
+    d.polygon([(15, 27), (16, 24), (17, 27)], fill=FIRE_C)
+
+def draw_tribe_timber(d):
+    # Timber Fell: felled trunks and a stump with an axe in it. The human
+    # lumber camp is a tidy sawhouse; this is a work site.
+    BARK, BARK_D = (98, 74, 46), (70, 52, 32)
+    RING, RING_L = (168, 132, 84), (198, 166, 116)
+    AXE, AXE_L = (108, 104, 98), (156, 152, 146)
+    draw_grass(d)
+    ground_shadow(d, 2, 30, 28, 4)
+    for lx, ly in [(3,20),(11,20),(19,20),(7,13),(15,13)]:
+        d.ellipse([lx, ly, lx+7, ly+7], fill=BARK)
+        d.ellipse([lx+1, ly+1, lx+6, ly+6], fill=RING)
+        d.ellipse([lx+3, ly+3, lx+4, ly+4], fill=RING_L)
+    d.ellipse([21, 6, 29, 13], fill=BARK)
+    d.ellipse([22, 7, 28, 12], fill=RING)
+    d.line([20, 2, 25, 8], fill=POLE_T, width=1)
+    d.polygon([(18, 1), (22, 4), (19, 5)], fill=AXE)
+    d.line([18, 1, 19, 5], fill=AXE_L)
+    scatter(d, 7717, 12, (128, 104, 68))
+
+def draw_tribe_pit(d):
+    # Stone Pit: an open dig with terraced steps and a spoil heap. Reads as a
+    # HOLE, where the human quarry reads as a building.
+    ROCK, ROCK_D, ROCK_L = (120, 116, 110), (86, 83, 78), (156, 152, 146)
+    EARTH, EARTH_D = (112, 92, 68), (82, 66, 48)
+    draw_grass(d)
+    ground_shadow(d, 2, 30, 29, 3)
+    d.ellipse([3, 12, 27, 29], fill=EARTH_D)
+    d.ellipse([5, 14, 25, 27], fill=EARTH)
+    for sx, sy, sw in [(7,22,12),(9,19,8),(11,16,5)]:
+        rect(d, sx, sy, sx+sw, sy+1, shade(EARTH, 0.86))
+    for rx, ry, rw in ((9,23,5),(16,22,6),(13,19,4)):
+        d.ellipse([rx, ry, rx+rw, ry+rw-1], fill=ROCK)
+        d.ellipse([rx, ry, rx+rw-2, ry+rw-3], fill=ROCK_L)
+    d.ellipse([20, 8, 30, 15], fill=ROCK_D)
+    d.ellipse([21, 8, 28, 13], fill=ROCK)
+    d.line([4, 4, 9, 13], fill=POLE_T, width=1)
+    d.polygon([(2, 3), (7, 3), (4, 6)], fill=(96, 92, 88))
+
+def draw_tribe_cache(d):
+    # Cache: baskets on a raised platform, lifted off the ground so it reads
+    # as a store rather than a dwelling.
+    BASK, BASK_D, BASK_L = (176, 142, 88), (134, 106, 62), (204, 174, 118)
+    draw_grass(d)
+    ground_shadow(d, 4, 28, 29, 3)
+    for lx in (7, 22):
+        rect(d, lx, 20, lx+2, 28, POLE_T); rect(d, lx, 20, lx, 28, shade(POLE_T,1.25))
+    rect(d, 4, 17, 27, 20, POLE_TD)
+    rect(d, 4, 17, 27, 17, POLE_T)
+    for bx, by, bw in ((6,9,7),(14,10,7),(21,8,7)):
+        d.ellipse([bx, by, bx+bw, by+8], fill=BASK)
+        d.ellipse([bx, by, bx+bw, by+3], fill=BASK_L)
+        for wy in range(by+3, by+8, 2):
+            rect(d, bx, wy, bx+bw, wy, BASK_D)
+    d.ellipse([12, 20, 20, 26], fill=HIDE_T)
+    rect(d, 12, 22, 20, 22, POLE_TD)
+
+def draw_tribe_stock(d):
+    # Stockpile: logs and rough blocks under a pegged hide sheet.
+    ROCK, ROCK_L = (120, 116, 110), (152, 148, 142)
+    BARK, RING = (98, 74, 46), (168, 132, 84)
+    draw_grass(d)
+    ground_shadow(d, 2, 30, 29, 3)
+    for bx, by in ((3,17),(9,17),(3,22),(9,22),(6,12)):
+        rect(d, bx, by, bx+5, by+4, ROCK)
+        rect(d, bx, by, bx+5, by, ROCK_L)
+        rect(d, bx+5, by, bx+5, by+4, shade(ROCK,0.75))
+    for lx, ly in ((17,18),(24,18),(20,12)):
+        d.ellipse([lx, ly, lx+6, ly+6], fill=BARK)
+        d.ellipse([lx+1, ly+1, lx+5, ly+5], fill=RING)
+    d.polygon([(2, 12), (16, 6), (30, 12), (30, 14), (2, 14)], fill=HIDE_TD)
+    d.polygon([(3, 12), (16, 7), (29, 12)], fill=HIDE_T)
+    for px in (4, 15, 28):
+        rect(d, px, 13, px, 15, POLE_TD)
+
+def draw_tribe_gate(d):
+    # Stake Gate: the palisade with a gap, framed by heavy posts and a lintel,
+    # with a hide flap across the opening and a skull nailed above it.
+    LOG, LOG_D, LOG_L = (122, 92, 58), (92, 68, 42), (152, 118, 78)
+    ROPE = (168, 146, 104)
+    draw_grass(d)
+    ground_shadow(d, 1, 30, 28, 4)
+    for x0 in (1, 24):
+        for i in range(2):
+            x = x0 + i*4
+            rect(d, x, 8, x+2, 29, LOG); rect(d, x, 8, x, 29, LOG_L)
+            rect(d, x+2, 8, x+2, 29, LOG_D)
+            d.polygon([(x, 8), (x+1, 5), (x+2, 8)], fill=LOG_L)
+    rect(d, 9, 4, 12, 29, LOG_D); rect(d, 9, 4, 9, 29, LOG)
+    rect(d, 20, 4, 23, 29, LOG_D); rect(d, 23, 4, 23, 29, shade(LOG,0.8))
+    rect(d, 9, 4, 23, 7, LOG); rect(d, 9, 4, 23, 4, LOG_L)
+    rect(d, 13, 8, 19, 26, HIDE_TD)
+    rect(d, 13, 8, 14, 26, HIDE_T)
+    for ry in (12, 19):
+        rect(d, 13, ry, 19, ry, ROPE)
+    d.ellipse([14, 0, 19, 4], fill=TUSK_T)
+    rect(d, 15, 2, 15, 3, (40,34,28)); rect(d, 18, 2, 18, 3, (40,34,28))
+
+def draw_tribe_warlodge(d):
+    # War Lodge: squatter than the Great Lodge, hung with crossed spears and
+    # a war drum. It was reusing the core sprite, so the two were identical.
+    SPEAR, BLADE = (122, 96, 60), (178, 178, 186)
+    DRUM, DRUM_L = (150, 110, 66), (188, 152, 100)
+    draw_grass(d)
+    ground_shadow(d, 3, 29, 28, 4)
+    d.polygon([(2, 18), (16, 7), (30, 18)], fill=HIDE_TD)
+    d.polygon([(4, 18), (16, 10), (28, 18)], fill=HIDE_T)
+    d.polygon([(5, 17), (15, 11), (15, 17)], fill=HIDE_TL)
+    d.line([1, 19, 31, 19], fill=POLE_T, width=2)
+    rect(d, 5, 19, 26, 29, POLE_T)
+    for sx in range(6, 27, 3): rect(d, sx, 19, sx, 29, POLE_TD)
+    rect(d, 13, 21, 18, 29, (38, 28, 20))
+    d.line([8, 26, 20, 12], fill=SPEAR); d.line([23, 26, 11, 12], fill=SPEAR)
+    d.polygon([(20, 10), (18, 14), (22, 13)], fill=BLADE)
+    d.polygon([(11, 10), (9, 13), (13, 14)], fill=BLADE)
+    d.ellipse([22, 22, 29, 29], fill=DRUM)
+    d.ellipse([23, 23, 28, 27], fill=DRUM_L)
+    rect(d, 22, 25, 29, 25, POLE_TD)
+
 def draw_stake_wall(d):
     # A palisade of lashed timber. The tribe was using the human masonry wall
     # with a brown tint, which still read as tinted STONE — coursed blocks and
@@ -1903,6 +2045,13 @@ DRAWERS = [
     ("ritual_pit", draw_ritual_pit),
     ("flesh_golem", draw_flesh_golem),
     ("stake_wall", draw_stake_wall),
+    ("tribe_hunt", draw_tribe_hunt),
+    ("tribe_timber", draw_tribe_timber),
+    ("tribe_pit", draw_tribe_pit),
+    ("tribe_cache", draw_tribe_cache),
+    ("tribe_stock", draw_tribe_stock),
+    ("tribe_gate", draw_tribe_gate),
+    ("tribe_warlodge", draw_tribe_warlodge),
     ("tribe_lodge", draw_tribe_lodge),
     ("tribe_hut", draw_tribe_hut),
     ("tribe_totem", draw_tribe_totem),

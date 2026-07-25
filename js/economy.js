@@ -1294,7 +1294,12 @@ function economyTick(){
     const worker = assignedWorkerOf(b);
     if(!worker || recalled) continue;
     // no harvest unless the farmer is actually standing on the farm working it
-    const onTile = Math.round(worker.gx)===b.gx && Math.round(worker.gy)===b.gy && !worker.moving;
+    // A human farmer tends the field itself, so must stand on it. A tribe
+    // HUNTER draws from the surrounding forest and counts as working
+    // anywhere in the treeline near the camp.
+    const onTile = (typeof isHuntCamp === 'function' && isHuntCamp(b))
+      ? huntingInPlace(worker, b)
+      : (Math.round(worker.gx)===b.gx && Math.round(worker.gy)===b.gy && !worker.moving);
     if(!onTile) continue;
     if(b.fertility===undefined) b.fertility = 1;
     const amount = Math.max(1, Math.round(BUILD_DEFS.farm.produces.food * b.fertility * hm));

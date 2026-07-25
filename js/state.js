@@ -71,6 +71,7 @@ const state = {
   selectedGroup: [],     // drag-box multi-selection of friendly units
   buildMode: null,       // building type key while placing
   castMode: null,        // { unitId } while aiming a targeted ability
+  controlGroups: {},     // n -> [unitId] — see js/groups.js
   paused: false,
   manualRecall: false,   // player-toggled "Recall Workers"
   starving: false,       // true while food is at zero — units bleed HP

@@ -362,6 +362,7 @@ function syncPopulationCount(){
 }
 
 function damageUnit(u, dmg){
+  if(typeof noteGroupDamage === 'function') noteGroupDamage(u);
   u.hp -= dmg;
   u.hpBarBg.setVisible(true); u.hpBarFg.setVisible(true);
   const pct = Math.max(0, u.hp/u.maxHp);

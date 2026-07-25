@@ -87,6 +87,7 @@ function serializeGame(){
     aiTownSpawned: state.aiTownSpawned,
     aiTownCenter: state.aiTownCenter,
     ai: state.ai,   // their stockpile, build index and training timer
+    controlGroups: state.controlGroups,   // ids, so they survive a reload
     nextSkirmishInMs: state.nextSkirmishInMs,
     nextCaravanInMs: state.nextCaravanInMs,
     caravanActiveMs: state.caravanActiveMs,
@@ -190,6 +191,7 @@ function restoreGame(snapshot){
   // aiTownHall() is momentarily null before the buildings are rebuilt
   state.aiTownSpawned = !!snapshot.aiTownSpawned;
   state.aiTownCenter = snapshot.aiTownCenter || null;
+  state.controlGroups = snapshot.controlGroups || {};
   // Rebuild the economy from the snapshot, or from scratch for a save taken
   // before it existed — a null state.ai would make aiThink() a no-op and
   // leave the enemy frozen for the rest of the run.

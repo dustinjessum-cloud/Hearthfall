@@ -101,11 +101,27 @@
 
   /* Reserved for command groups — claimed now so adding the feature later
      cannot shove the rest of the bar sideways. */
+  .grpChip {
+    position: relative; min-width: 30px; padding: 3px 4px 6px;
+    background: #33261a; border: 1px solid #7a5a34; border-radius: 4px;
+    color: #f0e6d2; cursor: pointer; font-size: 11px; line-height: 1.1;
+    display: flex; flex-direction: column; align-items: center; gap: 1px;
+  }
+  .grpChip:hover { background: #4a3520; border-color: #ffd76b; }
+  .grpChip .grpN { font-weight: bold; color: #ffd76b; }
+  .grpChip .grpCount { font-size: 9px; color: #b8a888; }
+  .grpChip .grpHp { position:absolute; left:2px; right:2px; bottom:2px; height:3px;
+                    background:#2a1c10; border-radius:2px; overflow:hidden; }
+  .grpChip .grpHp > i { display:block; height:100%; width:100%; background:#6bbf59; }
+  /* a group taking fire flashes, so trouble off-screen is still visible */
+  .grpChip.hurt { border-color:#ff6b6b; animation: grpHurt .6s ease-in-out infinite; }
+  @keyframes grpHurt { 0%,100%{ background:#33261a; } 50%{ background:#5a2424; } }
+  @media (prefers-reduced-motion: reduce){ .grpChip.hurt { animation:none; background:#5a2424; } }
   #groupBar {
     flex: 0 0 auto; min-height: 46px;
     background: rgba(20,14,8,.5); border: 1px dashed #5a4a30; border-radius: 6px;
-    display: flex; align-items: center; justify-content: center; gap: 4px;
-    padding: 4px;
+    display: flex; align-items: center; justify-content: center; gap: 3px;
+    padding: 4px; flex-wrap: wrap; overflow-y: auto;
   }
 
   #buildBar {
@@ -283,14 +299,15 @@
 <script src="js/content.js?v=45d10579"></script>
 <script src="js/tribe.js?v=db5ed793"></script>
 <script src="js/swarm.js?v=ed2748db"></script>
-<script src="js/state.js?v=4f36ed42"></script>
+<script src="js/state.js?v=fe961f44"></script>
 <script src="js/economy.js?v=fd37614e"></script>
-<script src="js/units.js?v=52f84493"></script>
+<script src="js/units.js?v=0d87615d"></script>
 <script src="js/enemies.js?v=b4194990"></script>
 <script src="js/ai.js?v=ddd5061d"></script>
-<script src="js/save.js?v=6fc27d4a"></script>
+<script src="js/save.js?v=74b5d2e9"></script>
 <script src="js/ui.js?v=1c273cd4"></script>
+<script src="js/groups.js?v=0af99b0f"></script>
 <script src="js/telemetry.js?v=91f2a402"></script>
-<script src="js/main.js?v=b77b3798"></script>
+<script src="js/main.js?v=5d3c6344"></script>
 </body>
 </html>

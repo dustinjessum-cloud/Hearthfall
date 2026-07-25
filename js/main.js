@@ -151,6 +151,26 @@ class MainScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-K', ()=> heroSlash());
     this.input.keyboard.on('keydown-P', ()=> togglePause());
     this.input.keyboard.on('keydown-R', ()=> toggleRangeRings());
+    // Control groups. Bound on the raw keydown rather than nine Phaser key
+    // objects: this way Ctrl/Shift state comes straight off the event, and
+    // the digits keep working regardless of which key Phaser thinks is down.
+    // Ignored while typing into a field, so a future text input cannot be
+    // hijacked into re-binding an army.
+    this.input.keyboard.on('keydown', (ev)=>{
+      if(state.gameOver) return;
+      const tag = (ev.target && ev.target.tagName) || '';
+      if(tag === 'INPUT' || tag === 'TEXTAREA') return;
+      // Ctrl+A: grab the whole army. preventDefault or the browser selects
+      // the entire page.
+      if((ev.ctrlKey || ev.metaKey) && (ev.key === 'a' || ev.key === 'A')){
+        ev.preventDefault(); selectAllSoldiers(); return;
+      }
+      const n = parseInt(ev.key, 10);
+      if(!(n >= 1 && n <= CONTROL_GROUPS.count)) return;
+      ev.preventDefault();
+      if(ev.ctrlKey || ev.metaKey) bindControlGroup(n, ev.shiftKey);
+      else recallControlGroup(n);
+    });
     this.input.keyboard.on('keydown-ESC', ()=>{
       this.cancelBuildMode();
       if(typeof cancelSeedTargeting === 'function') cancelSeedTargeting();
@@ -179,6 +199,7 @@ class MainScene extends Phaser.Scene {
     refreshBuildBar();
     refreshHud2Buttons();   // the ring button reflects the saved preference on boot
 
+    groupsInit();
     telemetryInit();
     logEvent('world_ready', { restored: !!snapWasRestored });
     refreshHud2Buttons();   // AFTER init, or the REC pill renders as paused
@@ -509,7 +530,7 @@ class MainScene extends Phaser.Scene {
     // minimap: 8/sec is smooth enough to track a camera pan without
     // repainting 4,544 tiles every frame
     this.lastMiniAt = (this.lastMiniAt || 0) + delta;
-    if(this.lastMiniAt >= 125){ this.lastMiniAt = 0; updateMinimap(); }
+    if(this.lastMiniAt >= 125){ this.lastMiniAt = 0; updateMinimap(); refreshGroupChips(); }
     if(this.idleKey && Phaser.Input.Keyboard.JustDown(this.idleKey)){
       selectIdleWorkers(this.idleKey.ctrlKey);
     }

@@ -9,7 +9,7 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 12  # 6x12 = 72 slots (grew from 6x11 for the bandit camp + bandit)
+ROWS = 13  # 6x13 = 78 slots (grew from 6x12 for the bone/golem set)
 
 frames = {}
 order = []
@@ -1150,6 +1150,198 @@ def draw_bandit(d):
     rect(d, 24, 16, 25, 21, WOOD_D)                          # knife
     d.polygon([(24, 16), (26, 16), (25, 9)], fill=(198, 198, 206))
 
+def draw_bone_pile(d):
+    # A bone HAYSTACK — the first pass was a low heap and read as a blob on
+    # the ground. The fix is silhouette: this is tall and conical, wide at
+    # the base and tapering to a point, exactly like a stook of hay, with the
+    # long bones playing the part of the straw. A skull near the base tells
+    # you what the straw is made of; a femur juts from the top like the pole.
+    BONE, BONE_D, BONE_L = (226, 220, 198), (168, 162, 140), (246, 242, 226)
+    BONE_XD = (128, 122, 104)
+    EARTH = (96, 84, 68)
+    draw_dirt(d)
+    d.ellipse([4, 24, 28, 31], fill=EARTH)                  # trampled ground
+    ground_shadow(d, 5, 27, 28, 3)
+
+    # solid conical body first, so the stack has real mass behind the detail
+    d.polygon([(16, 3), (27, 28), (5, 28)], fill=BONE_D)
+    d.polygon([(16, 5), (24, 28), (9, 28)], fill=BONE)
+    d.polygon([(15, 6), (12, 28), (9, 28)], fill=BONE_L)    # lit left flank
+
+    # long bones laid up the cone like thatch, fanning out from the peak
+    for x1, y1 in [(6,27), (9,28), (13,28), (19,28), (23,28), (26,27)]:
+        d.line([16, 6, x1, y1], fill=BONE_XD)
+        d.line([15, 6, x1-1, y1], fill=BONE_L)
+    # knobbed ends poking out along the bottom edge, so it reads as bones
+    for bx in (6, 10, 14, 18, 22, 26):
+        rect(d, bx-1, 27, bx+1, 28, BONE)
+        rect(d, bx-1, 28, bx+1, 28, BONE_XD)
+
+    # a femur jutting from the peak, the haystack's pole
+    d.line([16, 6, 19, 1], fill=BONE)
+    rect(d, 18, 0, 20, 2, BONE_L)
+    rect(d, 15, 5, 17, 7, BONE_L)
+
+    # Bones jutting OUT past the cone's edge. Without these the silhouette is
+    # a clean triangle and the whole thing reads as a tent or a snowdrift —
+    # breaking the outline is what says "made of loose parts".
+    for x0, y0, x1, y1 in [(11,14, 3,11), (21,13, 29,10), (10,20, 2,20),
+                           (22,19, 30,21), (13,9, 7,4), (19,10, 25,5)]:
+        d.line([x0, y0, x1, y1], fill=BONE_XD, width=2)
+        d.line([x0, y0-1, x1, y1-1], fill=BONE, width=1)
+        rect(d, x1-1, y1-1, x1+1, y1+1, BONE_L)             # knobbed end
+
+    # one skull at the foot, on a DARK socket so it separates from the bone
+    # cone behind it — first pass drew bone-on-bone and it disappeared
+    d.ellipse([11, 20, 20, 28], fill=BONE_XD)
+    d.ellipse([12, 21, 19, 27], fill=BONE)
+    d.ellipse([12, 21, 15, 24], fill=BONE_L)                # lit dome
+    rect(d, 14, 24, 15, 25, (34, 30, 26))                   # eye sockets
+    rect(d, 17, 24, 18, 25, (34, 30, 26))
+    rect(d, 15, 26, 17, 26, (34, 30, 26))                   # nasal gap
+    rect(d, 14, 27, 18, 27, BONE_L)                         # jaw
+
+    scatter(d, 4441, 10, BONE_L)
+    scatter(d, 4457, 8, BONE_XD)
+
+def draw_bone_yard(d):
+    # A rack-and-cauldron works: bones are hauled in, boiled down and stacked.
+    # Undead structure, so it sits on blight and reads bone-white on green.
+    BONE, BONE_D = (222, 216, 194), (168, 162, 140)
+    WOOD_R, WOOD_RD = (108, 86, 60), (78, 62, 42)
+    IRON, IRON_L = (86, 90, 98), (132, 136, 146)
+    draw_creep(d)
+    ground_shadow(d, 5, 27, 27, 4)
+    # drying rack: two posts and a crossbar hung with bones
+    rect(d, 6, 10, 7, 27, WOOD_R); rect(d, 6, 10, 6, 27, shade(WOOD_R, 1.25))
+    rect(d, 24, 10, 25, 27, WOOD_R); rect(d, 25, 10, 25, 27, WOOD_RD)
+    rect(d, 6, 9, 25, 10, WOOD_RD)
+    for hx in (10, 14, 18, 22):
+        rect(d, hx, 11, hx, 17, BONE)
+        rect(d, hx-1, 17, hx+1, 18, BONE_D)                # knobbed end
+    # cauldron below, where the marrow is rendered
+    d.ellipse([11, 20, 23, 28], fill=IRON)
+    d.ellipse([11, 20, 23, 24], fill=IRON_L)               # lit rim
+    d.ellipse([13, 21, 21, 24], fill=(58, 70, 52))         # green brew
+    rect(d, 12, 28, 22, 29, shade(IRON, 0.7))              # base
+    # stacked bones at the foot
+    for bx in (8, 26):
+        rect(d, bx-1, 25, bx+1, 26, BONE_D)
+        rect(d, bx-1, 25, bx+1, 25, BONE)
+
+def draw_ritual_pit(d):
+    # A dug pit ringed by FOUR burning pillars. Positions come straight off a
+    # circle at 30/150/210/330 degrees, so the ring is symmetrical about both
+    # axes and no pillar sits dead-centre hiding the hole. The two rear
+    # pillars are drawn BEFORE the pit and the two front ones after, so the
+    # rim overlaps their feet and the whole thing sits in depth rather than
+    # looking pasted on.
+    STONE_R, STONE_RD, STONE_RL = (104, 100, 110), (72, 69, 78), (140, 136, 148)
+    PIT, PIT_D = (58, 40, 44), (30, 20, 24)
+    GORE = (122, 44, 46)
+    # was bone-white; a lighter red instead, so the marks in the pit read as
+    # clots in the blood rather than as bones sitting in it
+    CLOT = (178, 70, 62)
+    # orange flame on purpose: on green blight a green witch-fire would sink
+    # into the background, and the pit needs to read at a glance
+    F_CORE, F_MID, F_OUT, F_GLOW = (255, 242, 190), (255, 186, 62), (226, 104, 30), (150, 58, 20)
+
+    draw_creep(d)
+    ground_shadow(d, 3, 29, 29, 3)
+
+    import math
+    # Those four angles put the rear and front pillars on IDENTICAL x
+    # (cos 30 = cos 330), so at one radius they stack into two vertical bars
+    # instead of reading as a ring of four. The rear pair therefore sits on a
+    # narrower radius — which is also what perspective actually does to the
+    # far side of a circle seen at an angle.
+    CX, CY, RY = 16.0, 19.0, 7.5
+    RX_FRONT, RX_BACK = 9.5, 6.0
+    def pillar_base(deg, rx):
+        r = math.radians(deg)
+        return int(round(CX + rx*math.cos(r))), int(round(CY - RY*math.sin(r)))
+
+    def draw_pillar(bx, by, h):
+        rect(d, bx-1, by-h, bx+1, by, STONE_R)
+        rect(d, bx-1, by-h, bx+1, by-h, STONE_RL)      # lit cap
+        rect(d, bx-1, by-h, bx-1, by, STONE_RL)        # lit left face
+        rect(d, bx+1, by-h, bx+1, by, STONE_RD)        # shaded right face
+        rect(d, bx-1, by, bx+1, by, STONE_RD)          # contact shadow
+
+    def draw_flame(bx, ty):
+        # ty is the pillar's cap row; the flame sits on top of it
+        rect(d, bx-1, ty-1, bx+1, ty-1, F_GLOW)        # heat wash on the stone
+        rect(d, bx-1, ty-3, bx+1, ty-2, F_OUT)
+        rect(d, bx-1, ty-4, bx+1, ty-3, F_MID)
+        rect(d, bx,   ty-6, bx,   ty-4, F_MID)         # tapering tongue
+        rect(d, bx,   ty-5, bx,   ty-4, F_CORE)        # white-hot core
+        rect(d, bx-1, ty-3, bx-1, ty-3, F_CORE)
+
+    back  = [pillar_base(150, RX_BACK),  pillar_base(30,  RX_BACK)]
+    front = [pillar_base(210, RX_FRONT), pillar_base(330, RX_FRONT)]
+
+    H_BACK, H_FRONT = 7, 9
+    for bx, by in back:
+        draw_pillar(bx, by, H_BACK)
+
+    # the hole itself
+    d.ellipse([5, 12, 27, 28], fill=PIT_D)
+    d.ellipse([7, 14, 25, 26], fill=PIT)
+    d.ellipse([10, 17, 22, 24], fill=GORE)
+    for bx, by in ((12, 20), (18, 19), (15, 23)):
+        rect(d, bx, by, bx+1, by, CLOT)                # thicker clots in the blood
+
+    for bx, by in front:
+        draw_pillar(bx, by, H_FRONT)
+
+    # flames last, so nothing overlaps them
+    for bx, by in back:
+        draw_flame(bx, by - H_BACK)
+    for bx, by in front:
+        draw_flame(bx, by - H_FRONT)
+
+def draw_flesh_golem(d):
+    # Twenty corpses stitched into one body. Deliberately LUMPY and
+    # asymmetric — mismatched limbs, visible sutures, exposed ribs — so it
+    # never reads as a big skeleton. Renders at 1.45x, the largest thing the
+    # undead field, so it can carry this much detail.
+    FLESH, FLESH_D, FLESH_L = (146, 130, 118), (112, 98, 90), (172, 156, 142)
+    FLESH_XD = (82, 70, 66)
+    SUTURE = (58, 44, 42)
+    GORE = (128, 52, 52)
+    BONE = (218, 212, 192)
+    EYE = (196, 214, 120)
+    ground_shadow(d, 5, 27, 28, 4)
+    # hunched, uneven torso — wider on its right
+    rect(d, 9, 11, 23, 24, FLESH)
+    rect(d, 9, 11, 10, 24, FLESH_L)
+    rect(d, 22, 11, 23, 24, FLESH_D)
+    rect(d, 11, 18, 21, 23, FLESH_D)                       # sagging gut
+    # sutures holding the pieces together
+    for sy in (14, 19):
+        d.line([10, sy, 22, sy], fill=SUTURE)
+        for sx in range(11, 22, 3):
+            rect(d, sx, sy-1, sx, sy+1, SUTURE)
+    # ribs pushing through on one side
+    for ry in (13, 15, 17):
+        rect(d, 17, ry, 21, ry, BONE)
+    # MISMATCHED arms: one huge, one withered
+    rect(d, 3, 12, 8, 26, FLESH); rect(d, 3, 12, 4, 26, FLESH_L)
+    rect(d, 3, 24, 9, 29, FLESH_D)                         # great fist
+    rect(d, 24, 14, 27, 22, FLESH_D)                       # shrivelled arm
+    rect(d, 24, 22, 28, 25, FLESH_XD)
+    # stubby legs
+    rect(d, 11, 24, 15, 30, FLESH_D); rect(d, 11, 24, 11, 30, FLESH)
+    rect(d, 17, 24, 21, 30, FLESH_D); rect(d, 17, 24, 17, 30, FLESH)
+    # lolling head, sunk between the shoulders and set off-centre
+    d.ellipse([12, 3, 21, 12], fill=FLESH)
+    rect(d, 12, 3, 16, 4, FLESH_L)
+    d.line([13, 7, 20, 7], fill=SUTURE)                    # stitched across the skull
+    rect(d, 14, 8, 15, 9, EYE); rect(d, 18, 8, 19, 9, EYE) # cold green lights
+    rect(d, 14, 11, 19, 12, GORE)                          # slack red mouth
+    for tx in (15, 17):
+        rect(d, tx, 11, tx, 11, BONE)
+
 def draw_bandit_camp(d):
     # an outlaw camp: sharpened palisade stakes, a hide tent, a campfire and
     # a skull on a pike. Was a red-tinted wall GATE, of all things.
@@ -1550,6 +1742,10 @@ DRAWERS = [
     ("bandit", draw_bandit),
     ("bandit_camp", draw_bandit_camp),
     ("sealed_pass", draw_sealed_pass),
+    ("bone_pile", draw_bone_pile),
+    ("bone_yard", draw_bone_yard),
+    ("ritual_pit", draw_ritual_pit),
+    ("flesh_golem", draw_flesh_golem),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

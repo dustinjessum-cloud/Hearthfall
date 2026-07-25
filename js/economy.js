@@ -366,6 +366,29 @@ function buyWithGold(res){
 // Wells and taverns cheer people up; overcrowding and famine sour them.
 // Happiness scales farm output and tax income.
 const TAX_GOLD_PER_HOUSE = 0.25; // per economy tick, scaled by happiness
+// ---- the Ritual Pit -------------------------------------------------
+// Corpses are BANKED here as a count, not stored as bodies. That is the
+// whole reason the mechanic works: corpses rot in 45 seconds, so twenty of
+// them can never exist on the map at once — but a tally survives between
+// raids, so a golem is something you build toward over a whole war.
+function ritualPit(){
+  return myBuildings().find(b=>b.type==='ritual_pit' && b.hp>0 && !underConstruction(b)) || null;
+}
+
+function depositCorpseInPit(pit){
+  pit.corpseCount = (pit.corpseCount || 0) + 1;
+  const need = RITUAL.corpsesPerGolem;
+  if(scene && scene.add) floatResourceText(pit.gx, pit.gy, `${pit.corpseCount}/${need}`, '#b6c98a');
+  if(pit.corpseCount >= need){
+    pit.corpseCount -= need;
+    const spot = findFreeSpotNear(pit.gx, pit.gy, 3) || {gx:pit.gx, gy:pit.gy};
+    createFleshGolem(spot.gx, spot.gy);
+    flashWaveBanner('The pit heaves — a Flesh Golem drags itself free!');
+  }
+  updateHUD();
+  refreshInfoPanel();
+}
+
 // ---- corpses: the shared raise/bury resource (see CORPSE in content.js) ----
 let corpseIdCounter = 1;
 function spawnCorpse(gx, gy){
@@ -434,6 +457,7 @@ function effectiveBuildCost(type){
 // gathered past the cap is simply wasted.
 function storageCapFor(key){
   if(key==='wildstone') return WILDSTONE_CAP; // small and fixed — this resource stays precious no matter how big everything else grows
+  if(key==='bone') return BONE_CAP;           // likewise: bone is meant to gate, not to pile up
   let cap = STORAGE_BASE;
   // Town Hall levels raise the base cap for every resource
   const lvl = tcLevel();
@@ -1376,7 +1400,7 @@ function economyTick(){
 
   // rations + famine: soldiers eat double, and at zero food EVERYONE
   // bleeds HP until you fix it — starvation is a spiral, not a dice roll.
-  const soldiers = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman'||u.type==='captain') && u.hp>0).length;
+  const soldiers = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman'||u.type==='captain'||u.type==='flesh_golem') && u.hp>0).length;
   const civilians = state.units.filter(u=>(u.type==='villager'||u.type==='repairman') && u.hp>0).length;
   const foodUse = civilians * 0.5 + soldiers * UPKEEP.soldierFoodPerTick;
   state.resources.food -= foodUse;

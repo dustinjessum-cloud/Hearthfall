@@ -43,6 +43,8 @@ function updateHUD(){
   if(flourEl) flourEl.textContent = `${Math.floor(state.resources.flour)}/${storageCapFor('flour')}`;
   document.querySelector('#resWood span').textContent = `${Math.floor(state.resources.wood)}/${storageCapFor('wood')}`;
   document.querySelector('#resStone span').textContent = `${Math.floor(state.resources.stone)}/${storageCapFor('stone')}`;
+  const boneEl = document.querySelector('#resBone span');
+  if(boneEl) boneEl.textContent = `${Math.floor(state.resources.bone||0)}/${storageCapFor('bone')}`;
   const wildstoneEl = document.querySelector('#resWildstone span');
   if(wildstoneEl) wildstoneEl.textContent = `${Math.floor(state.resources.wildstone)}/${storageCapFor('wildstone')}`;
   const goldEl = document.querySelector('#resGold span');
@@ -54,7 +56,7 @@ function updateHUD(){
   document.querySelector('#resPop span').textContent = `${state.population.current} / ${state.population.cap}`;
   document.getElementById('resFood').classList.toggle('warn', state.resources.food < 10 || state.starving);
 
-  const soldierCount = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman'||u.type==='captain') && u.hp>0).length;
+  const soldierCount = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman'||u.type==='captain'||u.type==='flesh_golem') && u.hp>0).length;
   const workerCount = state.units.filter(u=>u.type==='villager' && u.hp>0).length;
   document.querySelector('#resWorkers span').textContent = workerCount;
   document.querySelector('#resSoldiers span').textContent = soldierCount;
@@ -339,10 +341,11 @@ function refreshRallyMarkers(){
 function unitAttack(u){
   const atk = u.type==='archer' ? ARCHER_ATTACK
             : (u.type==='swordsman' ? SWORDSMAN_ATTACK
-            : (u.type==='villager' ? VILLAGER_ATTACK : null));
+            : (u.type==='villager' ? VILLAGER_ATTACK
+            : (u.type==='flesh_golem' ? FLESH_GOLEM.attack : null)));
   if(!atk) return null;
   // villagers are not soldiers: no banner buff, and the panel says so
-  const isSoldier = (u.type === 'archer' || u.type === 'swordsman');
+  const isSoldier = (u.type === 'archer' || u.type === 'swordsman' || u.type === 'flesh_golem');
   const cap = livingCaptain();
   const inAura = !!(isSoldier && cap && cap !== u &&
     Phaser.Math.Distance.Between(cap.gx, cap.gy, u.gx, u.gy) <= CAPTAIN.auraRange);
@@ -374,7 +377,7 @@ function unitActivity(u){
 
 // What this unit costs to keep, per minute (economy ticks are 3s => x20).
 function unitUpkeepPerMin(u){
-  const soldier = (u.type==='archer' || u.type==='swordsman' || u.type==='captain');
+  const soldier = (u.type==='archer' || u.type==='swordsman' || u.type==='captain' || u.type==='flesh_golem');
   return (soldier ? UPKEEP.soldierFoodPerTick : 0.5) * 20;
 }
 function foodWord(){ return state.faction==='swarm' ? 'carrion' : 'food'; }

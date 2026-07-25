@@ -40,7 +40,7 @@ function tcLevel(){ const th = townHall(); return th ? (th.level||1) : 1; }
 // Game state (outside Phaser, plain JS)
 // ---------------------------------------------------------------------
 const state = {
-  resources: { food:50, wood:80, stone:40, wheat:0, flour:0, gold:0, wildstone:0 },
+  resources: { food:50, wood:80, stone:40, wheat:0, flour:0, gold:0, wildstone:0, bone:0 },
   evolutions: { swordsman:false, archer:false },   // completed evolutions — permanent, faction-wide
   evolutionInProgress: null,                        // { type, msRemaining } or null — only one at a time
   captainRecruited: false,
@@ -127,7 +127,7 @@ function inBounds(gx,gy){ return gx>=0 && gy>=0 && gx<MAP_W && gy<MAP_H; }
 function tileAt(gx,gy){ return inBounds(gx,gy) ? state.grid[gy][gx] : null; }
 function occAt(gx,gy){ return inBounds(gx,gy) ? state.occupied[gy][gx] : null; }
 
-const RESOURCE_QTY_RANGE = { forest: [90, 140], stone_deposit: [180, 260], wildstone_deposit: [40, 70] };
+const RESOURCE_QTY_RANGE = { forest: [90, 140], stone_deposit: [180, 260], wildstone_deposit: [40, 70], bone_pile: BONE_PILE_QTY };
 
 function generateMap(){
   for(let y=0;y<MAP_H;y++){
@@ -181,6 +181,32 @@ function generateMap(){
   }
 
   state._wildstoneSites = [];
+
+  // Bone piles: rare, huge, and spread across ALL THREE playable bands so an
+  // undead player has to push blight outward to reach more than the first
+  // one. Placed before the resource blobs so they get first pick of open
+  // ground rather than landing on a forest.
+  state._bonePiles = [];
+  {
+    let tries = 0;
+    while(state._bonePiles.length < BONE_PILE_COUNT && tries < 900){
+      tries++;
+      const zoneName = ['home','neutral','enemy'][tries % 3];
+      const z = ZONES[zoneName];
+      const x = Phaser.Math.Between(z.x0+2, z.x1-2), y = Phaser.Math.Between(2, MAP_H-3);
+      if(nearCenter(x,y,8)) continue;                       // never on your doorstep
+      if(state.grid[y][x] !== 'grass') continue;
+      let tooClose = false;
+      for(const b of state._bonePiles){
+        if(Math.hypot(x-b.gx, y-b.gy) < BONE_PILE_MIN_GAP){ tooClose = true; break; }
+      }
+      if(tooClose) continue;
+      state.grid[y][x] = 'bone_pile';
+      const [lo,hi] = RESOURCE_QTY_RANGE.bone_pile;
+      state.resourceQty[y][x] = Phaser.Math.Between(lo,hi);
+      state._bonePiles.push({gx:x, gy:y});
+    }
+  }
 
   // -- home band: unchanged from the pre-corridor game, so the opening plays
   //    exactly as it always has --

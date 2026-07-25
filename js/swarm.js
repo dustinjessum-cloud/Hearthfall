@@ -241,14 +241,27 @@ function applyFaction(faction){
   BUILD_DEFS.tower       = { name:'Bone Spire', cost:{food:30}, hp:150, frame:'bone_spire', blocksPath:true, garrison:true, attack:{range:4.2,damage:7,damageLow:4,cooldownMs:900} }; // dedicated bone-spire sprite, baked colors — no tint
   BUILD_DEFS.road        = { name:'Bone Path', cost:{food:2}, frame:'dirt', tint:SWARM.creep.roadTint, isRoad:true };
   BUILD_DEFS.creep_tumor = { name:'Grave Mound', cost:{food:18}, hp:40, frame:'headstone', popCap:2 }; // grey stone cross, baked colors — no tint
+  // Bone Yard: the ONLY source of bone. Piles are rare and far apart, and the
+  // undead can only build on blight — so reaching a second pile is a
+  // territorial push, not a walk. That is the whole point of the resource.
+  BUILD_DEFS.bone_yard   = { name:'Bone Yard', cost:{food:30}, hp:60, frame:'bone_yard',
+                             produces:{bone:3}, needsWorker:true, bonusNear:'bone_pile' };
+  // Ritual Pit: corpses are dragged here and BANKED (they rot in 45s, so a
+  // running count is the only way twenty can ever be assembled). Must sit
+  // near the Necropolis — this is the heart of the necropolis, not a
+  // forward camp you sneak next to a battlefield.
+  BUILD_DEFS.ritual_pit  = { name:'Ritual Pit', cost:{food:40, bone:25}, hp:90,
+                             frame:'ritual_pit', nearTC:true };
+  BUILD_TIME.bone_yard  = 9000;
+  BUILD_TIME.ritual_pit = 14000;
   BUILD_TIME.creep_tumor = 5000;
   CARRY.lumber_camp = { key:'food', amt:6 }; // charnel pits haul carrion home
 
   // -- build bar shows only the undead roster --
   BUILD_CATEGORIES.splice(0, BUILD_CATEGORIES.length,
-    { key:'economy', label:'Blight',   types:['lumber_camp','creep_tumor','road','wildstone_refinery'] },
+    { key:'economy', label:'Blight',   types:['lumber_camp','creep_tumor','road','wildstone_refinery','bone_yard'] },
     { key:'trade',   label:'Storage',  types:['granary'] },
-    { key:'defense', label:'Undead',   types:['tower','barracks'] },
+    { key:'defense', label:'Undead',   types:['tower','barracks','ritual_pit'] },
   );
 
   // -- unit costs collapse to pure biomass --

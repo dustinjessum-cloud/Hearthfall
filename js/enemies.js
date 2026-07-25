@@ -600,6 +600,9 @@ function updateCombat(delta, time){
     // 1.2 reach means they can only ever hit what has closed to arm's length —
     // they never leave their work to go looking for a fight.
     else if(u.type==='villager' && !u.inTC) attackers.push({ent:u, atk:VILLAGER_ATTACK, gx:u.gx, gy:u.gy, melee:true});
+    // The golem is a soldier: it benefits from the Necromancer's banner,
+    // which is the point of pairing them.
+    else if(u.type==='flesh_golem') attackers.push({ent:u, atk:FLESH_GOLEM.attack, gx:u.gx, gy:u.gy, melee:true, soldier:true});
     // the Minotaur attacks only via his manual javelin (J) and slash (K)
   }
 

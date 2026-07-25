@@ -21,7 +21,7 @@ const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker', 'garri
 // out-of-date. Additive fields (a new building property, say) do NOT need a
 // bump — restore overlays them onto freshly created objects, so anything
 // missing keeps its default.
-const SAVE_VERSION = 2;   // v2: five-band world, corridor endgame
+const SAVE_VERSION = 3;   // v3: bone resource + bone piles in the terrain grid
 
 // A save is only offered if it can actually be restored, so the "Continue
 // Your Game" button can't appear for one this build would choke on.
@@ -240,7 +240,7 @@ function restoreGame(snapshot){
   for(const b of state.buildings) if(b.type==='wall') refreshWallSprite(b);
 
   // ---- units ----
-  const CREATORS = { villager: createVillager, archer: createArcher, swordsman: createSwordsman, captain: createCaptain, repairman: createRepairman };
+  const CREATORS = { villager: createVillager, archer: createArcher, swordsman: createSwordsman, captain: createCaptain, repairman: createRepairman, flesh_golem: createFleshGolem };
   for(const su of snapshot.units){
     const create = CREATORS[su.type];
     if(!create){ console.error('Skipping unknown unit type on restore:', su.type); continue; }
@@ -252,6 +252,7 @@ function restoreGame(snapshot){
     // second or two on its own.
     u.tx = u.gx; u.ty = u.gy; u.moving = false; u.buildTaskId = null; u.path = null;
     u.buryCorpseId = null; u.raiseCorpseId = null; // mid-walk corpse errands don't survive a reload — re-order them
+    u.dragCorpseId = null; u.carryingCorpse = false;  // ...same for a haul; the pit's banked COUNT persists on the building
     if(su.type==='villager'){ u.gatherWorking = false; u.gatherPhase = null; u.gatherTarget = null; u.carrying = null; u.harvestMs = 0; }
     positionUnitVisuals(u, u.gx*TILE+TILE/2, u.gy*TILE+TILE/2);
     if(u.baseTint && u.sprite && u.sprite.setTint) u.sprite.setTint(u.baseTint);

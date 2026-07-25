@@ -42,7 +42,7 @@ class MainScene extends Phaser.Scene {
   }
 
   setupFrames(texture){
-    const cols=6, rows=12, size=32; // 6x12 grid — must match gen_sprites.py ROWS
+    const cols=6, rows=13, size=32; // 6x13 grid — must match gen_sprites.py ROWS
     let idx=0;
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
@@ -520,6 +520,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
       drawIconCanvas(document.getElementById('icoWood'), FRAME.icon_wood);
       drawIconCanvas(document.getElementById('icoStone'), FRAME.icon_stone);
       drawIconCanvas(document.getElementById('icoWildstone'), FRAME.icon_wildstone);
+      drawIconCanvas(document.getElementById('icoBone'), FRAME.bone_pile);
       drawIconCanvas(document.getElementById('icoPop'), FRAME.icon_population);
       drawIconCanvas(document.getElementById('icoWorker'), FRAME.villager);
       drawIconCanvas(document.getElementById('icoSoldier'), FRAME.archer);

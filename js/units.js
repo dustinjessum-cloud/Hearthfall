@@ -261,6 +261,29 @@ function createSwordsman(gx, gy){
   return u;
 }
 
+// The Flesh Golem: twenty corpses stitched into one body. A tank that
+// fights alongside the Necromancer — she webs and bursts from behind it
+// while it soaks. Tanky first (220 HP, ~5x a skeleton) but it hits hard
+// enough that ignoring it is not an option.
+function createFleshGolem(gx, gy){
+  const u = {
+    id: unitIdCounter++, type:'flesh_golem', gx, gy, tx:gx, ty:gy,
+    hp: FLESH_GOLEM.hp, maxHp: FLESH_GOLEM.hp, lastAttackAt: 0, moving:false,
+    orderQueue: [], visualScale: FLESH_GOLEM.scale,
+  };
+  const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
+  u.marker = scene.add.ellipse(cx, cy+9, 24, 10, 0x5a4a6a, 0.55).setStrokeStyle(1, 0xc9b0e8, 0.9).setDepth(3);
+  u.sprite = scene.add.image(cx, cy, 'tiles', FRAME.flesh_golem).setDepth(4);
+  u.hpBarBg = scene.add.rectangle(cx, cy-18, TILE-10, 4, 0x2a1c10).setDepth(5).setVisible(false);
+  u.hpBarFg = scene.add.rectangle(cx-(TILE-10)/2, cy-18, TILE-10, 4, 0x6bbf59).setOrigin(0,0.5).setDepth(6).setVisible(false);
+  const sc = u.visualScale;
+  u.sprite.setScale(sc); u.marker.setScale(sc); u.hpBarBg.setScale(sc); u.hpBarFg.setScale(sc);
+  positionUnitVisuals(u, cx, cy);
+  state.units.push(u);
+  syncPopulationCount();
+  return u;
+}
+
 function createRepairman(gx, gy){
   const u = {
     id: unitIdCounter++, type:'repairman', gx, gy, tx:gx, ty:gy,
@@ -447,10 +470,15 @@ function resolveBuildingOrder(u, gx, gy){
   } else if(u.type==='archer'){
     if(bAt && bAt.type==='tower' && bAt.hp>0) return {kind:'garrisonTower', buildingId: bAt.id};
   } else if(u.type==='captain' && state.faction==='swarm'){
-    // the Necromancer raises the fallen where they lie
+    // the Necromancer raises the fallen where they lie — she never hauls
     const c = corpseAt(gx, gy);
     if(c) return {kind:'raise', corpseId: c.id};
     return null; // ghouls & the Necromancer never bury — they raise
+  }
+  // Every OTHER undead unit drags bodies to the Ritual Pit, if one is built.
+  if(state.faction==='swarm' && u.type!=='captain'){
+    const c = corpseAt(gx, gy);
+    if(c && ritualPit()) return {kind:'drag', corpseId: c.id};
   }
   // burying the fallen: ALL the living can do it — villagers, soldiers,
   // repairmen, and the hero — humans only (the undead raise instead).
@@ -535,9 +563,21 @@ function executeOrder(u, order){
     u.raiseCorpseId = c.id; u.path = null;
     u.tx = c.gx; u.ty = c.gy; u.moving = true; u.playerOrder = true;
     flashWaveBanner('The Necromancer approaches the fallen...');
+  } else if(order.kind==='drag'){
+    // Haul a body to the Ritual Pit. Any undead unit can do this EXCEPT the
+    // Necromancer, whose answer to a corpse is to raise it where it lies.
+    const c = corpseById(order.corpseId);
+    const pit = ritualPit();
+    if(!c || !pit) return;
+    if(u.inTowerId) exitTower(u);
+    if(u.type==='villager') unassignVillager(u);
+    u.dragCorpseId = c.id; u.carryingCorpse = false; u.path = null;
+    u.tx = c.gx; u.ty = c.gy; u.moving = true; u.playerOrder = true;
+    flashWaveBanner('Dragging the fallen to the Ritual Pit.');
   } else if(order.kind==='move'){
     if(u.inTowerId) exitTower(u); // any move order pops them out of the tower
     u.buryCorpseId = null; // a move cancels a pending burial, whoever's doing it
+    u.dragCorpseId = null; u.carryingCorpse = false; // ...and a pending haul
     if(u.type==='villager') unassignVillager(u);
     else if(u.type==='repairman') u.repairTargetId = null;
     else if(u.type==='archer'){ u.garrisonId = null; u.path = null; }
@@ -555,6 +595,7 @@ function describeOrder(order){
   if(order.kind==='work') return 'work';
   if(order.kind==='bury') return 'bury the fallen';
   if(order.kind==='raise') return 'raise the fallen';
+  if(order.kind==='drag') return 'drag the fallen to the pit';
   return 'order';
 }
 
@@ -594,7 +635,7 @@ function clearOrderQueue(u){
 // goes stale (executeOrder's checks just no-op and the NEXT frame moves on).
 function isUnitIdle(u){
   return !u.moving && !u.assignedBuildingId && !u.buildTaskId && !u.garrisonId
-    && !u.repairTargetId && !u.buryCorpseId && !u.raiseCorpseId && !u.inTC && !u.enteringTC;
+    && !u.repairTargetId && !u.buryCorpseId && !u.raiseCorpseId && !u.dragCorpseId && !u.inTC && !u.enteringTC;
 }
 
 // ---- multi-unit selection ----
@@ -958,6 +999,35 @@ function updateUnits(delta){
         if(!u.path) u.buryCorpseId = null; // unreachable — give up gracefully
       }
     }
+    // hauling: pick the body up, carry it to the Ritual Pit, bank it there
+    if(u.dragCorpseId && !u.moving){
+      const pit = ritualPit();
+      if(!pit){ u.dragCorpseId = null; u.carryingCorpse = false; }
+      else if(!u.carryingCorpse){
+        const c = corpseById(u.dragCorpseId);
+        if(!c){ u.dragCorpseId = null; }               // rotted before they arrived
+        else if(Math.round(u.gx)===c.gx && Math.round(u.gy)===c.gy){
+          // shouldered it — the corpse leaves the map here so it can no longer
+          // rot out from under the delivery, and the count is what matters
+          removeCorpse(c);
+          u.carryingCorpse = true;
+          if(scene && scene.add) floatResourceText(c.gx, c.gy, 'hauling...', '#b6c98a');
+          u.tx = pit.gx; u.ty = pit.gy; u.moving = true;
+        } else if(!u.path || !u.path.length){
+          u.path = findFriendlyPath(u, c.gx, c.gy, null);
+          if(!u.path) u.dragCorpseId = null;
+        }
+      } else {
+        const atPit = Math.max(Math.abs(Math.round(u.gx)-pit.gx), Math.abs(Math.round(u.gy)-pit.gy)) <= 1;
+        if(atPit){
+          u.carryingCorpse = false; u.dragCorpseId = null;
+          depositCorpseInPit(pit);
+        } else if(!u.path || !u.path.length){
+          u.path = findFriendlyPath(u, pit.gx, pit.gy, pit.id);
+          if(!u.path){ u.carryingCorpse = false; u.dragCorpseId = null; }
+        }
+      }
+    }
     // raising: the Necromancer within reach pulls the fallen up as a skeleton
     if(u.type==='captain' && u.raiseCorpseId && !u.moving && state.faction==='swarm'){
       const c = corpseById(u.raiseCorpseId);
@@ -1067,7 +1137,9 @@ function updateUnits(delta){
     }
     if(u.moving){
       // archers march 25% slower — longbows and quivers are heavy
-      const typeSpeed = u.type==='archer' ? baseSpeed*0.75 : baseSpeed;
+      let typeSpeed = u.type==='archer' ? baseSpeed*0.75
+                    : (u.type==='flesh_golem' ? baseSpeed*FLESH_GOLEM.speedMult : baseSpeed);
+      if(u.carryingCorpse) typeSpeed *= RITUAL.dragSlow;   // a body is dead weight
       const speed = typeSpeed * speedMultiplierAt(u.gx, u.gy) * (delta/1000);
       const dx = u.tx - u.gx, dy = u.ty - u.gy;
       const dist = Math.hypot(dx,dy);

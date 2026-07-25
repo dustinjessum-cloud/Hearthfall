@@ -35,6 +35,7 @@ function spawnWave(){
       setTimeout(()=> spawnEnemy(80 + wave*10, 20, wave, 'ram'), 1500 + i*900);
     }
   }
+  logEvent('wave', { n: wave, race, count });
   flashWaveBanner(`Wave ${wave} incoming — ${ENEMY_RACES[race].banner}`);
 }
 

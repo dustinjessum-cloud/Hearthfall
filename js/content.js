@@ -487,6 +487,16 @@ const RESOURCE_COLOR = { food:'#f0c96b', wood:'#c98f52', stone:'#d4d4dc', wheat:
 const STORAGE_BASE = 100;               // per-resource cap with just the Town Hall — build granaries/warehouses to grow it
 const WILDSTONE_CAP = 60;               // deliberately small and fixed — see storageCapFor
 const HARVEST_MS = 1600;                // time spent chopping/mining at the resource tile
+// Build-bar grouping. Lives here with the other content tables, not in
+// ui.js where it used to sit — it is content, and applyFaction rewrites it
+// per faction alongside BUILD_DEFS.
+const BUILD_CATEGORIES = [
+  { key:'economy', label:'Economy',        types:['farm','lumber_camp','quarry','mill','bakery','wildstone_refinery'] },
+  { key:'town',    label:'Town',           types:['house','well','tavern','apothecary','mason','road'] },
+  { key:'trade',   label:'Storage/Trade',  types:['granary','warehouse','market'] },
+  { key:'defense', label:'Defense',        types:['wall','gate','tower','barracks'] },
+];
+
 const CARRY = {                         // what one villager hauls home per trip
   lumber_camp: { key:'wood',  amt:6 },
   quarry:      { key:'stone', amt:5 },

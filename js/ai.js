@@ -732,6 +732,7 @@ function updateAiWar(delta){
     m.homeGuard = false;
   }
   ai.attackCdMs = AI_TUNING.attackCooldownMs;
+  logEvent('ai_attack', { size: muster.length, gx: goal.gx, gy: goal.gy });
   flashWaveBanner(`A war party marches out of the enemy town — ${muster.length} strong!`);
 }
 

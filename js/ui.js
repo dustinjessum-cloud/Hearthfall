@@ -272,6 +272,13 @@ function refreshHud2Buttons(){
     ringBtn.classList.toggle('toggled-on', on);
     ringBtn.textContent = on ? 'Rings: On' : 'Rings: Off';
   }
+  const recBtn = document.getElementById('recBtn');
+  if(recBtn){
+    const on = !!(state.session && state.session.recording);
+    recBtn.classList.toggle('live', on);
+    recBtn.classList.toggle('paused', !on);
+    recBtn.textContent = `${on ? '●' : '❚❚'} REC ${telemetryEventCount()}`;
+  }
   const sbBtn = document.getElementById('sandboxBtn');
   if(sbBtn){
     sbBtn.classList.toggle('toggled-on', sandboxOn());
@@ -658,12 +665,6 @@ function flashWaveBanner(msg){
 
 // The build bar is split into category tabs so 17 buildings don't sprawl
 // across the whole width — click a tab, see only that family.
-const BUILD_CATEGORIES = [
-  { key:'economy', label:'Economy',        types:['farm','lumber_camp','quarry','mill','bakery','wildstone_refinery'] },
-  { key:'town',    label:'Town',           types:['house','well','tavern','apothecary','mason','road'] },
-  { key:'trade',   label:'Storage/Trade',  types:['granary','warehouse','market'] },
-  { key:'defense', label:'Defense',        types:['wall','gate','tower','barracks'] },
-];
 let activeBuildCategory = 'economy';
 
 function categoryOf(type){
@@ -1337,6 +1338,9 @@ function trainSoldier(barracks, kind){
 }
 
 function endGame(won){
+  logEvent('game_over', { won: !!won, wave: state.wave, pop: state.population.current,
+                          bldgs: myBuildings().filter(b=>b.hp>0).length });
+  if(typeof telemetryFlush === 'function') telemetryFlush();
   state.gameOver = true;
   clearSavedGame(); // a finished run should never offer "Continue" back into it
   const overlay = document.getElementById('overlay');

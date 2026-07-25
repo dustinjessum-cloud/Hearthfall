@@ -60,10 +60,12 @@ class MainScene extends Phaser.Scene {
     this.unitMoveTargets = new Map();
 
     let cx, cy;
+    let snapWasRestored = false;
     if(pendingRestoreSnapshot){
       const snap = pendingRestoreSnapshot;
       pendingRestoreSnapshot = null;
       restoreGame(snap);
+      snapWasRestored = true;
       cx = snap.townHallPos.gx; cy = snap.townHallPos.gy;
     } else {
       const gen = generateMap();
@@ -177,6 +179,9 @@ class MainScene extends Phaser.Scene {
     refreshBuildBar();
     refreshHud2Buttons();   // the ring button reflects the saved preference on boot
 
+    telemetryInit();
+    logEvent('world_ready', { restored: !!snapWasRestored });
+    refreshHud2Buttons();   // AFTER init, or the REC pill renders as paused
     this.worldReady = true;
   }
 
@@ -226,6 +231,7 @@ class MainScene extends Phaser.Scene {
         this.cameras.main.pan(home.gx*TILE, home.gy*TILE, 1800, 'Sine.easeInOut');
       });
     }
+    logEvent('corridor_open', { wave: state.wave });
     flashWaveBanner('The raids are broken — the mountain pass lies open!');
   }
 
@@ -484,6 +490,7 @@ class MainScene extends Phaser.Scene {
 
     aiThink(delta);         // their economy: train, gather, build, expand
     if(state.faction==='tribe'){ updateForesters(delta); updateSaplings(delta); }
+    updateTelemetry(delta);
     updateAiBlight(delta);  // an undead enemy town spreads its own blight
     updateAiWar(delta);     // muster war parties and send them at you
     updateAiDefence(delta); // defenders answer alarms, then drift back
@@ -642,6 +649,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
   bindBtn('pauseBtn',   'togglePause');
   bindBtn('sandboxBtn', 'toggleSandbox');
   bindBtn('skipBtn',    'skipToCorridor');
+  bindBtn('recBtn',     'toggleRecording');
+  bindBtn('exportLogBtn','exportSessionLog');
   const hintCloseBtn = document.getElementById('hintClose');
   if(hintCloseBtn){
     hintCloseBtn.addEventListener('click', ()=>{

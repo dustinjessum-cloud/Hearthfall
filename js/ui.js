@@ -802,9 +802,26 @@ function selectEntity(type, ref){
 // (tracked via panel._boundRef), and only the dynamic bits — hp text, hp
 // bar width, button disabled state/cost — are updated in place every
 // frame without ever removing the button from the DOM.
+// The selection panel, split into three. It was one 493-line function —
+// 6% of all logic — mixing markup construction with per-frame updates for
+// buildings, units, enemies, groups and the empty state. The split preserves
+// the property that matters: markup is built ONCE per selection (tracked by
+// panel._boundRef) and only live values are touched each frame, so the DOM
+// never churns under the cursor mid-click.
 function refreshInfoPanel(){
   const panel = document.getElementById('infoPanel');
-  if(!state.selected){
+  if(!state.selected){ renderNoSelectionPanel(panel); return; }
+  const {type, ref} = state.selected;
+  if(panel._boundRef !== ref){
+    panel._boundRef = ref;
+    buildPanelMarkup(panel, type, ref);
+  }
+  updatePanelLive(type, ref);
+}
+
+// Nothing selected: a multi-unit group summary, or a placeholder. Never
+// display:none — a panel that collapses reflows the whole bottom bar.
+function renderNoSelectionPanel(panel){
     if(state.selectedGroup && state.selectedGroup.length > 1){
       if(panel._boundRef !== 'group'){
         panel._boundRef = 'group';
@@ -840,11 +857,10 @@ function refreshInfoPanel(){
       panel.innerHTML = '<span class="slotEmpty">Nothing selected</span>';
     }
     return;
-  }
-  const {type, ref} = state.selected;
+}
 
-  if(panel._boundRef !== ref){
-    panel._boundRef = ref;
+// Static structure for one selection, built once per selection.
+function buildPanelMarkup(panel, type, ref){
     if(type==='building' && isEnemyBuilding(ref)){
       // Enemy structures get a plain readout — no train/upgrade/salvage
       // buttons, because every one of those acts on a building it assumes
@@ -960,7 +976,11 @@ function refreshInfoPanel(){
         <div id="infoEnemyAtkNote" style="color:#d8c79a;"></div>
         <div style="margin-top:6px;color:#d8c79a;">${enemyDesc(ref)}</div>`;
     }
-  }
+}
+
+// Runs every frame while something is selected. Updates values in place
+// only — replacing a node can drop a button between mousedown and mouseup.
+function updatePanelLive(type, ref){
 
   // dynamic updates only, every frame — no DOM node ever gets replaced here
   if(type==='building'){

@@ -208,7 +208,7 @@ function refreshIdleBox(){
     document.getElementById('idleCount').textContent = '0';
     document.getElementById('idleLabel').textContent = 'idle';
     box.title = 'No idle villagers — everyone is working';
-    const f0 = state.faction === 'swarm' ? FRAME.ghoul : FRAME.villager;
+    const f0 = unitFrame('villager');
     if(_idleIconFrame !== f0 && SPRITESHEET_IMG){
       drawIconCanvas(document.getElementById('idleIcon'), f0);
       _idleIconFrame = f0;
@@ -216,7 +216,7 @@ function refreshIdleBox(){
     return;
   }
 
-  const noun = state.faction === 'swarm' ? 'ghoul' : 'villager';
+  const noun = factionWord('worker');
   const word = list.length === 1 ? noun : noun + 's';
   document.getElementById('idleCount').textContent = list.length;
   document.getElementById('idleLabel').textContent = 'idle';
@@ -225,7 +225,7 @@ function refreshIdleBox(){
 
   // the icon can only be drawn once the faction is known, so it is drawn
   // lazily on first show rather than at boot with the other HUD icons
-  const frame = state.faction === 'swarm' ? FRAME.ghoul : FRAME.villager;
+  const frame = unitFrame('villager');
   if(_idleIconFrame !== frame && SPRITESHEET_IMG){
     drawIconCanvas(document.getElementById('idleIcon'), frame);
     _idleIconFrame = frame;
@@ -380,7 +380,7 @@ function unitUpkeepPerMin(u){
   const soldier = (u.type==='archer' || u.type==='swordsman' || u.type==='captain' || u.type==='flesh_golem');
   return (soldier ? UPKEEP.soldierFoodPerTick : 0.5) * 20;
 }
-function foodWord(){ return state.faction==='swarm' ? 'carrion' : 'food'; }
+function foodWord(){ return factionWord('food'); }
 
 // Range + aura rings drawn on the map for the current selection. Numbers tell
 // you an archer has 3.5 range; a ring tells you whether that wall is actually
@@ -761,7 +761,7 @@ function refreshBuildBar(){
 
 // A readable name + one-line description for a selected enemy, by race/role.
 function enemyName(e){
-  if(e.kind==='camp') return state.faction==='swarm' ? 'Human Outpost' : 'Bandit Camp';
+  if(e.kind==='camp') return factionDef().campName;
   if(e.kind==='ram') return 'Battering Ram';
   const race = e.race || 'human';
   if(race==='troll') return e.ranged ? 'Hobgoblin' : 'Troll';

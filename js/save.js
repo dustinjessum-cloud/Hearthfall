@@ -126,7 +126,7 @@ function restoreCamp(se){
     kind: 'camp', speedMult: 0, path: null, pathIdx: 0, lastMoveAt: 0, lastAttackAt: 0, target: null,
   };
   e.sprite = scene.add.image(se.gx*TILE+TILE/2, se.gy*TILE+TILE/2, 'tiles', FRAME.wall_gate)
-    .setTint(state.faction==='swarm' ? 0x8fb4e8 : 0xcc5544);
+    .setTint(factionDef().campTint);
   e.hpBarBg = scene.add.rectangle(se.gx*TILE+TILE/2, se.gy*TILE-2, TILE-8, 4, 0x2a1c10).setDepth(5);
   e.hpBarFg = scene.add.rectangle(se.gx*TILE+4, se.gy*TILE-2, TILE-8, 4, 0xd85a3a).setOrigin(0,0.5).setDepth(6);
   state.enemies.push(e);
@@ -171,7 +171,7 @@ function restoreGame(snapshot){
       if(!spr || !spr.setFrame) continue;
       if(state.roads[y] && state.roads[y][x]){
         spr.setFrame(FRAME.dirt);
-        spr.setTint(state.faction==='swarm' ? SWARM.creep.roadTint : (BUILD_DEFS.road.tint || 0xe0c898));
+        spr.setTint(factionDef().roadTintKey==='swarm' ? SWARM.creep.roadTint : (BUILD_DEFS.road.tint || 0xe0c898));
       } else if(isCreeped(x, y)){
         spr.setFrame(frameForGroundTile(x, y));
       }

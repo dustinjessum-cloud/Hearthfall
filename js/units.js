@@ -188,7 +188,7 @@ function createArcher(gx, gy){
   // A colored ring under the unit's feet so it's easy to spot against the
   // grass tiles, since the sprite alone is small and similarly toned.
   u.marker = scene.add.ellipse(cx, cy+9, 20, 9, 0x2255aa, 0.55).setStrokeStyle(1, 0x9fc4ff, 0.9).setDepth(3);
-  u.sprite = scene.add.image(cx, cy, 'tiles', state.faction==='swarm' ? FRAME.spitter_naga : FRAME.archer).setDepth(4);
+  u.sprite = scene.add.image(cx, cy, 'tiles', unitFrame('archer')).setDepth(4);
   if(state.faction==='swarm'){ u.baseTint = SWARM.unitTints.archer; u.sprite.setTint(u.baseTint); }
   u.hpBarBg = scene.add.rectangle(cx, cy-18, TILE-10, 4, 0x2a1c10).setDepth(5).setVisible(false);
   u.hpBarFg = scene.add.rectangle(cx-(TILE-10)/2, cy-18, TILE-10, 4, 0x6bbf59).setOrigin(0,0.5).setDepth(6).setVisible(false);
@@ -205,7 +205,7 @@ function createCaptain(gx, gy){
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   // gold ring + gold-tinted sprite: unmistakably the hero
   u.marker = scene.add.ellipse(cx, cy+9, 24, 11, 0xaa8822, 0.6).setStrokeStyle(2, 0xffd76b, 1).setDepth(3);
-  u.sprite = scene.add.image(cx, cy, 'tiles', state.faction==='swarm' ? FRAME.broodmother : FRAME.minotaur).setDepth(4);
+  u.sprite = scene.add.image(cx, cy, 'tiles', unitFrame('captain')).setDepth(4);
   // the Broodmother's colors are baked into her own sprite — no tint needed,
   // same as the Minotaur
   u.hpBarBg = scene.add.rectangle(cx, cy-18, TILE-10, 4, 0x2a1c10).setDepth(5).setVisible(false);
@@ -219,7 +219,7 @@ function livingCaptain(){ return state.units.find(u=>u.type==='captain' && u.hp>
 function recruitCaptain(){
   if(state.gameOver || livingCaptain()) return false;
   const cost = state.captainRecruited ? CAPTAIN.reviveCost : CAPTAIN.cost;
-  const heroResKey = state.faction==='swarm' ? 'food' : 'gold'; // the Broodmother is born of biomass
+  const heroResKey = factionDef().heroResKey;
   if(state.resources[heroResKey] < cost) return false;
   state.resources[heroResKey] -= cost;
   const th = scene.townHallPos;
@@ -249,7 +249,7 @@ function createSwordsman(gx, gy){
   u.marker = scene.add.ellipse(cx, cy+9, 20, 9, 0x22848a, 0.55).setStrokeStyle(1, 0x9fe8e0, 0.9).setDepth(3);
   // reuse the swordsman frame for humans; zerglings get their own quadruped sprite
   u.baseTint = swarm ? SWARM.unitTints.swordsman : 0xaad4ff;
-  u.sprite = scene.add.image(cx, cy, 'tiles', swarm ? FRAME.zergling_quad : FRAME.enemy_swordsman).setDepth(4).setTint(u.baseTint);
+  u.sprite = scene.add.image(cx, cy, 'tiles', unitFrame('swordsman')).setDepth(4).setTint(u.baseTint);
   u.hpBarBg = scene.add.rectangle(cx, cy-18, TILE-10, 4, 0x2a1c10).setDepth(5).setVisible(false);
   u.hpBarFg = scene.add.rectangle(cx-(TILE-10)/2, cy-18, TILE-10, 4, 0x6bbf59).setOrigin(0,0.5).setDepth(6).setVisible(false);
   if(u.visualScale !== 1){
@@ -341,7 +341,7 @@ function createVillager(gx, gy){
   // the undead drone is a proper ghoul sprite (baked sickly-green flesh), so
   // it needs no runtime tint — unlike the other swarm units which recolor a
   // shared frame
-  u.sprite = scene.add.image(cx, cy, 'tiles', state.faction==='swarm' ? FRAME.ghoul : FRAME.villager).setDepth(4);
+  u.sprite = scene.add.image(cx, cy, 'tiles', unitFrame('villager')).setDepth(4);
   u.hpBarBg = scene.add.rectangle(cx, cy-18, TILE-10, 4, 0x2a1c10).setDepth(5).setVisible(false);
   u.hpBarFg = scene.add.rectangle(cx-(TILE-10)/2, cy-18, TILE-10, 4, 0x6bbf59).setOrigin(0,0.5).setDepth(6).setVisible(false);
   state.units.push(u);

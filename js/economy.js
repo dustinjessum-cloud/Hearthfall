@@ -200,7 +200,7 @@ function nearestUnbuiltFoundation(u, radius){
 function updateConstruction(delta){
   for(const b of myBuildings()){
     if(underConstruction(b) && !b.awaitingBuilder){
-      const builder = state.faction==='swarm' ? null : assignedBuilder(b);
+      const builder = factionDef().builderDissolves ? null : assignedBuilder(b);
       const ready = state.faction==='swarm' || builderPresent(builder, b);
       if(ready){
         b.buildMs -= delta;
@@ -394,7 +394,7 @@ let corpseIdCounter = 1;
 function spawnCorpse(gx, gy){
   const c = {
     id: corpseIdCounter++, gx: Math.round(gx), gy: Math.round(gy),
-    rotMs: state.faction==='swarm' ? CORPSE.rotMsSwarm : CORPSE.rotMs,
+    rotMs: factionDef().corpseRotMs,
   };
   if(scene && scene.add){
     c.sprite = scene.add.image(c.gx*TILE+TILE/2, c.gy*TILE+TILE/2, 'tiles', FRAME.corpse).setDepth(2); // above ground, below units
@@ -1383,8 +1383,8 @@ function economyTick(){
   // building maintenance: every structure draws wood (humans) or biomass
   // (the hive feeds its growths); when the stockpile is empty, everything
   // weathers instead — decay until you restock.
-  const upkeepKey = state.faction==='swarm' ? 'food' : 'wood';
-  const upkeepRate = state.faction==='swarm' ? SWARM.upkeepPerBuildingPerTick : UPKEEP.woodPerBuildingPerTick;
+  const upkeepKey = factionDef().upkeepKey;
+  const upkeepRate = isSwarm() ? SWARM.upkeepPerBuildingPerTick : UPKEEP.woodPerBuildingPerTick;
   const structures = myBuildings().filter(b=>b.hp>0 && !b.isCore);
   const upkeepNeeded = structures.length * upkeepRate;
   if(upkeepNeeded > 0){

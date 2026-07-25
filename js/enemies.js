@@ -4,7 +4,7 @@
 let enemyIdCounter = 1;
 
 // the race that raids the player: the opposite of their own faction
-function oppositeRace(){ return state.faction==='swarm' ? 'human' : 'undead'; }
+function oppositeRace(){ return factionDef().enemyRace; }
 
 function spawnWave(){
   const wave = state.wave + 1;

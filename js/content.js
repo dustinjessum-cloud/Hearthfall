@@ -84,7 +84,96 @@ const AI_BUILD_DEFS = {
 
 // The enemy town is always the opposite race. state.faction is the PLAYER's
 // ('human' or 'swarm'); this is the skin the enemy wears.
-function aiTownRace(){ return state.faction === 'swarm' ? 'human' : 'undead'; }
+// ---------------------------------------------------------------------
+// FACTION TABLE
+//
+// Everything that used to be a `state.faction==='swarm' ? A : B` ternary
+// lives here instead. That pattern was fine with two factions and actively
+// dangerous with three: the else-branch silently means "human", so a third
+// faction would inherit human upkeep, human corpse rules, human road tints
+// and human core art in roughly forty places without a single error.
+//
+// Every faction must state its values EXPLICITLY. Nothing is inherited by
+// falling through a conditional. Adding a fourth faction means adding one
+// entry here, not auditing forty call sites.
+//
+// applyFaction() still mutates BUILD_DEFS for the undead — that is a
+// separate problem and is left alone deliberately, since only one faction's
+// roster is ever needed in a page load. This table is about the SCATTERED
+// per-faction values, which is where the real bug surface was.
+const FACTION_DEFS = {
+  human: {
+    label: 'human', adjective: 'human',
+    coreName: 'Town Hall', coreFrame: 'town_hall',
+    corpseRotMs: 60000,
+    upkeepKey: 'wood',
+    campTint: 0xcc5544,
+    roadTintKey: 'human',
+    builderDissolves: false,   // a human builder walks away when the job is done
+    usesCreep: false,
+    unitFrames: { villager:'villager', archer:'archer', swordsman:'enemy_swordsman', captain:'minotaur' },
+    words: { food:'food', worker:'villager', workers:'villagers' },
+    campName: 'Bandit Camp',
+    heroResKey: 'gold',
+    // who the enemy town is when you play this faction
+    enemyRace: 'undead',
+  },
+  swarm: {
+    label: 'undead', adjective: 'undead',
+    coreName: 'Necropolis', coreFrame: 'crypt',
+    corpseRotMs: 45000,
+    upkeepKey: 'food',
+    campTint: 0x8fb4e8,
+    roadTintKey: 'swarm',
+    builderDissolves: true,    // the drone dissolves INTO the structure
+    usesCreep: true,
+    unitFrames: { villager:'ghoul', archer:'spitter_naga', swordsman:'zergling_quad', captain:'broodmother' },
+    words: { food:'carrion', worker:'ghoul', workers:'ghouls' },
+    campName: 'Human Outpost',
+    heroResKey: 'food',        // the Necromancer is raised from biomass
+    enemyRace: 'human',
+  },
+  // "Lead your Tribe" — registered now with explicit values so nothing about
+  // it is inherited from human by accident. Gameplay comes later; the point
+  // of listing it today is that every lookup below already has an answer for
+  // it rather than silently falling through to the human branch.
+  tribe: {
+    label: 'tribe', adjective: 'troll',
+    coreName: 'Great Lodge', coreFrame: 'town_hall',  // placeholder art
+    corpseRotMs: 60000,
+    upkeepKey: 'wood',
+    campTint: 0xcc5544,
+    roadTintKey: 'human',
+    builderDissolves: false,
+    usesCreep: false,
+    // hobgoblins do the work, ogres do the fighting — placeholder assignments
+    // using the sprites that already exist, until the tribe gets its own art
+    unitFrames: { villager:'hobgoblin', archer:'hobgoblin', swordsman:'troll', captain:'troll' },
+    words: { food:'food', worker:'hobgoblin', workers:'hobgoblins' },
+    campName: 'Bandit Camp',
+    heroResKey: 'gold',
+    enemyRace: 'human',
+  },
+};
+
+// Convenience readers, so call sites don't reach into the table by hand.
+function unitFrame(role){ return FRAME[factionDef().unitFrames[role]]; }
+function factionWord(key){ return factionDef().words[key]; }
+
+// Always returns a definition — an unknown faction is a bug worth hearing
+// about rather than one that quietly plays as a human.
+function factionDef(f){
+  const key = f || state.faction;
+  const d = FACTION_DEFS[key];
+  if(!d){ console.error('Unknown faction:', key, '- falling back to human'); return FACTION_DEFS.human; }
+  return d;
+}
+function isSwarm(){ return state.faction === 'swarm'; }
+function usesCreep(){ return factionDef().usesCreep; }
+
+// The enemy town wears the opposite race. With two factions "opposite" was
+// obvious; with three it has to be stated, so it comes off the table.
+function aiTownRace(){ return factionDef().enemyRace; }
 
 function aiDef(type){
   const d = AI_BUILD_DEFS[type];

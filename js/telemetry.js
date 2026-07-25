@@ -64,6 +64,26 @@ function logSnapshot(){
     bldgs: (typeof myBuildings === 'function') ? myBuildings().filter(b=>b.hp>0).length : 0,
     wave: state.wave,
     enemies: state.enemies.filter(e=>e.hp>0 && e.kind!=='camp').length,
+    // Which production buildings exist and whether they are STAFFED. Reading
+    // the last log, stone froze at 79 for six minutes and the data could not
+    // say whether the quarry was destroyed, unstaffed, or out of deposit.
+    prod: (function(){
+      const out = {};
+      for(const b of myBuildings()){
+        if(b.hp<=0 || underConstruction(b)) continue;
+        const d = BUILD_DEFS[b.type];
+        if(!d || !d.produces) continue;
+        const k = b.type;
+        out[k] = out[k] || { n:0, staffed:0, dry:0 };
+        out[k].n++;
+        if(workersOf(b).length) out[k].staffed++;
+        // no resource left within reach is the difference between "idle" and
+        // "nothing left to mine"
+        if(d.bonusNear && !findNearestResourceTile(b.gx, b.gy, d.bonusNear, 10)) out[k].dry++;
+      }
+      return out;
+    })(),
+    idle: (typeof idleWorkers === 'function') ? idleWorkers().length : null,
     // the AI's side of the race, so their economy can be compared to yours
     aiRes: state.ai ? { f:Math.round(state.ai.resources.food), w:Math.round(state.ai.resources.wood), s:Math.round(state.ai.resources.stone) } : null,
     aiBldgs: (typeof aiBuildings === 'function') ? aiBuildings().filter(b=>b.hp>0).length : 0,
@@ -133,6 +153,10 @@ function exportSessionLog(){
 
 function toggleRecording(){
   if(!state.session) return;
+  // Log the PAUSE before pausing, or the gap it creates is unexplained: a
+  // read of the last log showed snapshots stopping at t=283 and resuming at
+  // t=625 with nothing to say why 5.7 minutes were missing.
+  if(state.session.recording) logEvent('recording_paused');
   state.session.recording = !state.session.recording;
   if(state.session.recording) logEvent('recording_resumed');
   refreshHud2Buttons();

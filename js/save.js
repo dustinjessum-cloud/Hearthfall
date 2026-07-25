@@ -224,9 +224,9 @@ function restoreGame(snapshot){
     const override = aiOwned
       ? Object.assign({}, aiDef(sb.aiType || sb.type), {hp: sb.maxHp})
       : (sb.isCore
-        ? (state.faction==='swarm'
-            ? {name:'Necropolis', hp:sb.maxHp, frame:'crypt', size:sb.size||2}
-            : {name:'Town Hall', hp:sb.maxHp, frame:'town_hall', size:sb.size||2})
+        // off the faction table, same as world creation — hardcoding the two
+        // known cores here would reload a tribe save as a human town
+        ? {name: factionDef().coreName, hp: sb.maxHp, frame: factionDef().coreFrame, size: sb.size||2}
         : Object.assign({}, BUILD_DEFS[sb.type], {hp: sb.maxHp}));
     if(!override || !override.frame){ console.error('Skipping unknown building type on restore:', sb.type); continue; }
     const b = createBuilding(sb.type, sb.gx, sb.gy, override, sb.owner || OWNER_PLAYER);

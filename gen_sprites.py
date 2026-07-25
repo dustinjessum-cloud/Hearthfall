@@ -9,7 +9,8 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 13  # 6x13 = 78 slots (grew from 6x12 for the bone/golem set)
+ROWS = 15  # 6x15 = 90 slots (grew from 6x13 for the tribe roster;
+           # headroom on purpose so the rest of the tribe needs no regrow)
 
 frames = {}
 order = []
@@ -1150,6 +1151,130 @@ def draw_bandit(d):
     rect(d, 24, 16, 25, 21, WOOD_D)                          # knife
     d.polygon([(24, 16), (26, 16), (25, 9)], fill=(198, 198, 206))
 
+# ---- the Tribe -------------------------------------------------------
+# Deliberately NOT medieval. Where the human set is squared masonry, tidy
+# gables and plank doors, everything here is lashed poles, stretched hide and
+# bone. Nothing is straight and nothing is symmetrical — that contrast is the
+# whole read at a glance on a shared map.
+HIDE_T, HIDE_TD, HIDE_TL = (166, 132, 92), (126, 98, 66), (196, 164, 120)
+POLE_T, POLE_TD = (104, 78, 50), (74, 54, 34)
+TUSK_T = (232, 226, 202)
+WARPAINT = (168, 52, 40)
+
+def draw_tribe_lodge(d):
+    # The Great Lodge: a long hide-roofed hall on a heavy timber frame, with
+    # tusks flanking the door and trophy skulls on the gable. Renders at 2x2,
+    # so it carries the most detail of the set.
+    draw_grass(d)
+    ground_shadow(d, 2, 30, 28, 4)
+    # sagging hide roof — a shallow curve, never a clean gable
+    d.polygon([(2, 20), (16, 5), (30, 20)], fill=HIDE_TD)
+    d.polygon([(4, 20), (16, 8), (28, 20)], fill=HIDE_T)
+    d.polygon([(5, 19), (15, 9), (15, 19)], fill=HIDE_TL)      # lit left slope
+    # lashings holding the hide down over the ribs
+    for lx in (9, 16, 23):
+        d.line([lx, 20, 16, 7], fill=POLE_TD)
+    # ridge pole jutting past both ends, the giveaway that it is lashed
+    d.line([1, 21, 31, 21], fill=POLE_T, width=2)
+    rect(d, 0, 20, 2, 22, POLE_TD); rect(d, 29, 20, 31, 22, POLE_TD)
+    # wall of upright stakes
+    rect(d, 4, 21, 27, 30, POLE_T)
+    for sx in range(5, 28, 3):
+        rect(d, sx, 21, sx, 30, POLE_TD)                        # stake gaps
+    rect(d, 4, 21, 4, 30, shade(POLE_T, 1.3))                   # lit corner
+    # dark doorway with a hide flap
+    rect(d, 13, 23, 18, 30, (38, 28, 20))
+    rect(d, 13, 23, 18, 25, HIDE_TD)
+    # tusks flanking the entrance
+    d.polygon([(11, 30), (12, 23), (13, 30)], fill=TUSK_T)
+    d.polygon([(18, 30), (19, 23), (20, 30)], fill=TUSK_T)
+    # trophy skull at the peak + warpaint daubs
+    d.ellipse([13, 4, 19, 10], fill=TUSK_T)
+    rect(d, 14, 7, 15, 8, (40, 34, 28)); rect(d, 17, 7, 18, 8, (40, 34, 28))
+    rect(d, 7, 24, 8, 25, WARPAINT); rect(d, 24, 24, 25, 25, WARPAINT)
+
+def draw_tribe_hut(d):
+    # A hide dome on a bent-pole frame — the tribe's dwelling. Small, round
+    # and lopsided, so a row of them never reads as a tidy street.
+    draw_grass(d)
+    ground_shadow(d, 6, 26, 28, 3)
+    d.ellipse([6, 11, 26, 30], fill=HIDE_TD)
+    d.ellipse([8, 13, 24, 29], fill=HIDE_T)
+    d.ellipse([9, 14, 17, 22], fill=HIDE_TL)                    # lit shoulder
+    # bent poles showing through the hide
+    for px in (11, 16, 21):
+        d.line([px, 13, px, 29], fill=POLE_TD)
+    d.line([8, 20, 24, 20], fill=POLE_TD)                       # binding hoop
+    # smoke hole at the crown, poles poking out
+    d.ellipse([13, 9, 19, 13], fill=(46, 36, 26))
+    d.line([13, 11, 11, 6], fill=POLE_T); d.line([19, 11, 21, 6], fill=POLE_T)
+    # low door flap
+    rect(d, 13, 24, 18, 30, (40, 30, 22))
+    d.polygon([(13, 24), (16, 21), (19, 24)], fill=HIDE_TD)
+
+def draw_tribe_totem(d):
+    # A carved pole: stacked faces, a skull, tusks and feathers. Tall and
+    # vertical on purpose — nothing else in the tribe set has this silhouette,
+    # so it reads instantly as a landmark rather than a building.
+    draw_grass(d)
+    ground_shadow(d, 10, 22, 29, 3)
+    rect(d, 12, 4, 19, 29, POLE_T)
+    rect(d, 12, 4, 13, 29, shade(POLE_T, 1.28))                 # lit left face
+    rect(d, 18, 4, 19, 29, POLE_TD)                             # shaded right
+    # stacked carved faces, each a band with eyes and a mouth
+    for fy, col in ((22, POLE_TD), (15, POLE_T)):
+        rect(d, 11, fy, 20, fy+5, col)
+        rect(d, 11, fy, 20, fy, shade(col, 1.3))
+        rect(d, 13, fy+1, 14, fy+2, (34, 26, 18))
+        rect(d, 17, fy+1, 18, fy+2, (34, 26, 18))
+        rect(d, 13, fy+4, 18, fy+4, (34, 26, 18))               # slit mouth
+        rect(d, 12, fy+1, 12, fy+3, WARPAINT)
+    # skull crowning the pole
+    d.ellipse([12, 3, 19, 10], fill=TUSK_T)
+    rect(d, 13, 6, 14, 7, (36, 30, 24)); rect(d, 17, 6, 18, 7, (36, 30, 24))
+    rect(d, 15, 8, 16, 9, (36, 30, 24))
+    # tusks and a feather binding
+    d.polygon([(11, 11), (7, 8), (11, 14)], fill=TUSK_T)
+    d.polygon([(20, 11), (24, 8), (20, 14)], fill=TUSK_T)
+    for fy2 in (12, 13):
+        rect(d, 10, fy2, 21, fy2, (92, 70, 44))
+
+def draw_tribe_worker(d):
+    # A hobgoblin labourer: same wiry build as the spear-thrower, but hunched
+    # under a bundle with a mattock instead of a javelin, so the two read
+    # apart instantly on the field.
+    SKN, SKN_D, SKN_L = (140, 132, 78), (104, 98, 54), (168, 160, 102)
+    RAG, RAG_D = (98, 78, 56), (72, 56, 40)
+    HAFT = (122, 96, 60)
+    STONE_H, STONE_HL = (108, 104, 98), (150, 146, 140)
+    d.ellipse([10, 27, 22, 31], fill=(0, 0, 0, 70))
+    # bundle of hides strapped to the back, the silhouette that says "worker"
+    d.ellipse([17, 10, 27, 21], fill=HIDE_TD)
+    d.ellipse([18, 11, 25, 18], fill=HIDE_T)
+    for by in (13, 16):
+        rect(d, 17, by, 27, by, POLE_TD)                        # cords
+    # bent legs
+    rect(d, 12, 22, 14, 29, SKN_D); rect(d, 12, 22, 12, 29, SKN)
+    rect(d, 17, 22, 19, 29, SKN_D); rect(d, 17, 22, 17, 29, SKN)
+    rect(d, 11, 29, 15, 30, RAG_D); rect(d, 16, 29, 20, 30, RAG_D)
+    # hunched torso, leaning under the load
+    rect(d, 12, 13, 19, 23, RAG)
+    rect(d, 12, 13, 13, 23, shade(RAG, 1.28))
+    rect(d, 18, 13, 19, 23, RAG_D)
+    rect(d, 12, 17, 19, 17, RAG_D)
+    # mattock held low across the body
+    d.line([6, 24, 16, 18], fill=HAFT, width=1)
+    d.polygon([(4, 25), (9, 21), (5, 20)], fill=STONE_H)
+    d.line([4, 25, 5, 20], fill=STONE_HL)
+    rect(d, 13, 19, 15, 21, SKN)                                # gripping hand
+    # big-eared head, tipped forward under the weight
+    d.ellipse([11, 5, 19, 13], fill=SKN)
+    rect(d, 11, 5, 15, 6, SKN_L)
+    d.polygon([(11, 7), (6, 3), (11, 11)], fill=SKN)
+    d.polygon([(19, 7), (24, 3), (19, 11)], fill=SKN_D)
+    rect(d, 12, 8, 13, 9, (60, 40, 24)); rect(d, 16, 8, 17, 9, (60, 40, 24))
+    rect(d, 13, 11, 17, 12, SKN_D)                              # set jaw
+
 def draw_bone_pile(d):
     # A bone HAYSTACK — the first pass was a low heap and read as a blob on
     # the ground. The fix is silhouette: this is tall and conical, wide at
@@ -1746,6 +1871,10 @@ DRAWERS = [
     ("bone_yard", draw_bone_yard),
     ("ritual_pit", draw_ritual_pit),
     ("flesh_golem", draw_flesh_golem),
+    ("tribe_lodge", draw_tribe_lodge),
+    ("tribe_hut", draw_tribe_hut),
+    ("tribe_totem", draw_tribe_totem),
+    ("tribe_worker", draw_tribe_worker),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

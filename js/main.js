@@ -42,7 +42,7 @@ class MainScene extends Phaser.Scene {
   }
 
   setupFrames(texture){
-    const cols=6, rows=13, size=32; // 6x13 grid — must match gen_sprites.py ROWS
+    const cols=6, rows=15, size=32; // 6x15 grid — must match gen_sprites.py ROWS
     let idx=0;
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
@@ -74,9 +74,12 @@ class MainScene extends Phaser.Scene {
 
       // place the starting core — Town Hall for humans, the Hive for the swarm
       const swarm = state.faction === 'swarm';
+      // core name and art come off the faction table — this was the last
+      // `swarm ? A : B` in world creation, and it would have handed the tribe
+      // a human Town Hall
+      const fd = factionDef();
       const th = createBuilding('town_hall_core', cx, cy,
-        swarm ? {name:'Necropolis', hp:500, frame:'crypt', size:2}
-              : {name:'Town Hall', hp:500, frame:'town_hall', size:2});
+        {name: fd.coreName, hp:500, frame: fd.coreFrame, size:2});
       th.isCore = true;
       th.level = 1;
 
@@ -582,6 +585,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
   };
   document.getElementById('startBtn').addEventListener('click', ()=> { clearSavedGame(); bootGame('human'); });
   document.getElementById('startSwarmBtn').addEventListener('click', ()=> { clearSavedGame(); bootGame('swarm'); });
+  const tribeBtn = document.getElementById('startTribeBtn');
+  if(tribeBtn) tribeBtn.addEventListener('click', ()=> { clearSavedGame(); bootGame('tribe'); });
 
   const continueBtn = document.getElementById('continueBtn');
   if(hasSavedGame()){

@@ -669,7 +669,13 @@ function refreshWallSprite(b){
   const vert = (up && up.type==='wall') || (down && down.type==='wall');
   // corners, T-junctions and crossings use the junction sprite so
   // perpendicular wall runs read as one continuous wall
-  const frame = (vert && horiz) ? 'wall_corner' : ((vert && !horiz) ? 'wall_v' : 'wall');
+  // Variant names come off the faction def, not hardcoded. These three were
+  // literal human frame names, so they overwrote whatever a faction had set
+  // the moment a wall was placed or a neighbour updated — which is why the
+  // tribe kept building human masonry despite frame:stake_wall.
+  const wd = BUILD_DEFS.wall || {};
+  const v = wd.variants || { corner:'wall_corner', vert:'wall_v', straight:'wall' };
+  const frame = (vert && horiz) ? v.corner : ((vert && !horiz) ? v.vert : v.straight);
   b.sprite.setFrame(FRAME[frame]);
 }
 

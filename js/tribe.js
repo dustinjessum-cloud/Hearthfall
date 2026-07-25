@@ -46,7 +46,10 @@ function applyTribeFaction(){
                              nearTC:true };
   // its own palisade art — a brown TINT on the masonry wall still read as
   // stone, because the coursing and merlons were still there
+  // variants must be stated, or refreshWallSprite falls back to the human
+  // masonry names and overwrites the palisade on every placement
   BUILD_DEFS.wall        = { name:'Stake Wall', cost:{wood:6}, hp:100, frame:'stake_wall',
+                             variants:{ straight:'stake_wall', vert:'stake_wall', corner:'stake_wall' },
                              blocksPath:true };
   BUILD_DEFS.gate        = { name:'Stake Gate', cost:{wood:8}, hp:100, frame:'tribe_gate',
                              blocksPath:true, friendlyPassable:true };

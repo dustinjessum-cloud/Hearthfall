@@ -1402,7 +1402,10 @@ function economyTick(){
   // bleeds HP until you fix it — starvation is a spiral, not a dice roll.
   const soldiers = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman'||u.type==='captain'||u.type==='flesh_golem') && u.hp>0).length;
   const civilians = state.units.filter(u=>(u.type==='villager'||u.type==='repairman') && u.hp>0).length;
-  const foodUse = civilians * 0.5 + soldiers * UPKEEP.soldierFoodPerTick;
+  // Per-faction appetite. The tribe eats 15% less: they have no cooking
+  // chain to multiply what they gather, and their food is tied to finite
+  // forest, so the cut is compensation rather than a bonus.
+  const foodUse = (civilians * 0.5 + soldiers * UPKEEP.soldierFoodPerTick) * factionDef().foodUpkeepMult;
   state.resources.food -= foodUse;
   if(state.resources.food <= 0 && state.population.current > 0){
     state.resources.food = 0;

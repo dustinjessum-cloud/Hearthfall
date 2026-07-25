@@ -378,7 +378,7 @@ function unitActivity(u){
 // What this unit costs to keep, per minute (economy ticks are 3s => x20).
 function unitUpkeepPerMin(u){
   const soldier = (u.type==='archer' || u.type==='swordsman' || u.type==='captain' || u.type==='flesh_golem');
-  return (soldier ? UPKEEP.soldierFoodPerTick : 0.5) * 20;
+  return (soldier ? UPKEEP.soldierFoodPerTick : 0.5) * 20 * factionDef().foodUpkeepMult;
 }
 function foodWord(){ return factionWord('food'); }
 
@@ -885,7 +885,7 @@ function refreshInfoPanel(){
           <button class="tradeBtn" id="buy_food"></button>` : ''}
         ${STORAGE_LEVELS[ref.type] ? `<div id="infoStorage" style="margin-top:4px;color:#d8c79a;"></div><button id="upgradeBtn"></button>` : ''}
         ${(ref.type==='barracks' || ref.type==='town_hall_core') ? `<div id="prodStatus" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
-        ${ref.type==='town_hall_core' ? `<div id="infoTC" style="margin-top:4px;color:#d8c79a;"></div><div id="infoGarrisonTC" style="margin-top:4px;color:#d8c79a;"></div><button id="tcUpgradeBtn"></button><button id="trainVillagerBtn"></button><button id="captainBtn"></button><button id="releaseBtn"></button>` : ''}
+        ${ref.type==='town_hall_core' ? `<div id="infoTC" style="margin-top:4px;color:#d8c79a;"></div><div id="infoGarrisonTC" style="margin-top:4px;color:#d8c79a;"></div><button id="tcUpgradeBtn"></button><button id="trainVillagerBtn"></button>${state.faction==='tribe' ? `<button id="trainForesterBtn"></button>` : ''}<button id="captainBtn"></button><button id="releaseBtn"></button>` : ''}
         ${ref.type==='barracks' ? `<button id="trainBtn"></button><button id="trainSwordBtn"></button>
           <div style="margin-top:6px;color:#d8c79a;font-size:12px;">EVOLUTIONS (permanent, faction-wide)</div>
           <button id="evolveSwordBtn"></button><button id="evolveArcherBtn"></button>` : ''}
@@ -898,6 +898,8 @@ function refreshInfoPanel(){
       }
       if(ref.type==='town_hall_core'){
         document.getElementById('trainVillagerBtn').addEventListener('click', ()=> trainVillager(ref));
+        const fb = document.getElementById('trainForesterBtn');
+        if(fb) fb.addEventListener('click', ()=> trainForester(ref));
         document.getElementById('tcUpgradeBtn').addEventListener('click', ()=> upgradeTownCenter(ref));
         document.getElementById('captainBtn').addEventListener('click', ()=> recruitCaptain());
         document.getElementById('releaseBtn').addEventListener('click', ()=> releaseTCGarrison());
@@ -1084,6 +1086,13 @@ function refreshInfoPanel(){
       btn.disabled = !canAfford || queueFull(ref);
       const trainSec = Math.round((TC_LEVELS.trainMs[lvl-1] || VILLAGER_TRAIN_MS)/1000);
       btn.textContent = `Train Villager (${fmtCost(VILLAGER_COST)}, ${trainSec}s)`;
+    }
+    const fbtn = document.getElementById('trainForesterBtn');
+    if(fbtn){
+      let ok = state.population.current < state.population.cap && !state.starving;
+      for(const k in FORESTER.cost) if(state.resources[k] < FORESTER.cost[k]) ok = false;
+      fbtn.disabled = !ok;
+      fbtn.textContent = `Train Forester (${fmtCost(FORESTER.cost)})`;
     }
     const capBtn = document.getElementById('captainBtn');
     if(capBtn){

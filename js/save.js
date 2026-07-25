@@ -240,7 +240,7 @@ function restoreGame(snapshot){
   for(const b of state.buildings) if(b.type==='wall') refreshWallSprite(b);
 
   // ---- units ----
-  const CREATORS = { villager: createVillager, archer: createArcher, swordsman: createSwordsman, captain: createCaptain, repairman: createRepairman, flesh_golem: createFleshGolem };
+  const CREATORS = { villager: createVillager, archer: createArcher, swordsman: createSwordsman, captain: createCaptain, repairman: createRepairman, flesh_golem: createFleshGolem, forester: createForester };
   for(const su of snapshot.units){
     const create = CREATORS[su.type];
     if(!create){ console.error('Skipping unknown unit type on restore:', su.type); continue; }

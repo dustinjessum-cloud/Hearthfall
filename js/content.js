@@ -113,6 +113,7 @@ const FACTION_DEFS = {
     builderDissolves: false,   // a human builder walks away when the job is done
     usesCreep: false,
     unitFrames: { villager:'villager', archer:'archer', swordsman:'enemy_swordsman', captain:'minotaur' },
+    foodUpkeepMult: 1.0,   // baseline
     words: { food:'food', worker:'villager', workers:'villagers' },
     campName: 'Bandit Camp',
     heroResKey: 'gold',
@@ -129,6 +130,7 @@ const FACTION_DEFS = {
     builderDissolves: true,    // the drone dissolves INTO the structure
     usesCreep: true,
     unitFrames: { villager:'ghoul', archer:'spitter_naga', swordsman:'zergling_quad', captain:'broodmother' },
+    foodUpkeepMult: 1.0,   // the dead eat carrion at the same rate
     words: { food:'carrion', worker:'ghoul', workers:'ghouls' },
     campName: 'Human Outpost',
     heroResKey: 'food',        // the Necromancer is raised from biomass
@@ -150,6 +152,7 @@ const FACTION_DEFS = {
     // hobgoblins do the work, ogres do the fighting — placeholder assignments
     // using the sprites that already exist, until the tribe gets its own art
     unitFrames: { villager:'tribe_worker', archer:'hobgoblin', swordsman:'troll', captain:'troll' },
+    foodUpkeepMult: 0.85,   // lean and used to hunger — see the note in tribe.js
     words: { food:'food', worker:'hobgoblin', workers:'hobgoblins' },
     campName: 'Bandit Camp',
     heroResKey: 'gold',

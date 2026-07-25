@@ -469,6 +469,7 @@ class MainScene extends Phaser.Scene {
     updateCombat(delta, time);
 
     aiThink(delta);         // their economy: train, gather, build, expand
+    if(state.faction==='tribe'){ updateForesters(delta); updateSaplings(delta); }
     updateAiBlight(delta);  // an undead enemy town spreads its own blight
     updateAiWar(delta);     // muster war parties and send them at you
     updateAiDefence(delta); // defenders answer alarms, then drift back

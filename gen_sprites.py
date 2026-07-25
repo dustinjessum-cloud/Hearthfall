@@ -1161,6 +1161,37 @@ POLE_T, POLE_TD = (104, 78, 50), (74, 54, 34)
 TUSK_T = (232, 226, 202)
 WARPAINT = (168, 52, 40)
 
+def draw_stake_wall(d):
+    # A palisade of lashed timber. The tribe was using the human masonry wall
+    # with a brown tint, which still read as tinted STONE — coursed blocks and
+    # merlons. This is sharpened logs bound with rope: vertical grain, pointed
+    # tops, uneven heights, no straight courses anywhere.
+    LOG, LOG_D, LOG_L = (122, 92, 58), (92, 68, 42), (152, 118, 78)
+    LOG_XD = (66, 48, 30)
+    ROPE = (168, 146, 104)
+    draw_grass(d)
+    ground_shadow(d, 1, 30, 28, 4)
+    # six stakes across the tile, each a slightly different height so the
+    # top edge is ragged rather than a machined line
+    tops = [6, 3, 7, 4, 8, 5]
+    for i, ty in enumerate(tops):
+        x = i*5 + 1
+        rect(d, x, ty+2, x+3, 29, LOG)
+        rect(d, x, ty+2, x, 29, LOG_L)          # lit left edge of each log
+        rect(d, x+3, ty+2, x+3, 29, LOG_D)      # shaded right edge
+        # sharpened point
+        d.polygon([(x, ty+2), (x+1, ty), (x+3, ty+2)], fill=LOG_L)
+        rect(d, x+2, ty+1, x+3, ty+2, LOG_D)
+        # a knot or two of grain
+        rect(d, x+1, ty+7, x+1, ty+8, LOG_XD)
+        rect(d, x+2, ty+13, x+2, ty+13, LOG_XD)
+    # two binding ropes running the width, sagging slightly between stakes
+    for ry in (13, 22):
+        for i in range(6):
+            x = i*5 + 1
+            rect(d, x, ry, x+3, ry, ROPE)
+            if i < 5: rect(d, x+4, ry+1, x+4, ry+1, ROPE)   # sag between logs
+
 def draw_tribe_lodge(d):
     # The Great Lodge: a long hide-roofed hall on a heavy timber frame, with
     # tusks flanking the door and trophy skulls on the gable. Renders at 2x2,
@@ -1871,6 +1902,7 @@ DRAWERS = [
     ("bone_yard", draw_bone_yard),
     ("ritual_pit", draw_ritual_pit),
     ("flesh_golem", draw_flesh_golem),
+    ("stake_wall", draw_stake_wall),
     ("tribe_lodge", draw_tribe_lodge),
     ("tribe_hut", draw_tribe_hut),
     ("tribe_totem", draw_tribe_totem),

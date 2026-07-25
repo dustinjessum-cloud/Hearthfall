@@ -1298,11 +1298,18 @@ function economyTick(){
     if(!onTile) continue;
     if(b.fertility===undefined) b.fertility = 1;
     const amount = Math.max(1, Math.round(BUILD_DEFS.farm.produces.food * b.fertility * hm));
-    const gained = addResource('wheat', amount);
+    // WHICH resource a farm yields is faction business. Humans grow wheat and
+    // run it through mill -> bakery for a 1.5x payoff. The tribe HUNTS: there
+    // is no cooking chain, so wheat would be a resource they can never eat —
+    // and that is exactly what happened, food falling from 45 to 0 across a
+    // whole run while the Hunting Camps worked perfectly and banked grain
+    // nobody could cook.
+    const yieldKey = factionDef().farmYield;
+    const gained = addResource(yieldKey, amount);
     // soil exhaustion: every harvest wears the field down a little, so old
     // farms slowly fade and you have to found new ones on fresh ground
     b.fertility = Math.max(FARM_MIN_FERTILITY, b.fertility - FARM_SOIL_WEAR);
-    if(scene && scene.add && gained>0) floatResourceText(b.gx, b.gy, '+'+gained, RESOURCE_COLOR.wheat);
+    if(scene && scene.add && gained>0) floatResourceText(b.gx, b.gy, '+'+gained, RESOURCE_COLOR[yieldKey] || RESOURCE_COLOR.wheat);
   }
 
   // a staffed chain building only runs while its worker stands on it

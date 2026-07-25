@@ -44,8 +44,10 @@ function applyTribeFaction(){
                              tint:0xc0a070, nearTC:true };
   BUILD_DEFS.warehouse   = { name:'Stockpile', cost:{wood:30}, hp:80, frame:'warehouse',
                              tint:0xc0a070, nearTC:true };
-  BUILD_DEFS.wall        = { name:'Stake Wall', cost:{wood:6}, hp:100, frame:'wall',
-                             tint:0xc0a070, blocksPath:true };
+  // its own palisade art — a brown TINT on the masonry wall still read as
+  // stone, because the coursing and merlons were still there
+  BUILD_DEFS.wall        = { name:'Stake Wall', cost:{wood:6}, hp:100, frame:'stake_wall',
+                             blocksPath:true };
   BUILD_DEFS.gate        = { name:'Stake Gate', cost:{wood:8}, hp:100, frame:'wall_gate',
                              tint:0xc0a070, blocksPath:true, friendlyPassable:true };
   BUILD_DEFS.road        = { name:'Trail', cost:{wood:2}, frame:'dirt', tint:0xc4a578, isRoad:true };

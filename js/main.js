@@ -151,6 +151,7 @@ class MainScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-R', ()=> toggleRangeRings());
     this.input.keyboard.on('keydown-ESC', ()=>{
       this.cancelBuildMode();
+      if(typeof cancelSeedTargeting === 'function') cancelSeedTargeting();
       clearGroupSelection();
       selectEntity(null,null);
     });
@@ -233,6 +234,12 @@ class MainScene extends Phaser.Scene {
   }
 
   handlePointerMove(p){
+    if(state.castMode){
+      const wpc = this.cameras.main.getWorldPoint(p.x, p.y);
+      const g = this.screenToGrid(wpc.x, wpc.y);
+      updateSeedGhost(g.gx, g.gy);
+      return;   // no drag-select while aiming an ability
+    }
     // drag-selection rectangle
     if(this.dragStart && p.isDown && !state.buildMode){
       const ddx = p.x - this.dragStart.sx, ddy = p.y - this.dragStart.sy;
@@ -326,6 +333,7 @@ class MainScene extends Phaser.Scene {
     const {gx, gy} = this.screenToGrid(wp.x, wp.y);
 
     if(p.rightButtonDown()){
+      if(state.castMode){ cancelSeedTargeting(); return; }
       if(state.buildMode){ this.cancelBuildMode(); return; }
       // shift held: queue the order behind whatever's already happening
       // instead of interrupting it. Same for drones — they're villagers
@@ -359,6 +367,12 @@ class MainScene extends Phaser.Scene {
       return;
     }
 
+    if(state.castMode){
+      const cu = castModeUnit();
+      if(cu) castSeedGrove(cu, gx, gy);
+      cancelSeedTargeting();
+      return;
+    }
     if(state.buildMode){
       tryPlaceBuilding(state.buildMode, gx, gy);
       return;

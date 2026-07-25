@@ -110,10 +110,15 @@ const TRIBE_TEXT = [
 const FORESTER = {
   cost: { food: 20, wood: 10 },
   hp: 24,
-  plantMs: 2500,        // time spent planting one sapling
-  saplingMs: 60000,     // how long until it is harvestable forest
+  saplingMs: 60000,     // how long until a sapling is harvestable forest
   qty: [70, 100],       // a planted tree yields a little less than wild growth
-  searchRadius: 6,      // how far it will wander looking for bare ground
+  // Seeding is a CAST, not a job. An autonomous planter quietly turned the
+  // whole map to woodland with no decision attached; as an ability with a
+  // long cooldown, WHERE you put ten trees is the interesting part.
+  treesPerCast: 10,
+  cooldownMs: 300000,   // five minutes — one cast is a real commitment
+  castRange: 7,         // how far from the Forester the circle can be placed
+  areaRadius: 3.2,      // radius of the seeded area, in tiles
 };
 
 // A tile can be planted if it is open ground the tribe can actually reach:
@@ -169,55 +174,59 @@ function updateSaplings(delta){
   markMinimapDirty();
 }
 
-// Foresters work on their own: find bare ground near where they stand, walk
-// to it, plant, repeat. They are workers, not a spell — they cost population
-// and can be killed mid-walk like any other unit.
+// Foresters no longer plant on their own — all they do per frame is tick
+// their cooldown down. The decision moved to the player.
 function updateForesters(delta){
   for(const u of state.units){
     if(u.type !== 'forester' || u.hp <= 0) continue;
-    if(u.moving) continue;
-    if(u.plantMs > 0){
-      u.plantMs -= delta;
-      if(u.plantMs <= 0){
-        plantSapling(Math.round(u.gx), Math.round(u.gy));
-        u.plantTarget = null;
-      }
-      continue;
-    }
-    if(u.plantTarget){
-      // arrived where it meant to plant?
-      if(Math.round(u.gx) === u.plantTarget.gx && Math.round(u.gy) === u.plantTarget.gy){
-        u.plantMs = FORESTER.plantMs;
-      } else if(!u.path || !u.path.length){
-        u.path = findFriendlyPath(u, u.plantTarget.gx, u.plantTarget.gy, null);
-        if(!u.path) u.plantTarget = null;
-      }
-      continue;
-    }
-    // look for somewhere to plant, spiralling out from where it stands
-    const ox = Math.round(u.gx), oy = Math.round(u.gy);
-    let found = null;
-    for(let r = 1; r <= FORESTER.searchRadius && !found; r++){
-      for(let dy = -r; dy <= r && !found; dy++){
-        for(let dx = -r; dx <= r && !found; dx++){
-          if(Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          if(canPlantAt(ox+dx, oy+dy)) found = { gx: ox+dx, gy: oy+dy };
-        }
-      }
-    }
-    if(found){
-      u.plantTarget = found;
-      commandUnitMove(u, found.gx, found.gy);
-      u.playerOrder = false;   // it is working, not following an order
+    if(u.seedCd > 0) u.seedCd = Math.max(0, u.seedCd - delta);
+  }
+}
+
+function foresterReady(u){ return !!u && u.type === 'forester' && u.hp > 0 && (u.seedCd || 0) <= 0; }
+
+// Scatter treesPerCast saplings at RANDOM valid spots inside the circle.
+// Random on purpose: you choose the ground, the grove chooses its own shape,
+// so no two castings look alike and a planted wood never reads as a grid.
+function castSeedGrove(u, gx, gy){
+  if(!foresterReady(u)) return false;
+  const dist = Phaser.Math.Distance.Between(u.gx, u.gy, gx, gy);
+  if(dist > FORESTER.castRange){
+    flashWaveBanner('Too far — move the Forester closer.');
+    return false;
+  }
+  // gather every plantable tile in the circle, then take a random sample
+  const spots = [];
+  const R = Math.ceil(FORESTER.areaRadius);
+  for(let dy = -R; dy <= R; dy++){
+    for(let dx = -R; dx <= R; dx++){
+      if(Math.hypot(dx, dy) > FORESTER.areaRadius) continue;
+      const x = gx + dx, y = gy + dy;
+      if(canPlantAt(x, y)) spots.push({gx:x, gy:y});
     }
   }
+  if(!spots.length){ flashWaveBanner('No open ground there to seed.'); return false; }
+  // Fisher-Yates, so the same tile is never picked twice
+  for(let i = spots.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = spots[i]; spots[i] = spots[j]; spots[j] = t;
+  }
+  const n = Math.min(FORESTER.treesPerCast, spots.length);
+  for(let i = 0; i < n; i++) plantSapling(spots[i].gx, spots[i].gy);
+  u.seedCd = FORESTER.cooldownMs;
+  if(scene && scene.add) floatResourceText(gx, gy, `${n} seeded`, '#7ad07a');
+  flashWaveBanner(n < FORESTER.treesPerCast
+    ? `Only ${n} seeds found open ground.`
+    : 'The Forester scatters a season of seed.');
+  refreshInfoPanel();
+  return true;
 }
 
 function createForester(gx, gy){
   const u = {
     id: unitIdCounter++, type:'forester', gx, gy, tx:gx, ty:gy,
     hp: FORESTER.hp, maxHp: FORESTER.hp, lastAttackAt: 0, moving: false,
-    orderQueue: [], plantTarget: null, plantMs: 0,
+    orderQueue: [], seedCd: 0,
   };
   const cx = gx*TILE+TILE/2, cy = gy*TILE+TILE/2;
   u.marker = scene.add.ellipse(cx, cy+9, 18, 8, 0x3a7a3a, 0.5)
@@ -250,4 +259,54 @@ function trainForester(core){
   flashWaveBanner('A Forester takes up seed and spade.');
   updateHUD();
   return true;
+}
+
+// ---- targeting mode --------------------------------------------------
+// Mirrors how build placement works: enter a mode, a ghost follows the
+// cursor, click commits, Esc or right-click cancels. Two circles are drawn —
+// the AREA that will be seeded, and the RANGE the Forester can reach — so
+// the two limits are visible at once rather than discovered by being refused.
+function beginSeedTargeting(u){
+  if(!foresterReady(u)) return;
+  state.castMode = { unitId: u.id };
+  flashWaveBanner('Choose where to seed — Esc or right-click to cancel.');
+}
+
+function cancelSeedTargeting(){
+  state.castMode = null;
+  if(scene){
+    if(scene._seedArea){ scene._seedArea.destroy(); scene._seedArea = null; }
+    if(scene._seedRange){ scene._seedRange.destroy(); scene._seedRange = null; }
+  }
+}
+
+function castModeUnit(){
+  if(!state.castMode) return null;
+  const u = state.units.find(x => x.id === state.castMode.unitId && x.hp > 0);
+  return foresterReady(u) ? u : null;
+}
+
+// Redrawn every frame while targeting: area circle under the cursor, range
+// circle around the Forester. Out of range turns the area circle red, so the
+// refusal is visible BEFORE the click rather than as a banner after it.
+function updateSeedGhost(gx, gy){
+  const u = castModeUnit();
+  if(!u){ cancelSeedTargeting(); return; }
+  if(!scene._seedRange){
+    scene._seedRange = scene.add.circle(0, 0, 10, 0x9fe08a, 0)
+      .setStrokeStyle(1, 0x9fe08a, 0.5).setDepth(9);
+  }
+  scene._seedRange.setPosition(u.gx*TILE + TILE/2, u.gy*TILE + TILE/2);
+  scene._seedRange.setRadius(FORESTER.castRange * TILE);
+
+  const inRange = Phaser.Math.Distance.Between(u.gx, u.gy, gx, gy) <= FORESTER.castRange;
+  const col = inRange ? 0x7ad07a : 0xd85a3a;
+  if(!scene._seedArea){
+    scene._seedArea = scene.add.circle(0, 0, 10, 0x7ad07a, 0.18)
+      .setStrokeStyle(2, 0x7ad07a, 0.9).setDepth(10);
+  }
+  scene._seedArea.setPosition(gx*TILE + TILE/2, gy*TILE + TILE/2);
+  scene._seedArea.setRadius(FORESTER.areaRadius * TILE);
+  scene._seedArea.setFillStyle(col, 0.18);
+  scene._seedArea.setStrokeStyle(2, col, 0.9);
 }

@@ -932,7 +932,8 @@ function refreshInfoPanel(){
       }
     } else if(type==='unit'){
       const isVillager = ref.type==='villager';
-      const unitName = isVillager ? 'Villager' : (ref.type==='captain' ? 'Minotaur' : (ref.type==='swordsman' ? 'Swordsman' : (ref.type==='repairman' ? 'Repairman' : 'Archer')));
+      const unitName = ref.type==='forester' ? 'Forester'
+        : (isVillager ? 'Villager' : (ref.type==='captain' ? 'Minotaur' : (ref.type==='swordsman' ? 'Swordsman' : (ref.type==='repairman' ? 'Repairman' : 'Archer'))));
       const isHero = ref.type==='captain';
       panel.innerHTML = `<h3>${unitName}${isHero ? ' <span id="heroLvl"></span>' : ''}</h3>
         <div>HP: <span id="infoHpText"></span></div>
@@ -945,12 +946,15 @@ function refreshInfoPanel(){
         <div class="hpbar"><div class="hpfill" id="heroXpFill" style="background:#9a6fd4;"></div></div>
         <div id="heroCds" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${isVillager ? `<div id="infoAssign" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
+        ${ref.type==='forester' ? `<div id="seedNote" style="margin-top:4px;color:#9fe08a;"></div><button id="seedBtn">Seed Grove</button>` : ''}
         <div style="margin-top:6px;color:#d8c79a;">${isVillager
           ? 'Right-click a Farm/Lumber Camp/Quarry to assign them there, or an empty tile to send them there (unassigns).'
           : (isHero ? (state.faction==='swarm' ? 'Right-click to move. J = hurl a hex toward the mouse, slowing the target 20% for a few seconds. K = raise short-lived risen. Gains power from kills nearby.'
                                                 : 'Right-click to move. J = hurl javelin toward the mouse. K = slash everything adjacent. He gains XP from kills near him.')
                     : (ref.type==='repairman' ? 'Right-click a damaged Wall or Tower to repair it (costs wood). He works only on your orders.'
                     : 'Right-click a tile to move.'))}</div>`;
+      const sb2 = document.getElementById('seedBtn');
+      if(sb2) sb2.addEventListener('click', ()=> beginSeedTargeting(ref));
     } else if(type==='enemy'){
       panel.innerHTML = `<h3 style="color:#ff8a6b;">${enemyName(ref)}</h3>
         <div>HP: <span id="infoHpText"></span></div>
@@ -1245,6 +1249,20 @@ function refreshInfoPanel(){
         ae.textContent = `${ref.dmg} dmg · ${rng} range · ${(ref.dmg/secs).toFixed(1)}/s`;
         if(an) an.textContent = `every ${secs.toFixed(1)}s${ref.ranged ? ' — holds at range and looses' : ' — melee'}`;
       }
+    }
+  }
+  if(type==='unit' && ref.type==='forester'){
+    const nEl = document.getElementById('seedNote');
+    const sBtn = document.getElementById('seedBtn');
+    const cd = ref.seedCd || 0;
+    if(nEl){
+      nEl.textContent = cd > 0
+        ? `Seed Grove ready in ${Math.ceil(cd/1000)}s`
+        : `Ready — scatters ${FORESTER.treesPerCast} saplings, range ${FORESTER.castRange}`;
+    }
+    if(sBtn){
+      sBtn.disabled = cd > 0;
+      sBtn.textContent = cd > 0 ? `Seed Grove (${Math.ceil(cd/1000)}s)` : 'Seed Grove';
     }
   }
   if(type==='unit'){

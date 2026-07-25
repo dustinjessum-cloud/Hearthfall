@@ -593,17 +593,23 @@ function updateCombat(delta, time){
   }
   for(const u of state.units){
     if(u.hp<=0 || u.inTowerId) continue; // garrisoned archers fire THROUGH the tower's bonus, not their own bow
-    if(u.type==='archer') attackers.push({ent:u, atk:ARCHER_ATTACK, gx:u.gx, gy:u.gy, soldier:true});
-    else if(u.type==='swordsman') attackers.push({ent:u, atk:SWORDSMAN_ATTACK, gx:u.gx, gy:u.gy, melee:true, soldier:true});
-    // Villagers fight back when something is already on top of them. NOT
-    // flagged `soldier`, so the Minotaur's banner does not buff them, and the
-    // 1.2 reach means they can only ever hit what has closed to arm's length —
-    // they never leave their work to go looking for a fight.
-    else if(u.type==='villager' && !u.inTC) attackers.push({ent:u, atk:VILLAGER_ATTACK, gx:u.gx, gy:u.gy, melee:true});
-    // The golem is a soldier: it benefits from the Necromancer's banner,
-    // which is the point of pairing them.
-    else if(u.type==='flesh_golem') attackers.push({ent:u, atk:FLESH_GOLEM.attack, gx:u.gx, gy:u.gy, melee:true, soldier:true});
-    // the Minotaur attacks only via his manual javelin (J) and slash (K)
+    // ONE rule for every unit that auto-attacks, read off UNIT_DEFS. What
+    // used to be a chain of per-type branches is now table-driven: whether it
+    // fights at all, how hard, and whether the hero's banner buffs it.
+    //
+    // Villagers are in here too — they hold VILLAGER_ATTACK and soldier:false,
+    // so they defend themselves at arm's length without the banner bonus and
+    // without ever leaving work to seek a fight. Sheltering inside the Town
+    // Hall is the one case that stops them.
+    // The hero has attack:null: he fights only through his manual J and K.
+    const udef = unitDef(u);
+    if(udef && udef.attack && !(u.type==='villager' && u.inTC)){
+      attackers.push({ent:u, atk:udef.attack, gx:u.gx, gy:u.gy,
+                      // melee if its reach is about a tile — archers loose
+                      // arrows, everyone else lunges. Derived from the
+                      // profile rather than hardcoded per type.
+                      melee: udef.attack.range <= 2, soldier: udef.soldier});
+    }
   }
 
   // The enemy town's towers shoot back. Without this, razing it is a

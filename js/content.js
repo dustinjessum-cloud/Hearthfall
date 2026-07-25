@@ -431,6 +431,43 @@ const FLESH_GOLEM = {
   scale: 1.45,            // reads as a monster next to a 1.0 skeleton
 };
 
+// ---------------------------------------------------------------------
+// UNIT TABLE
+//
+// Unit behaviour used to live in scattered string comparisons — 33 of them,
+// in the shape `u.type==='archer' || u.type==='swordsman' || u.type==='captain'`,
+// spread across economy, ui and enemies. Adding the Flesh Golem meant editing
+// FOUR of those by hand, and missing one would have made it silently not a
+// soldier: no banner buff, wrong upkeep, absent from the army count, with no
+// error anywhere. That is the same silent-wrongness the faction table was
+// built to kill, in a different system.
+//
+// One entry per unit type. Adding a unit means adding a row here, not
+// hunting through three files for every place a type name is spelled out.
+//   soldier  - counts as army, eats soldier rations, benefits from the
+//              hero's banner, and shows a range ring
+//   attack   - the attack profile, or null for units that do not auto-attack
+//              (the hero attacks only through his manual abilities)
+const UNIT_DEFS = {
+  villager:    { name:'Villager',    soldier:false, attack:VILLAGER_ATTACK },
+  forester:    { name:'Forester',    soldier:false, attack:null },
+  repairman:   { name:'Repairman',   soldier:false, attack:null },
+  archer:      { name:'Archer',      soldier:true,  attack:ARCHER_ATTACK },
+  swordsman:   { name:'Swordsman',   soldier:true,  attack:SWORDSMAN_ATTACK },
+  captain:     { name:'Minotaur',    soldier:true,  attack:null },
+  flesh_golem: { name:'Flesh Golem', soldier:true,  attack:FLESH_GOLEM.attack },
+};
+
+function unitDef(t){ return UNIT_DEFS[t && t.type ? t.type : t] || null; }
+function isSoldierType(t){ const d = unitDef(t); return !!(d && d.soldier); }
+function unitDisplayName(t){ const d = unitDef(t); return d ? d.name : 'Unit'; }
+// Rations per economy tick. Soldiers eat double; the faction multiplier is
+// applied by the caller, not baked in here.
+function unitUpkeepPerTick(t){ return isSoldierType(t) ? UPKEEP.soldierFoodPerTick : 0.5; }
+// Every living unit of ours that counts toward the army.
+function mySoldiers(){ return state.units.filter(u => u.hp > 0 && isSoldierType(u)); }
+
+
 // ---- unit evolutions: permanent, faction-wide upgrades funded by Wildstone ----
 // Applies to every unit of that type — existing AND future — the moment it
 // completes. Damage/range bonuses just bump the shared ATTACK constants

@@ -56,7 +56,7 @@ function updateHUD(){
   document.querySelector('#resPop span').textContent = `${state.population.current} / ${state.population.cap}`;
   document.getElementById('resFood').classList.toggle('warn', state.resources.food < 10 || state.starving);
 
-  const soldierCount = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman'||u.type==='captain'||u.type==='flesh_golem') && u.hp>0).length;
+  const soldierCount = mySoldiers().length;
   const workerCount = state.units.filter(u=>u.type==='villager' && u.hp>0).length;
   document.querySelector('#resWorkers span').textContent = workerCount;
   document.querySelector('#resSoldiers span').textContent = soldierCount;
@@ -339,13 +339,11 @@ function refreshRallyMarkers(){
 // Minotaur's banner bonus appears the moment the unit steps into his radius.
 // Returns null for non-combatants (villagers, repairmen).
 function unitAttack(u){
-  const atk = u.type==='archer' ? ARCHER_ATTACK
-            : (u.type==='swordsman' ? SWORDSMAN_ATTACK
-            : (u.type==='villager' ? VILLAGER_ATTACK
-            : (u.type==='flesh_golem' ? FLESH_GOLEM.attack : null)));
+  const def = unitDef(u);
+  const atk = def && def.attack;
   if(!atk) return null;
-  // villagers are not soldiers: no banner buff, and the panel says so
-  const isSoldier = (u.type === 'archer' || u.type === 'swordsman' || u.type === 'flesh_golem');
+  // non-soldiers (villagers) get no banner buff, and the panel says so
+  const isSoldier = isSoldierType(u);
   const cap = livingCaptain();
   const inAura = !!(isSoldier && cap && cap !== u &&
     Phaser.Math.Distance.Between(cap.gx, cap.gy, u.gx, u.gy) <= CAPTAIN.auraRange);
@@ -377,8 +375,7 @@ function unitActivity(u){
 
 // What this unit costs to keep, per minute (economy ticks are 3s => x20).
 function unitUpkeepPerMin(u){
-  const soldier = (u.type==='archer' || u.type==='swordsman' || u.type==='captain' || u.type==='flesh_golem');
-  return (soldier ? UPKEEP.soldierFoodPerTick : 0.5) * 20 * factionDef().foodUpkeepMult;
+  return unitUpkeepPerTick(u) * 20 * factionDef().foodUpkeepMult;
 }
 function foodWord(){ return factionWord('food'); }
 
@@ -932,8 +929,7 @@ function refreshInfoPanel(){
       }
     } else if(type==='unit'){
       const isVillager = ref.type==='villager';
-      const unitName = ref.type==='forester' ? 'Forester'
-        : (isVillager ? 'Villager' : (ref.type==='captain' ? 'Minotaur' : (ref.type==='swordsman' ? 'Swordsman' : (ref.type==='repairman' ? 'Repairman' : 'Archer'))));
+      const unitName = unitDisplayName(ref);
       const isHero = ref.type==='captain';
       panel.innerHTML = `<h3>${unitName}${isHero ? ' <span id="heroLvl"></span>' : ''}</h3>
         <div>HP: <span id="infoHpText"></span></div>

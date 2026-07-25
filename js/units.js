@@ -353,9 +353,12 @@ function createVillager(gx, gy){
 // hand-incremented, so it can't drift out of sync with what's really on
 // the map (a bug in an earlier version of this code).
 function syncPopulationCount(){
-  const villagers = state.units.filter(u=>(u.type==='villager'||u.type==='repairman') && u.hp>0).length;
-  const soldiers = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman') && u.hp>0).length;
-  state.population.current = villagers + soldiers;
+  // Every living unit costs population EXCEPT the hero, who is a one-off and
+  // deliberately free. Listing types by hand meant new units silently cost
+  // nothing: the Forester and the Flesh Golem were both free to field,
+  // because neither appeared in the old archer/swordsman/villager/repairman
+  // list. Counting by exclusion means a new unit is charged by default.
+  state.population.current = state.units.filter(u => u.hp > 0 && u.type !== 'captain').length;
 }
 
 function damageUnit(u, dmg){
@@ -381,7 +384,10 @@ function removeUnit(u){
   // fallen humans leave a corpse to bury (or, in enemy hands one day, to
   // raise). Only the living do: the undead's units are already dead, and
   // the hero has a revival of his own. (See CORPSE in content.js.)
-  if(state.faction!=='swarm' && (u.type==='villager' || u.type==='repairman' || u.type==='archer' || u.type==='swordsman')){
+  // Anything living leaves a body — again by exclusion, so a new unit type
+  // does not quietly stop dropping corpses. The hero has his own revival,
+  // and the undead are already dead.
+  if(state.faction!=='swarm' && u.type!=='captain' && u.type!=='flesh_golem'){
     spawnCorpse(u.gx, u.gy);
   }
   destroyUnitVisuals(u);

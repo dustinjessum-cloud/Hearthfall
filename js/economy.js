@@ -1400,7 +1400,7 @@ function economyTick(){
 
   // rations + famine: soldiers eat double, and at zero food EVERYONE
   // bleeds HP until you fix it — starvation is a spiral, not a dice roll.
-  const soldiers = state.units.filter(u=>(u.type==='archer'||u.type==='swordsman'||u.type==='captain'||u.type==='flesh_golem') && u.hp>0).length;
+  const soldiers = mySoldiers().length;
   const civilians = state.units.filter(u=>(u.type==='villager'||u.type==='repairman') && u.hp>0).length;
   // Per-faction appetite. The tribe eats 15% less: they have no cooking
   // chain to multiply what they gather, and their food is tied to finite

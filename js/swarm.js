@@ -60,15 +60,25 @@ const SWARM_TEXT = [
   ['town', 'necropolis'], ['Town', 'Necropolis'],
 ];
 
+// Which substitution table (if any) the current faction speaks through.
+// Humans are the base copy, so they have none. Looked up rather than
+// hardcoded to 'swarm', or the tribe would silently speak human.
+function skinTable(){
+  if(state.faction === 'swarm') return SWARM_TEXT;
+  if(state.faction === 'tribe') return (typeof TRIBE_TEXT !== 'undefined') ? TRIBE_TEXT : null;
+  return null;
+}
+
 function applySkinText(msg){
-  if(state.faction !== 'swarm' || !msg) return msg;
-  for(const [from, to] of SWARM_TEXT) msg = msg.split(from).join(to);
+  const table = skinTable();
+  if(!table || !msg) return msg;
+  for(const [from, to] of table) msg = msg.split(from).join(to);
   return msg;
 }
 
 // Re-theme rendered DOM without nuking event listeners: walk text nodes only.
 function skinDomText(rootEl){
-  if(state.faction !== 'swarm' || !rootEl) return;
+  if(!skinTable() || !rootEl) return;
   const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
   let node;
   while((node = walker.nextNode())){
@@ -232,6 +242,7 @@ function updateCreep(sources){
 // existing type-check ('barracks', 'granary', 'tower'...) working untouched.
 function applyFaction(faction){
   state.faction = faction;
+  if(faction === 'tribe'){ applyTribeFaction(); return; }
   if(faction !== 'swarm') return;
 
   // -- building roster: rename/re-cost the types the undead keep --

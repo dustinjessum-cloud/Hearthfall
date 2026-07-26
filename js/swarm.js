@@ -13,6 +13,8 @@ const SWARM = {
                                   // then each auto-spread child — shrinking,
                                   // so the chain naturally peters out
     tumorSpreadGenerations: 2,   // a tumor may auto-spread up to this many
+    spreadsFromCore: 1,          // the Necropolis seeds ONCE — see blightSpreadBudget
+    spreadsFromMound: 2,         // mounds carry the chain outward from there
                                   // more generations beyond itself
     tumorSpreadDelayMs: 35000,   // how long a mature tumor waits before
                                   // attempting its one spread
@@ -214,7 +216,19 @@ function blightSources(){
 // A structure whose children would already be past the last generation has
 // nothing left to give, and should never offer the button.
 function blightGenOf(b){ return b.isCore ? 0 : ((b.creepGen||0) + 1); }
+
+// How many times a structure may ever seed. The Necropolis gets exactly ONE:
+// it is the seat of the faction, not a nursery, and giving it a single push
+// makes the opening a real decision — that one placement decides which
+// direction the whole blight grows. Grave Mounds carry the chain from there.
+function blightSpreadBudget(b){
+  return b.isCore ? SWARM.creep.spreadsFromCore : SWARM.creep.spreadsFromMound;
+}
+function blightSpreadsLeft(b){
+  return Math.max(0, blightSpreadBudget(b) - (b.spreadsUsed || 0));
+}
 function blightCanEverSpread(b){
+  if(blightSpreadsLeft(b) <= 0) return false;             // budget spent
   return blightGenOf(b) < SWARM.creep.tumorGenRadius.length
       && blightGenOf(b) <= SWARM.creep.tumorSpreadGenerations;
 }
@@ -264,7 +278,13 @@ function spreadBlightTo(parent, gx, gy){
   // render the same size as a hand-built Grave Mound.
   const scale = Math.max(0.4, 1 - (gen + 1) * 0.18);
   if(b.sprite && b.sprite.setScale) b.sprite.setScale(scale);
+  parent.spreadsUsed = (parent.spreadsUsed || 0) + 1;
   parent.spreadAgeMs = 0;              // parent must charge again
+  // The button is built into the panel's static markup, which is only
+  // rebuilt when the SELECTION changes — so clear the binding to force a
+  // rebuild, or a spent structure keeps showing a button it can no longer use.
+  const panel = document.getElementById('infoPanel');
+  if(panel) panel._boundRef = null;
   updateCreep();                        // immediate bloom, so the click has an effect
   flashWaveBanner(gen >= SWARM.creep.tumorSpreadGenerations
     ? 'The blight reaches its limit here.'

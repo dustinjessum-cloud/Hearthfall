@@ -887,8 +887,12 @@ function buildPanelMarkup(panel, type, ref){
         <div id="infoBuild" style="margin-top:4px;color:#ffd76b;"></div>
         ${BUILD_DEFS[ref.type] && BUILD_DEFS[ref.type].needsWorker ? `<div id="infoWorkers" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='farm' ? `<div id="infoSoil" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
-        ${(state.faction==='swarm' && (ref.isCore || ref.type==='creep_tumor'))
-          ? `<div id="blightNote" style="margin-top:4px;color:#9aae78;"></div><button id="blightBtn">Spread Blight</button>` : ''}
+        ${(state.faction==='swarm' && (ref.isCore || ref.type==='creep_tumor') && blightCanEverSpread(ref))
+          ? `<div id="blightNote" style="margin-top:4px;color:#9aae78;"></div><button id="blightBtn">Spread Blight</button>`
+          : ((state.faction==='swarm' && (ref.isCore || ref.type==='creep_tumor'))
+             ? `<div style="margin-top:4px;color:#8a7a5c;">The blight spreads no further from here.</div>` : '')}
+        ${ref.type==='ritual_pit' ? `<div id="pitCount" style="margin-top:4px;color:#c98a8a;"></div>
+        <div class="hpbar"><div class="hpfill" id="pitFill" style="background:#a8443f;"></div></div>` : ''}
         ${ref.type==='tower' ? `<div id="infoGarrison" style="margin-top:4px;color:#d8c79a;"></div><button id="towerReleaseBtn">Release defenders</button>` : ''}
         ${ref.type==='wall' ? `<div id="infoWallRepair" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='mill' ? `<div style="margin-top:4px;color:#d8c79a;">Grinds up to ${MILLING.millCapacity} wheat/tick into flour. Needs a worker at the millstone — right-click here with a villager selected.</div>` : ''}
@@ -1278,16 +1282,25 @@ function updatePanelLive(type, ref){
       }
     }
   }
+  if(type==='building' && ref.type==='ritual_pit'){
+    const need = RITUAL.corpsesPerGolem;
+    const have = ref.corpseCount || 0;
+    const cEl = document.getElementById('pitCount');
+    if(cEl) cEl.textContent = `Bodies: ${have} / ${need}` + (have >= need ? ' — rising!' : ` (${need-have} more)`);
+    const fEl = document.getElementById('pitFill');
+    if(fEl) fEl.style.width = Math.min(100, (have/need)*100) + '%';
+  }
   if(type==='building' && state.faction==='swarm' && (ref.isCore || ref.type==='creep_tumor')){
     const nEl = document.getElementById('blightNote');
     const bBtn = document.getElementById('blightBtn');
     const canEver = blightCanEverSpread(ref);
     const ready = blightSpreadReady(ref);
     if(nEl){
+      const left = blightSpreadsLeft(ref);
       nEl.textContent = !canEver
         ? 'This growth is spent — the blight reaches no further from here.'
-        : (ready ? `Ready — place a Grave Mound on blight within ${blightSpreadRange(ref)} tiles.`
-                 : `Gathering strength... ${Math.ceil(blightSpreadRemainingMs(ref)/1000)}s`);
+        : (ready ? `Ready — place on blight within ${blightSpreadRange(ref)} tiles. ${left} seeding${left===1?'':'s'} left.`
+                 : `Gathering strength... ${Math.ceil(blightSpreadRemainingMs(ref)/1000)}s (${left} left)`);
     }
     if(bBtn){
       bBtn.disabled = !ready;

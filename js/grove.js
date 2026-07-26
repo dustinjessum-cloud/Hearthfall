@@ -224,8 +224,8 @@ function groveEconomyTick(){
 function applyGroveFaction(){
   // Yields are per-tick and flow home along the roots; there is no gathering
   // building because there is no gathering.
-  BUILD_DEFS.house       = { name:'Bower', cost:{wood:16}, hp:60, frame:'tribe_hut', popCap:3 };
-  BUILD_DEFS.farm        = { name:'Fruiting Bough', cost:{wood:14}, hp:55, frame:'tribe_hunt',
+  BUILD_DEFS.house       = { name:'Bower', cost:{wood:16}, hp:60, frame:'grove_bower', popCap:3 };
+  BUILD_DEFS.farm        = { name:'Fruiting Bough', cost:{wood:14}, hp:55, frame:'grove_bough',
                              groveYield:{ food: GROVE.tickYield.food } };
   BUILD_DEFS.lumber_camp = { name:'Heartroot', cost:{wood:16}, hp:55, frame:'tribe_timber',
                              groveYield:{ wood: GROVE.tickYield.wood } };
@@ -233,13 +233,13 @@ function applyGroveFaction(){
                              groveYield:{ stone: 0.7 } };
   BUILD_DEFS.barracks    = { name:'Thornhall', cost:{wood:34}, hp:100, frame:'tribe_warlodge',
                              trains:'archer' };
-  BUILD_DEFS.tower       = { name:'Bramble Spire', cost:{wood:26}, hp:130, frame:'tribe_totem',
+  BUILD_DEFS.tower       = { name:'Bramble Spire', cost:{wood:26}, hp:130, frame:'grove_spire',
                              blocksPath:true, garrison:true,
                              attack:{ range:4.0, damage:6, damageLow:4, cooldownMs:950 } };
   BUILD_DEFS.granary     = { name:'Hollow', cost:{wood:22}, hp:80, frame:'tribe_cache', nearTC:true };
   BUILD_DEFS.warehouse   = { name:'Deep Hollow', cost:{wood:28}, hp:80, frame:'tribe_stock', nearTC:true };
-  BUILD_DEFS.wall        = { name:'Thicket', cost:{wood:5}, hp:90, frame:'stake_wall',
-                             variants:{ straight:'stake_wall', vert:'stake_wall', corner:'stake_wall' },
+  BUILD_DEFS.wall        = { name:'Thicket', cost:{wood:5}, hp:90, frame:'grove_thicket',
+                             variants:{ straight:'grove_thicket', vert:'grove_thicket', corner:'grove_thicket' },
                              blocksPath:true };
   BUILD_DEFS.gate        = { name:'Thornway', cost:{wood:7}, hp:90, frame:'tribe_gate',
                              blocksPath:true, friendlyPassable:true };

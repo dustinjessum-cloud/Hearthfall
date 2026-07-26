@@ -9,7 +9,7 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 15  # 6x15 = 90 slots (grew from 6x13 for the tribe roster;
+ROWS = 17  # 6x17 = 102 slots (grew from 6x15 for the Grove roster)
            # headroom on purpose so the rest of the tribe needs no regrow)
 
 frames = {}
@@ -2008,6 +2008,160 @@ def draw_barracks(d):
     rect(d, 15, 5, 16, 14, WOOD_D)                    # banner pole
     d.polygon([(16,5),(25,7),(16,12)], fill=(160, 44, 40))
 
+
+# ---- The Grove: living structures -------------------------------------
+# One palette for the whole faction so the network reads as one organism:
+# bark browns for structure, three greens for foliage, and a warm fruit red
+# reserved for the things that actually feed you.
+GV_BARK, GV_BARK_D, GV_BARK_L = (108, 82, 54), (78, 58, 38), (140, 110, 76)
+GV_LEAF, GV_LEAF_D, GV_LEAF_L = (76, 138, 58), (52, 102, 40), (108, 170, 82)
+GV_LEAF_XL = (144, 198, 112)
+GV_FRUIT, GV_FRUIT_D = (198, 74, 52), (150, 48, 34)
+
+def _gv_canopy(d, cx, cy, rx, ry):
+    """Layered blob canopy: dark base, mid body, lit top-left. Drawn as three
+    offset ellipses rather than one, so the edge is lumpy like foliage
+    instead of a clean geometric arc."""
+    d.ellipse([cx-rx, cy-ry, cx+rx, cy+ry], fill=GV_LEAF_D)
+    d.ellipse([cx-rx+1, cy-ry+1, cx+rx-1, cy+ry-1], fill=GV_LEAF)
+    d.ellipse([cx-rx+2, cy-ry+1, cx+rx-5, cy+ry-5], fill=GV_LEAF_L)
+    d.ellipse([cx-rx+3, cy-ry+2, cx-rx+7, cy-ry+6], fill=GV_LEAF_XL)
+
+def draw_grove_heart(d):
+    # The Heartwood: the oldest tree, and the only structure that keeps
+    # growing. Rendered at 2x2 in game, so it can carry real detail — a
+    # buttressed trunk, exposed roots gripping the ground, a canopy in
+    # layers, and a hollow at the base where the grove's life is kept.
+    draw_grass(d)
+    ground_shadow(d, 3, 29, 29, 3)
+    # roots spreading from the base
+    for x0, y0, x1, y1 in [(15,27, 5,30), (17,27, 27,30), (14,28, 9,31), (18,28, 23,31)]:
+        d.line([x0,y0,x1,y1], fill=GV_BARK_D, width=2)
+        d.line([x0,y0-1,x1,y1-1], fill=GV_BARK, width=1)
+    # buttressed trunk, wider at the foot
+    rect(d, 12, 12, 19, 28, GV_BARK)
+    rect(d, 11, 24, 20, 28, GV_BARK)
+    rect(d, 12, 12, 13, 28, GV_BARK_L)
+    rect(d, 18, 12, 19, 28, GV_BARK_D)
+    for gy in (16, 20, 24):
+        rect(d, 14, gy, 17, gy, GV_BARK_D)      # bark grain
+    # hollow at the base — where the grove keeps its life
+    d.ellipse([14, 21, 18, 27], fill=(38, 30, 22))
+    d.ellipse([15, 22, 17, 25], fill=(64, 50, 36))
+    # canopy in three overlapping masses
+    _gv_canopy(d, 16, 8, 14, 9)
+    _gv_canopy(d, 7, 12, 7, 5)
+    _gv_canopy(d, 25, 12, 7, 5)
+    scatter(d, 7717, 14, GV_LEAF_XL)
+    scatter(d, 7723, 10, GV_LEAF_D)
+
+def draw_grove_bower(d):
+    # A dwelling woven INTO a tree rather than built beside one — the Grove
+    # does not put up walls, it makes room inside what already grows.
+    draw_grass(d)
+    ground_shadow(d, 8, 24, 28, 3)
+    rect(d, 14, 16, 18, 28, GV_BARK)
+    rect(d, 14, 16, 14, 28, GV_BARK_L)
+    rect(d, 18, 16, 18, 28, GV_BARK_D)
+    _gv_canopy(d, 16, 12, 11, 8)
+    # a woven opening, the "door"
+    d.ellipse([13, 17, 19, 24], fill=(46, 36, 26))
+    d.ellipse([14, 18, 18, 23], fill=(70, 56, 40))
+    for wy in (19, 21):
+        rect(d, 14, wy, 18, wy, GV_BARK_D)      # woven withies across it
+    scatter(d, 7731, 8, GV_LEAF_XL)
+
+def draw_grove_bough(d):
+    # Fruiting Bough: a low tree heavy with fruit. Red is used ONLY here and
+    # on the Hollow, so anything feeding you is findable at a glance.
+    draw_grass(d)
+    ground_shadow(d, 7, 25, 28, 3)
+    rect(d, 15, 18, 17, 28, GV_BARK)
+    rect(d, 15, 18, 15, 28, GV_BARK_L)
+    d.line([16,20, 10,16], fill=GV_BARK, width=2)
+    d.line([16,20, 22,16], fill=GV_BARK, width=2)
+    _gv_canopy(d, 16, 13, 12, 8)
+    for fx, fy in [(9,14), (14,9), (20,12), (23,16), (12,17), (18,17)]:
+        d.ellipse([fx, fy, fx+3, fy+3], fill=GV_FRUIT_D)
+        d.ellipse([fx, fy, fx+2, fy+2], fill=GV_FRUIT)
+        rect(d, fx, fy, fx, fy, (240, 170, 150))     # specular dot
+    scatter(d, 7741, 8, GV_LEAF_XL)
+
+def draw_grove_spire(d):
+    # Bramble Spire: the Grove's tower. The first pass gave it small, low
+    # contrast thorns and it read as just another tree — wrong, since this is
+    # the one thing in the faction meant to look hostile. Now the thorns are
+    # long, dark, and break the silhouette on both sides, and the whole plant
+    # is pushed darker so it separates from the friendly greens around it.
+    THORN, THORN_D, THORN_XD = (74, 88, 48), (50, 60, 32), (32, 40, 22)
+    THORN_L = (126, 142, 84)
+    SPIKE = (196, 202, 160)
+    draw_grass(d)
+    ground_shadow(d, 9, 23, 29, 3)
+    # dark central shaft, narrow so the thorns dominate the read
+    d.polygon([(16,2), (21,29), (11,29)], fill=THORN_XD)
+    d.polygon([(16,4), (19,29), (13,29)], fill=THORN_D)
+    d.polygon([(15,5), (14,29), (12,29)], fill=THORN)
+    # long thorns, alternating, deliberately overshooting the trunk's width
+    for i, ty in enumerate(range(5, 29, 3)):
+        L = 7 + (i % 3) * 2
+        if i % 2 == 0:
+            d.polygon([(13,ty), (13-L,ty-3), (13,ty+2)], fill=THORN_D)
+            d.line([13,ty-1, 13-L,ty-3], fill=THORN_L)
+            rect(d, 13-L, ty-3, 13-L+1, ty-2, SPIKE)      # pale hard tip
+        else:
+            d.polygon([(19,ty), (19+L,ty-3), (19,ty+2)], fill=THORN_XD)
+            d.line([19,ty-1, 19+L,ty-3], fill=THORN)
+            rect(d, 19+L-1, ty-3, 19+L, ty-2, SPIKE)
+    rect(d, 15, 0, 17, 4, SPIKE)                          # hardened crown
+    rect(d, 15, 0, 15, 4, (240, 244, 210))
+    scatter(d, 7753, 10, THORN_XD)
+
+def draw_grove_thicket(d):
+    # Thicket: the Grove's wall. A dense bramble hedge — no coursing, no
+    # merlons, nothing quarried. Drawn to tile cleanly left-to-right so a run
+    # of them reads as one continuous hedge.
+    draw_grass(d)
+    rect(d, 0, 10, 31, 27, GV_LEAF_D)
+    for i in range(0, 32, 4):
+        d.ellipse([i-2, 8, i+6, 18], fill=GV_LEAF)
+        d.ellipse([i-1, 9, i+3, 14], fill=GV_LEAF_L)
+    rect(d, 0, 25, 31, 27, GV_LEAF_D)
+    # thorns along the crest, so it reads as hostile rather than ornamental
+    # crest thorns: tall and DARK against the pale canopy, or a hedge run
+    # reads as a soft green band rather than something you would not push into
+    for tx in range(1, 32, 4):
+        d.line([tx, 12, tx+2, 3], fill=(46, 58, 30))
+        d.line([tx+1, 12, tx+3, 4], fill=(86, 102, 56))
+        rect(d, tx+2, 3, tx+2, 4, (196, 202, 160))
+    scatter(d, 7761, 22, GV_LEAF_XL)
+    scatter(d, 7767, 16, GV_LEAF_D)
+
+def draw_grove_sprout(d):
+    # A Sprout: a seedling that walks. Two broad leaves for arms, a pale stem
+    # body, a seed husk still clinging to its head — small and unthreatening,
+    # which is right for a unit that tends rather than fights.
+    STEM, STEM_D, STEM_L = (128, 170, 92), (96, 132, 66), (168, 204, 128)
+    HUSK = (150, 118, 74)
+    d.ellipse([11, 27, 21, 31], fill=(0, 0, 0, 70))
+    rect(d, 15, 14, 17, 27, STEM)
+    rect(d, 15, 14, 15, 27, STEM_L)
+    rect(d, 17, 14, 17, 27, STEM_D)
+    rect(d, 13, 27, 15, 29, STEM_D)                 # little root feet
+    rect(d, 17, 27, 19, 29, STEM_D)
+    # leaf arms
+    d.polygon([(15,17), (6,14), (14,21)], fill=GV_LEAF)
+    d.polygon([(15,17), (8,15), (14,19)], fill=GV_LEAF_L)
+    d.polygon([(17,17), (26,14), (18,21)], fill=GV_LEAF_D)
+    d.polygon([(17,17), (24,15), (18,19)], fill=GV_LEAF)
+    # head bud with the seed husk still on it
+    d.ellipse([12, 7, 20, 15], fill=STEM)
+    d.ellipse([12, 7, 17, 12], fill=STEM_L)
+    d.polygon([(12,9), (16,2), (20,9)], fill=HUSK)
+    d.polygon([(14,8), (16,4), (18,8)], fill=shade(HUSK, 1.25))
+    rect(d, 14, 11, 15, 12, (46, 40, 30))           # eyes
+    rect(d, 17, 11, 18, 12, (46, 40, 30))
+
 DRAWERS = [
     ("grass", draw_grass),
     ("forest", draw_forest),
@@ -2077,6 +2231,12 @@ DRAWERS = [
     ("caravan", draw_caravan),
     ("bandit", draw_bandit),
     ("bandit_camp", draw_bandit_camp),
+    ("grove_heart", draw_grove_heart),
+    ("grove_bower", draw_grove_bower),
+    ("grove_bough", draw_grove_bough),
+    ("grove_spire", draw_grove_spire),
+    ("grove_thicket", draw_grove_thicket),
+    ("grove_sprout", draw_grove_sprout),
     ("sealed_pass", draw_sealed_pass),
     ("bone_pile", draw_bone_pile),
     ("bone_pile_corrupted", draw_bone_pile_corrupted),

@@ -48,7 +48,8 @@ const GROVE = {
   // --- roots ---
   rootGrowTilesPerSec: 1.6,  // how fast a root creeps toward a dormant seed
   rootMaxLen: 9,             // a seed further than this from the network is unreachable
-  rootColor: 0x6b8f4a,
+  // (root colours live in ROOT_PALETTE, below — a rootColor here was never
+  //  read by anything, so a change to it silently did nothing)
 
   // --- Ents: one at a time, and dear ---
   // An Ent is not a workforce, it is a caretaker. You begin with ONE and
@@ -280,13 +281,31 @@ function updateGroveRoots(delta){
   drawGroveRoots();
 }
 
+// Roots are WOOD, not foliage. These were greens sampled from the canopy, so
+// a root read as a vine lying on the grass rather than a limb pushing through
+// it — and against grass there was barely any contrast to read the network by.
+// Browned, and kept a shade deeper than the collar below so the collar still
+// reads as a lit swell sitting on top of the root rather than part of it.
+//
+// Hoisted out of drawGroveRoots so the palette is one named thing to tune
+// rather than six magic numbers buried in a draw loop.
+const ROOT_PALETTE = {
+  dark:  0x3b2a19,   // shadow side / outermost stroke
+  mid:   0x5c4327,   // the body of the root
+  light: 0x8a6842,   // lit top edge
+  // A live growing tip is pale and soft, not the colour of old bark — this is
+  // the only cue that a root is still creeping, so it wants to stand out.
+  tip:   0xc2a878,
+};
+const COLLAR_PALETTE = { dark: 0x54402a, mid: 0x74583a, light: 0x967650 };
+
 function drawGroveRoots(){
   if(!scene || !scene.add) return;
   if(!scene._rootGfx) scene._rootGfx = scene.add.graphics().setDepth(1);
   const g = scene._rootGfx;
   g.clear();
-  const ROOT_D = 0x4a6b32, ROOT = 0x6b8f4a, ROOT_L = 0x8fb46a;
-  const COL_D = 0x54402a, COL = 0x74583a, COL_L = 0x967650;
+  const ROOT_D = ROOT_PALETTE.dark, ROOT = ROOT_PALETTE.mid, ROOT_L = ROOT_PALETTE.light;
+  const COL_D = COLLAR_PALETTE.dark, COL = COLLAR_PALETTE.mid, COL_L = COLLAR_PALETTE.light;
 
   for(const r of (state.groveRoots || [])){
     const STEPS = 16;
@@ -309,7 +328,7 @@ function drawGroveRoots(){
     }
     if(!r.done){
       const tip = pts[pts.length-1];
-      g.fillStyle(ROOT_L, 0.9);
+      g.fillStyle(ROOT_PALETTE.tip, 0.95);
       g.fillCircle(tip[0], tip[1], 2.5);
     }
   }

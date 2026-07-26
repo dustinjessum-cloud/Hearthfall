@@ -80,6 +80,7 @@ const state = {
   creep: [],             // MAP_H x MAP_W booleans (swarm territory & build-space)
   _creepCount: 0,        // cached count for the passive biomass trickle
   saplings: [],          // tribe: planted trees still maturing into forest
+  groveRoots: [],        // grove: root links, grown or growing, between structures
   corpses: [],           // fallen humans awaiting raise (undead) / burial (humans) — see CORPSE
   burialBoost: 0,        // decaying happiness honor from recent burials (human faction)
   enemyProjectiles: [],  // spears/bolts/etc. loosed by ranged raiders (transient — not saved)

@@ -635,6 +635,14 @@ function createBuilding(type, gx, gy, override, owner){
     if(inBounds(gx+dx, gy+dy)) state.occupied[gy+dy][gx+dx] = b;
   }
   state.buildings.push(b);
+  // The Grove: a new structure starts as a dormant SEED and sends out a root
+  // toward the nearest connected neighbour. It is inert until that root
+  // lands — that delay is the whole faction, and it is what the enemy gets
+  // to interrupt.
+  if(state.faction === 'grove' && (b.owner || OWNER_PLAYER) === OWNER_PLAYER && !b.isCore){
+    b.groveStage = 0; b.groveAgeMs = 0;
+    if(typeof startRootTo === 'function') startRootTo(b);
+  }
   const px = gx*TILE + size*TILE/2, py = gy*TILE + size*TILE/2;
   b.sprite = scene.add.image(px, py, 'tiles', FRAME[def.frame]);
   if(def.tint && b.sprite.setTint) b.sprite.setTint(def.tint); // reused frames get a signature tint

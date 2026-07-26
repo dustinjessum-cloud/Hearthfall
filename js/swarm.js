@@ -73,6 +73,7 @@ const SWARM_TEXT = [
 function skinTable(){
   if(state.faction === 'swarm') return SWARM_TEXT;
   if(state.faction === 'tribe') return (typeof TRIBE_TEXT !== 'undefined') ? TRIBE_TEXT : null;
+  if(state.faction === 'grove') return (typeof GROVE_TEXT !== 'undefined') ? GROVE_TEXT : null;
   return null;
 }
 
@@ -344,6 +345,7 @@ function updateCreep(sources){
 function applyFaction(faction){
   state.faction = faction;
   if(faction === 'tribe'){ applyTribeFaction(); return; }
+  if(faction === 'grove'){ applyGroveFaction(); return; }
   if(faction !== 'swarm') return;
 
   // -- building roster: rename/re-cost the types the undead keep --

@@ -444,6 +444,7 @@ class MainScene extends Phaser.Scene {
       this.lastTickAt = 0;
       economyTick();
       aiEconomyTick();
+      groveEconomyTick();   // the Grove yields by living, not by gathering
     }
 
     // silent autosave
@@ -528,6 +529,7 @@ class MainScene extends Phaser.Scene {
 
     aiThink(delta);         // their economy: train, gather, build, expand
     if(state.faction==='tribe'){ updateForesters(delta); updateSaplings(delta); updateHunters(delta); }
+    if(state.faction==='grove'){ updateGroveRoots(delta); updateGroveGrowth(delta); }
     updateTelemetry(delta);
     updateAiBlight(delta);  // an undead enemy town spreads its own blight
     updateAiWar(delta);     // muster war parties and send them at you
@@ -647,6 +649,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
   document.getElementById('startSwarmBtn').addEventListener('click', ()=> { clearSavedGame(); bootGame('swarm'); });
   const tribeBtn = document.getElementById('startTribeBtn');
   if(tribeBtn) tribeBtn.addEventListener('click', ()=> { clearSavedGame(); bootGame('tribe'); });
+  const groveBtn = document.getElementById('startGroveBtn');
+  if(groveBtn) groveBtn.addEventListener('click', ()=> { clearSavedGame(); bootGame('grove'); });
 
   const continueBtn = document.getElementById('continueBtn');
   if(hasSavedGame()){

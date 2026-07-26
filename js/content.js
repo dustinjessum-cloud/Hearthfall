@@ -144,6 +144,30 @@ const FACTION_DEFS = {
     heroResKey: 'food',        // the Necromancer is raised from biomass
     enemyRace: 'human',
   },
+  // The Grove — a living forest that grows and connects rather than building
+  // a town. Registered with explicit values like every other faction, so
+  // nothing about it falls through to the human defaults.
+  grove: {
+    label: 'grove', adjective: 'forest',
+    coreName: 'Heartwood', coreFrame: 'tribe_lodge',   // placeholder art
+    corpseRotMs: 120000,
+    upkeepKey: 'wood',
+    campTint: 0xcc5544,
+    roadTintKey: 'human',
+    builderDissolves: false,
+    usesCreep: false,
+    foodUpkeepMult: 0.9,   // frugal: they photosynthesise more than they eat
+    // placeholder art — the Grove has no sprites of its own yet
+    unitFrames: { villager:'tribe_worker', archer:'hobgoblin', swordsman:'troll', captain:'minotaur' },
+    words: { food:'sap', worker:'sprout', workers:'sprouts' },
+    // The Grove has no farm building at all — Fruiting Boughs yield directly
+    // through groveEconomyTick — but the field must still be stated so the
+    // shared code has an answer rather than falling through to wheat.
+    farmYield: 'food',
+    campName: 'Bandit Camp',
+    heroResKey: 'wood',        // the Elder Bough is grown, not hired
+    enemyRace: 'human',
+  },
   // "Lead your Tribe" — registered now with explicit values so nothing about
   // it is inherited from human by accident. Gameplay comes later; the point
   // of listing it today is that every lookup below already has an answer for
@@ -175,6 +199,27 @@ function factionWord(key){ return factionDef().words[key]; }
 
 // Always returns a definition — an unknown faction is a bug worth hearing
 // about rather than one that quietly plays as a human.
+// Every faction must define all of these. A missing one used to surface as a
+// TypeError deep inside whatever first touched it — the Grove shipped without
+// unitFrames and threw inside unitFrame(), three calls away from the cause.
+// Checked once at load so the error names the faction AND the field.
+// Every faction must define whatever HUMAN defines. Deriving the list from
+// the baseline entry rather than hand-writing it is the point: a hand-written
+// list is only as good as what its author remembered, and mine missed BOTH
+// unitFrames and words — each surfacing as a TypeError deep inside an
+// unrelated helper rather than naming the real problem.
+(function validateFactionDefs(){
+  const required = Object.keys(FACTION_DEFS.human);
+  for(const name in FACTION_DEFS){
+    if(name === 'human') continue;
+    for(const k of required){
+      if(FACTION_DEFS[name][k] === undefined){
+        console.error(`FACTION_DEFS.${name} is missing "${k}" — it will fall through to human behaviour or throw.`);
+      }
+    }
+  }
+})();
+
 function factionDef(f){
   const key = f || state.faction;
   const d = FACTION_DEFS[key];

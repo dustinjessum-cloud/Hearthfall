@@ -85,15 +85,19 @@
   }
   .slotEmpty { font-size: 11px; color: #6b5c44; font-style: italic; }
 
-  #mapSlot   { flex: 0 0 176px; }
+  #mapSlot   { flex: 0 0 176px; }   /* map is 142x32 — wide and short */
   #selSlot   { flex: 0 0 168px; }
   #buildSlot { flex: 1 1 auto; min-width: 120px; }
-  #sideSlot  { flex: 0 0 84px; }
+  #sideSlot  { flex: 0 0 172px; }  /* control groups: room for two rows of chips */
 
+  /* The world is 142x32 — very wide, very short — so the minimap only needs
+     a sliver of height. This used to stretch to fill the whole bar, wrapping
+     a 40px-tall map in ~190px of empty box. Pinned to its content now, and
+     the freed height goes to the control groups below it. */
   #minimapWrap {
     background: rgba(20,14,8,.82); border: 2px solid #7a5a34; border-radius: 5px;
     padding: 3px; line-height: 0; cursor: crosshair;
-    flex: 1 1 auto; display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
   }
   /* native canvas is 284x64 (142x32 tiles at 2px); scale the DISPLAY down to
      the slot without touching the backing resolution, so it stays crisp */
@@ -118,7 +122,7 @@
   @keyframes grpHurt { 0%,100%{ background:#33261a; } 50%{ background:#5a2424; } }
   @media (prefers-reduced-motion: reduce){ .grpChip.hurt { animation:none; background:#5a2424; } }
   #groupBar {
-    flex: 0 0 auto; min-height: 46px;
+    flex: 1 1 auto; min-height: 92px;   /* takes the height the map gave back */
     background: rgba(20,14,8,.5); border: 1px dashed #5a4a30; border-radius: 6px;
     display: flex; align-items: center; justify-content: center; gap: 3px;
     padding: 4px; flex-wrap: wrap; overflow-y: auto;
@@ -308,6 +312,6 @@
 <script src="js/ui.js?v=ed35a989"></script>
 <script src="js/groups.js?v=0af99b0f"></script>
 <script src="js/telemetry.js?v=d297e1d8"></script>
-<script src="js/main.js?v=214a33f3"></script>
+<script src="js/main.js?v=e7833df6"></script>
 </body>
 </html>

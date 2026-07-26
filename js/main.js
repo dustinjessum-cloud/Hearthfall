@@ -165,7 +165,13 @@ class MainScene extends Phaser.Scene {
       if((ev.ctrlKey || ev.metaKey) && (ev.key === 'a' || ev.key === 'A')){
         ev.preventDefault(); selectAllSoldiers(); return;
       }
-      const n = parseInt(ev.key, 10);
+      // ev.code, NOT ev.key. With Shift held the browser reports the SHIFTED
+      // character — "!" for 1, "@" for 2 — so parseInt(ev.key) was NaN and the
+      // handler bailed before it could ever reach the append branch. That is
+      // why Shift+Ctrl+N silently did nothing. ev.code is the physical key
+      // and is unaffected by modifiers.
+      const m = /^Digit([1-9])$/.exec(ev.code || '');
+      const n = m ? +m[1] : NaN;
       if(!(n >= 1 && n <= CONTROL_GROUPS.count)) return;
       ev.preventDefault();
       if(ev.ctrlKey || ev.metaKey) bindControlGroup(n, ev.shiftKey);

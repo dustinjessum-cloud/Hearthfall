@@ -881,6 +881,8 @@ function buildPanelMarkup(panel, type, ref){
         <div id="infoBuild" style="margin-top:4px;color:#ffd76b;"></div>
         ${BUILD_DEFS[ref.type] && BUILD_DEFS[ref.type].needsWorker ? `<div id="infoWorkers" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='farm' ? `<div id="infoSoil" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
+        ${(state.faction==='swarm' && (ref.isCore || ref.type==='creep_tumor'))
+          ? `<div id="blightNote" style="margin-top:4px;color:#9aae78;"></div><button id="blightBtn">Spread Blight</button>` : ''}
         ${ref.type==='tower' ? `<div id="infoGarrison" style="margin-top:4px;color:#d8c79a;"></div><button id="towerReleaseBtn">Release defenders</button>` : ''}
         ${ref.type==='wall' ? `<div id="infoWallRepair" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='mill' ? `<div style="margin-top:4px;color:#d8c79a;">Grinds up to ${MILLING.millCapacity} wheat/tick into flour. Needs a worker at the millstone — right-click here with a villager selected.</div>` : ''}
@@ -928,6 +930,8 @@ function buildPanelMarkup(panel, type, ref){
         const rb = document.getElementById('towerReleaseBtn');
         if(rb) rb.addEventListener('click', ()=> releaseTowerGarrison(ref));
       }
+      const blb = document.getElementById('blightBtn');
+      if(blb) blb.addEventListener('click', ()=> beginBlightTargeting(ref));
       if(!ref.isCore){
         const sb = document.getElementById('salvageBtn');
         // checked at CLICK time, not bind time — the panel can stay open
@@ -1266,6 +1270,23 @@ function updatePanelLive(type, ref){
         ae.textContent = `${ref.dmg} dmg · ${rng} range · ${(ref.dmg/secs).toFixed(1)}/s`;
         if(an) an.textContent = `every ${secs.toFixed(1)}s${ref.ranged ? ' — holds at range and looses' : ' — melee'}`;
       }
+    }
+  }
+  if(type==='building' && state.faction==='swarm' && (ref.isCore || ref.type==='creep_tumor')){
+    const nEl = document.getElementById('blightNote');
+    const bBtn = document.getElementById('blightBtn');
+    const canEver = blightCanEverSpread(ref);
+    const ready = blightSpreadReady(ref);
+    if(nEl){
+      nEl.textContent = !canEver
+        ? 'This growth is spent — the blight reaches no further from here.'
+        : (ready ? `Ready — place a Grave Mound on blight within ${blightSpreadRange(ref)} tiles.`
+                 : `Gathering strength... ${Math.ceil(blightSpreadRemainingMs(ref)/1000)}s`);
+    }
+    if(bBtn){
+      bBtn.disabled = !ready;
+      bBtn.textContent = !canEver ? 'Spent'
+        : (ready ? 'Spread Blight' : `Spread Blight (${Math.ceil(blightSpreadRemainingMs(ref)/1000)}s)`);
     }
   }
   if(type==='unit' && ref.type==='forester'){

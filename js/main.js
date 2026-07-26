@@ -174,6 +174,7 @@ class MainScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ESC', ()=>{
       this.cancelBuildMode();
       if(typeof cancelSeedTargeting === 'function') cancelSeedTargeting();
+      if(typeof cancelBlightTargeting === 'function') cancelBlightTargeting();
       clearGroupSelection();
       selectEntity(null,null);
     });
@@ -264,7 +265,8 @@ class MainScene extends Phaser.Scene {
     if(state.castMode){
       const wpc = this.cameras.main.getWorldPoint(p.x, p.y);
       const g = this.screenToGrid(wpc.x, wpc.y);
-      updateSeedGhost(g.gx, g.gy);
+      if(state.castMode.kind === 'blight') updateBlightGhost(g.gx, g.gy);
+      else updateSeedGhost(g.gx, g.gy);
       return;   // no drag-select while aiming an ability
     }
     // drag-selection rectangle
@@ -360,7 +362,10 @@ class MainScene extends Phaser.Scene {
     const {gx, gy} = this.screenToGrid(wp.x, wp.y);
 
     if(p.rightButtonDown()){
-      if(state.castMode){ cancelSeedTargeting(); return; }
+      if(state.castMode){
+        if(state.castMode.kind === 'blight') cancelBlightTargeting(); else cancelSeedTargeting();
+        return;
+      }
       if(state.buildMode){ this.cancelBuildMode(); return; }
       // shift held: queue the order behind whatever's already happening
       // instead of interrupting it. Same for drones — they're villagers
@@ -395,9 +400,15 @@ class MainScene extends Phaser.Scene {
     }
 
     if(state.castMode){
-      const cu = castModeUnit();
-      if(cu) castSeedGrove(cu, gx, gy);
-      cancelSeedTargeting();
+      if(state.castMode.kind === 'blight'){
+        const par = blightCastParent();
+        if(par) spreadBlightTo(par, gx, gy);
+        cancelBlightTargeting();
+      } else {
+        const cu = castModeUnit();
+        if(cu) castSeedGrove(cu, gx, gy);
+        cancelSeedTargeting();
+      }
       return;
     }
     if(state.buildMode){

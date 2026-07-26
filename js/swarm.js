@@ -191,16 +191,87 @@ function trySpreadTumor(parent){
   if(scene && scene.add) floatResourceText(spot.gx, spot.gy, 'the blight spreads...', '#b6c98a');
 }
 
+// Blight no longer creeps outward on its own. Each blight structure charges
+// up, and the PLAYER chooses where the next one goes — spreading is the
+// undead's central decision rather than a background process they watch.
+//
+// The shrink is unchanged: a child is one generation further out, its reach
+// comes from tumorGenRadius (3 -> 2 -> 1), and the chain stops after
+// tumorSpreadGenerations. All that moved is who picks the direction.
 function updateTumorSpread(delta){
-  // snapshot first: a spread created THIS pass shouldn't also be eligible
-  // to spread again in the same pass, which could otherwise cascade an
-  // entire generation chain in one large tick (e.g. after a backgrounded
-  // tab resumes with a big delta) instead of one generation per tick
-  for(const b of myBuildings()){
-    if(b.type!=='creep_tumor' || b.hp<=0 || underConstruction(b) || b.spreadDone) continue;
+  for(const b of blightSources()){
+    if(b.hp<=0 || underConstruction(b)) continue;
+    if(!blightCanEverSpread(b)) continue;
     b.spreadAgeMs = (b.spreadAgeMs||0) + delta;
-    if(b.spreadAgeMs >= SWARM.creep.tumorSpreadDelayMs) trySpreadTumor(b);
   }
+}
+
+// Everything that anchors blight: the Necropolis and every Grave Mound.
+function blightSources(){
+  return myBuildings().filter(b => b.isCore || b.type === 'creep_tumor');
+}
+
+// A structure whose children would already be past the last generation has
+// nothing left to give, and should never offer the button.
+function blightGenOf(b){ return b.isCore ? 0 : ((b.creepGen||0) + 1); }
+function blightCanEverSpread(b){
+  return blightGenOf(b) < SWARM.creep.tumorGenRadius.length
+      && blightGenOf(b) <= SWARM.creep.tumorSpreadGenerations;
+}
+function blightSpreadReady(b){
+  return blightCanEverSpread(b) && (b.spreadAgeMs||0) >= SWARM.creep.tumorSpreadDelayMs;
+}
+function blightSpreadRemainingMs(b){
+  return Math.max(0, SWARM.creep.tumorSpreadDelayMs - (b.spreadAgeMs||0));
+}
+
+// How far from the parent a new mound may be planted: its own blight reach.
+// Combined with the must-be-on-blight rule below, that means growth always
+// advances the frontier one step rather than teleporting to a target.
+function blightSpreadRange(b){
+  const gen = b.isCore ? null : (b.creepGen||0);
+  return b.isCore
+    ? SWARM.creep.hiveRadius[(b.level||1)-1]
+    : SWARM.creep.tumorGenRadius[gen] || 1;
+}
+
+// Valid target: on existing blight, inside the parent's reach, buildable.
+function canSpreadBlightAt(parent, gx, gy){
+  if(!blightSpreadReady(parent)) return false;
+  if(!inBounds(gx,gy) || !isCreeped(gx,gy)) return false;   // your own ground only
+  if(occAt(gx,gy)) return false;
+  if(isImpassableTile(tileAt(gx,gy))) return false;
+  const t = tileAt(gx,gy);
+  if(t==='forest' || t==='stone_deposit') return false;
+  return Phaser.Math.Distance.Between(parent.gx, parent.gy, gx, gy) <= blightSpreadRange(parent);
+}
+
+function spreadBlightTo(parent, gx, gy){
+  if(!canSpreadBlightAt(parent, gx, gy)){
+    flashWaveBanner('Must be placed on your own blight, within reach.');
+    return false;
+  }
+  const gen = blightGenOf(parent);
+  const b = createBuilding('creep_tumor', gx, gy, Object.assign({}, BUILD_DEFS.creep_tumor));
+  if(!b) return false;
+  b.creepGen = gen;
+  b.construction = null; b.underConstruction = false; b.awaitingBuilder = false; b.buildMs = 0;
+  // Each generation is visibly smaller, matching its smaller reach — so the
+  // map shows at a glance how much further a chain can still go.
+  // Every spread mound is smaller than the structure that made it, and each
+  // generation smaller again — so the map shows at a glance how much further
+  // a chain can still reach. gen+1 rather than gen, or the first spread would
+  // render the same size as a hand-built Grave Mound.
+  const scale = Math.max(0.4, 1 - (gen + 1) * 0.18);
+  if(b.sprite && b.sprite.setScale) b.sprite.setScale(scale);
+  parent.spreadAgeMs = 0;              // parent must charge again
+  updateCreep();                        // immediate bloom, so the click has an effect
+  flashWaveBanner(gen >= SWARM.creep.tumorSpreadGenerations
+    ? 'The blight reaches its limit here.'
+    : 'A Grave Mound rises — the blight creeps onward.');
+  refreshInfoPanel();
+  markMinimapDirty();
+  return true;
 }
 
 // `sources` is optional: the enemy town passes its own list so the undead AI
@@ -333,3 +404,45 @@ function applyFaction(faction){
   }
 }
 
+
+// ---- targeting: same pattern as Seed Grove and building placement --------
+function beginBlightTargeting(b){
+  if(!blightSpreadReady(b)) return;
+  state.castMode = { kind:'blight', buildingId: b.id };
+  flashWaveBanner('Choose where the blight spreads — Esc or right-click to cancel.');
+}
+
+function blightCastParent(){
+  if(!state.castMode || state.castMode.kind !== 'blight') return null;
+  const b = buildingById(state.castMode.buildingId);
+  return (b && blightSpreadReady(b)) ? b : null;
+}
+
+// Ghost: the parent's reach as a ring, and a marker under the cursor that
+// turns red on invalid ground — so a refusal is visible BEFORE the click.
+function updateBlightGhost(gx, gy){
+  const p = blightCastParent();
+  if(!p){ cancelBlightTargeting(); return; }
+  if(!scene._blightRange){
+    scene._blightRange = scene.add.circle(0,0,10,0x9aae78,0).setStrokeStyle(1,0x9aae78,0.55).setDepth(9);
+  }
+  scene._blightRange.setPosition(p.gx*TILE+TILE/2, p.gy*TILE+TILE/2);
+  scene._blightRange.setRadius(blightSpreadRange(p)*TILE);
+
+  const ok = canSpreadBlightAt(p, gx, gy);
+  const col = ok ? 0x9aae78 : 0xd85a3a;
+  if(!scene._blightSpot){
+    scene._blightSpot = scene.add.rectangle(0,0,TILE,TILE,0x9aae78,0.3).setStrokeStyle(2,0x9aae78,0.9).setDepth(10);
+  }
+  scene._blightSpot.setPosition(gx*TILE+TILE/2, gy*TILE+TILE/2);
+  scene._blightSpot.setFillStyle(col, 0.3);
+  scene._blightSpot.setStrokeStyle(2, col, 0.9);
+}
+
+function cancelBlightTargeting(){
+  state.castMode = null;
+  if(scene){
+    if(scene._blightRange){ scene._blightRange.destroy(); scene._blightRange = null; }
+    if(scene._blightSpot){ scene._blightSpot.destroy(); scene._blightSpot = null; }
+  }
+}

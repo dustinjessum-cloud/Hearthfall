@@ -67,23 +67,65 @@ function logSnapshot(){
     // Which production buildings exist and whether they are STAFFED. Reading
     // the last log, stone froze at 79 for six minutes and the data could not
     // say whether the quarry was destroyed, unstaffed, or out of deposit.
+    // Production, counted per building type. Reads BOTH economies: the
+    // worker-driven one (produces + a staffed worker) and the Grove's, where
+    // buildings yield by being CONNECTED and no worker exists. Reading the
+    // first Grove log, this block was empty in every snapshot — it only knew
+    // about `produces`, so the entire faction's economy was invisible exactly
+    // where it most needed measuring.
     prod: (function(){
       const out = {};
+      const groveOn = (state.faction === 'grove' && typeof groveConnectedIds === 'function');
+      const linked = groveOn ? groveConnectedIds() : null;
       for(const b of myBuildings()){
         if(b.hp<=0 || underConstruction(b)) continue;
         const d = BUILD_DEFS[b.type];
-        if(!d || !d.produces) continue;
+        if(!d || (!d.produces && !d.groveYield)) continue;
         const k = b.type;
         out[k] = out[k] || { n:0, staffed:0, dry:0 };
         out[k].n++;
-        if(workersOf(b).length) out[k].staffed++;
-        // no resource left within reach is the difference between "idle" and
-        // "nothing left to mine"
-        if(d.bonusNear && !findNearestResourceTile(b.gx, b.gy, d.bonusNear, 10)) out[k].dry++;
+        if(d.produces){
+          if(workersOf(b).length) out[k].staffed++;
+          // no resource left within reach is the difference between "idle" and
+          // "nothing left to mine"
+          if(d.bonusNear && !findNearestResourceTile(b.gx, b.gy, d.bonusNear, 10)) out[k].dry++;
+        } else {
+          // Grove: "staffed" means CONNECTED — a severed structure is the
+          // faction's equivalent of an unstaffed one, and yields nothing.
+          const conn = b.isCore || (linked && linked.has(b.id));
+          if(conn) out[k].staffed++;
+          // and record how far along it is, since a Seed yields nothing even
+          // when perfectly connected
+          const st = (typeof groveStageDef === 'function') ? groveStageDef(b).name : '?';
+          out[k].stages = out[k].stages || {};
+          out[k].stages[st] = (out[k].stages[st] || 0) + 1;
+        }
       }
       return out;
     })(),
-    idle: (typeof idleWorkers === 'function') ? idleWorkers().length : null,
+    // "Idle" is meaningless for the Grove — it has no gathering jobs, so
+    // every Sprout reads idle forever. Reported as null rather than a
+    // misleading number.
+    idle: (state.faction === 'grove') ? null
+        : ((typeof idleWorkers === 'function') ? idleWorkers().length : null),
+    // The Grove IS its network, so record the network: how much is connected,
+    // how much is stranded, and how many roots are still creeping.
+    grove: (state.faction === 'grove' && typeof groveConnectedIds === 'function') ? (function(){
+      const linked = groveConnectedIds();
+      const mine = myBuildings().filter(b => b.hp > 0 && !underConstruction(b));
+      const roots = state.groveRoots || [];
+      return {
+        structures: mine.length,
+        connected: mine.filter(b => b.isCore || linked.has(b.id)).length,
+        severed:   mine.filter(b => !b.isCore && !linked.has(b.id)).length,
+        rootsGrowing: roots.filter(r => !r.done).length,
+        rootsDone:    roots.filter(r => r.done).length,
+        heartwoodStage: (function(){
+          const h = groveHeartwood();
+          return h && typeof groveStageDef === 'function' ? groveStageDef(h).name : null;
+        })(),
+      };
+    })() : null,
     // the AI's side of the race, so their economy can be compared to yours
     aiRes: state.ai ? { f:Math.round(state.ai.resources.food), w:Math.round(state.ai.resources.wood), s:Math.round(state.ai.resources.stone) } : null,
     aiBldgs: (typeof aiBuildings === 'function') ? aiBuildings().filter(b=>b.hp>0).length : 0,

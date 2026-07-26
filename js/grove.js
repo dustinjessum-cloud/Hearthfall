@@ -26,6 +26,12 @@
 // ---------------------------------------------------------------------
 
 const GROVE = {
+  // The Heartwood is the tree the grove sprang FROM — it starts already
+  // grown, not as a seed. Without this it defaulted to stage 0 and rendered
+  // as a sapling-sized speck that had to mature through three stages before
+  // looking like the heart of anything.
+  heartwoodStartStage: 2,
+
   // --- growth stages ---
   // Every structure walks these in order. A seed is fragile and does nothing;
   // it is the window in which a raider can cheaply kill an expansion.
@@ -271,3 +277,13 @@ const GROVE_TEXT = [
   ['soldiers', 'wardens'], ['Soldiers', 'Wardens'],
   ['town', 'grove'], ['Town', 'Grove'],
 ];
+
+// Called once when a Grove world is created: the Heartwood begins mature.
+function initGroveHeartwood(){
+  if(state.faction !== 'grove') return;
+  const h = groveHeartwood();
+  if(!h) return;
+  h.groveStage = GROVE.heartwoodStartStage;
+  h.groveAgeMs = 0;
+  applyGroveStage(h);
+}

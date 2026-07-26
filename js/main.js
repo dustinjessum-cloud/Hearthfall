@@ -116,6 +116,7 @@ class MainScene extends Phaser.Scene {
       initAiEconomy();
       for(let i=0;i<3;i++) spawnAiWorker(state.aiTownCenter.gx, state.aiTownCenter.gy);
       seedAiBlight();   // an undead enemy town starts ON blight, not on grass
+      if(typeof initGroveHeartwood === 'function') initGroveHeartwood();
     }
 
     this.cameras.main.setBounds(0,0, MAP_W*TILE, MAP_H*TILE);

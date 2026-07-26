@@ -891,6 +891,8 @@ function buildPanelMarkup(panel, type, ref){
           ? `<div id="blightNote" style="margin-top:4px;color:#9aae78;"></div><button id="blightBtn">Spread Blight</button>`
           : ((state.faction==='swarm' && (ref.isCore || ref.type==='creep_tumor'))
              ? `<div style="margin-top:4px;color:#8a7a5c;">The blight spreads no further from here.</div>` : '')}
+        ${(state.faction==='grove') ? `<div id="growNote" style="margin-top:4px;color:#9fe08a;"></div>
+        <div class="hpbar"><div class="hpfill" id="growFill" style="background:#6bbf59;"></div></div>` : ''}
         ${ref.type==='ritual_pit' ? `<div id="pitCount" style="margin-top:4px;color:#c98a8a;"></div>
         <div class="hpbar"><div class="hpfill" id="pitFill" style="background:#a8443f;"></div></div>` : ''}
         ${ref.type==='tower' ? `<div id="infoGarrison" style="margin-top:4px;color:#d8c79a;"></div><button id="towerReleaseBtn">Release defenders</button>` : ''}
@@ -971,7 +973,10 @@ function buildPanelMarkup(panel, type, ref){
         <div id="infoUpkeep" style="color:#d8c79a;"></div>
         ${isHero ? `<div id="heroXp" style="margin-top:4px;color:#c9a0ff;"></div>
         <div class="hpbar"><div class="hpfill" id="heroXpFill" style="background:#9a6fd4;"></div></div>
-        <div id="heroCds" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
+        <div id="heroCds" style="margin-top:4px;color:#d8c79a;"></div>
+        <div id="heroMana" style="margin-top:4px;color:#8fd0ff;"></div>
+        <div class="hpbar"><div class="hpfill" id="heroManaFill" style="background:#4a90d9;"></div></div>
+        <div id="heroSpells" style="margin-top:6px;"></div>` : ''}
         ${isVillager ? `<div id="infoAssign" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='forester' ? `<div id="seedNote" style="margin-top:4px;color:#9fe08a;"></div><button id="seedBtn">Seed Grove</button>` : ''}
         <div style="margin-top:6px;color:#d8c79a;">${isVillager
@@ -1280,6 +1285,71 @@ function updatePanelLive(type, ref){
         ae.textContent = `${ref.dmg} dmg · ${rng} range · ${(ref.dmg/secs).toFixed(1)}/s`;
         if(an) an.textContent = `every ${secs.toFixed(1)}s${ref.ranged ? ' — holds at range and looses' : ' — melee'}`;
       }
+    }
+  }
+  if(type==='unit' && ref.type==='captain' && typeof heroSpellbook === 'function'){
+    const mEl = document.getElementById('heroMana');
+    const mFill = document.getElementById('heroManaFill');
+    const max = heroMaxMana();
+    if(mEl) mEl.textContent = `Power: ${Math.floor(state.hero.mana)} / ${max}`
+      + (state.hero.picks > 0 ? `  —  ${state.hero.picks} skill point${state.hero.picks>1?'s':''} to spend` : '');
+    if(mFill) mFill.style.width = Math.round((state.hero.mana/max)*100) + '%';
+
+    const wrap = document.getElementById('heroSpells');
+    const book = heroSpellbook();
+    if(wrap){
+      // Rebuilt only when the SHAPE changes — which spells are known, at what
+      // rank, and whether a point is available. Cooldown numbers update in
+      // place, so a button never vanishes under the cursor mid-click.
+      const shape = book.map(sp=>sp.id+':'+heroSpellRank(sp.id)).join('|') + '#' + state.hero.picks;
+      if(wrap._shape !== shape){
+        wrap._shape = shape;
+        wrap.innerHTML = book.map(sp=>{
+          const rank = heroSpellRank(sp.id);
+          const canLearn = state.hero.picks > 0 && rank < sp.maxRank && state.hero.level >= sp.minLevel;
+          return `<div style="margin-bottom:6px;">
+            <div style="color:#e8dcc0;">${sp.name}${rank ? ` <span style="color:#9fe08a;">rank ${rank}/${sp.maxRank}</span>`
+              : ` <span style="color:#8a7a5c;">not learned</span>`}</div>
+            <div style="font-size:11px;color:#b8a888;">${rank ? sp.rankText(rank, sp) : sp.desc}</div>
+            ${rank ? `<button class="spellCast" data-id="${sp.id}">Cast</button>` : ''}
+            ${canLearn ? `<button class="spellLearn" data-id="${sp.id}">${rank ? 'Improve' : 'Learn'} (1 point)</button>` : ''}
+          </div>`;
+        }).join('');
+        for(const btn of wrap.querySelectorAll('.spellCast'))
+          btn.addEventListener('click', ()=> beginSpellTargeting(btn.dataset.id));
+        for(const btn of wrap.querySelectorAll('.spellLearn'))
+          btn.addEventListener('click', ()=> learnHeroSpell(btn.dataset.id));
+      }
+      // live: cooldown + affordability on each cast button
+      for(const btn of wrap.querySelectorAll('.spellCast')){
+        const sp = heroSpellById(btn.dataset.id), rank = heroSpellRank(btn.dataset.id);
+        const cd = state.hero.cooldowns[sp.id] || 0;
+        btn.disabled = !heroSpellReady(sp.id);
+        btn.textContent = cd > 0 ? `Cast (${Math.ceil(cd/1000)}s)`
+          : (state.hero.mana < sp.mana(rank) ? `Cast (${sp.mana(rank)} power)` : `Cast (${sp.mana(rank)})`);
+      }
+    }
+  }
+  if(type==='building' && state.faction==='grove'){
+    // Growth reads like experience: which stage it is, how far to the next,
+    // and whether it is actually growing at all — a severed structure is
+    // frozen, and that has to be visible or a stalled grove is a mystery.
+    const nEl = document.getElementById('growNote');
+    const fEl = document.getElementById('growFill');
+    const st = groveStageDef(ref);
+    const maxed = groveStage(ref) >= groveMaxStage(ref);
+    const linked = isGroveConnected(ref);
+    const pct = maxed ? 1 : Math.min(1, (ref.groveAgeMs||0) / GROVE.stageMs);
+    if(nEl){
+      nEl.textContent = maxed
+        ? `${st.name} — fully grown${ref.isCore ? '' : ' (only the Heartwood grows further)'}`
+        : (!linked && !ref.isCore
+            ? `${st.name} — SEVERED, growth halted. Reconnect it to the Heartwood.`
+            : `${st.name} — ${Math.round(pct*100)}% to ${GROVE.stages[groveStage(ref)+1].name}`);
+    }
+    if(fEl){
+      fEl.style.width = Math.round(pct*100) + '%';
+      fEl.style.background = maxed ? '#c9a227' : (linked || ref.isCore ? '#6bbf59' : '#8a7a5c');
     }
   }
   if(type==='building' && ref.type==='ritual_pit'){

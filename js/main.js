@@ -96,7 +96,10 @@ class MainScene extends Phaser.Scene {
       }
 
       // starting workers — idle until you build somewhere for them to work
-      for(let i=0;i<3;i++){
+      // The Grove starts with a single Ent — it tends, it does not gather, so
+      // three of them would be two too many.
+      const starters = (state.faction === 'grove') ? GROVE.startingEnts : 3;
+      for(let i=0;i<starters;i++){
         const spot = findFreeSpotNear(cx, cy, 4) || {gx:cx, gy:cy};
         createVillager(spot.gx, spot.gy);
       }
@@ -182,6 +185,7 @@ class MainScene extends Phaser.Scene {
       this.cancelBuildMode();
       if(typeof cancelSeedTargeting === 'function') cancelSeedTargeting();
       if(typeof cancelBlightTargeting === 'function') cancelBlightTargeting();
+      if(typeof cancelSpellTargeting === 'function') cancelSpellTargeting();
       clearGroupSelection();
       selectEntity(null,null);
     });
@@ -208,6 +212,7 @@ class MainScene extends Phaser.Scene {
     refreshHud2Buttons();   // the ring button reflects the saved preference on boot
 
     groupsInit();
+    initHeroSpells();
     telemetryInit();
     logEvent('world_ready', { restored: !!snapWasRestored });
     refreshHud2Buttons();   // AFTER init, or the REC pill renders as paused
@@ -273,6 +278,7 @@ class MainScene extends Phaser.Scene {
       const wpc = this.cameras.main.getWorldPoint(p.x, p.y);
       const g = this.screenToGrid(wpc.x, wpc.y);
       if(state.castMode.kind === 'blight') updateBlightGhost(g.gx, g.gy);
+      else if(state.castMode.kind === 'spell') updateSpellGhost(g.gx, g.gy);
       else updateSeedGhost(g.gx, g.gy);
       return;   // no drag-select while aiming an ability
     }
@@ -314,7 +320,21 @@ class MainScene extends Phaser.Scene {
         const px = u.gx*TILE + TILE/2, py = u.gy*TILE + TILE/2;
         return px>=x0 && px<=x1 && py>=y0 && py<=y1;
       });
-      setGroupSelection(picked);
+      if(picked.length){
+        setGroupSelection(picked);
+      } else {
+        // No units in the box — fall back to a BUILDING. Units win when both
+        // are caught, because a box drawn over your town is nearly always
+        // meant to grab the army standing in it, not the houses under them.
+        const b = myBuildings().find(bb=>{
+          if(bb.hp<=0) return false;
+          const sz = (bb.size||1)*TILE;
+          const px = bb.gx*TILE + sz/2, py = bb.gy*TILE + sz/2;
+          return px>=x0 && px<=x1 && py>=y0 && py<=y1;
+        });
+        if(b){ clearGroupSelection(); selectEntity('building', b); }
+        else setGroupSelection(picked);
+      }
     } else {
       // plain click — select whatever is nearest under the cursor
       const wp = this.cameras.main.getWorldPoint(p.x, p.y);
@@ -370,7 +390,9 @@ class MainScene extends Phaser.Scene {
 
     if(p.rightButtonDown()){
       if(state.castMode){
-        if(state.castMode.kind === 'blight') cancelBlightTargeting(); else cancelSeedTargeting();
+        if(state.castMode.kind === 'blight') cancelBlightTargeting();
+        else if(state.castMode.kind === 'spell') cancelSpellTargeting();
+        else cancelSeedTargeting();
         return;
       }
       if(state.buildMode){ this.cancelBuildMode(); return; }
@@ -411,6 +433,9 @@ class MainScene extends Phaser.Scene {
         const par = blightCastParent();
         if(par) spreadBlightTo(par, gx, gy);
         cancelBlightTargeting();
+      } else if(state.castMode.kind === 'spell'){
+        castHeroSpell(state.castMode.spellId, gx, gy);
+        cancelSpellTargeting();
       } else {
         const cu = castModeUnit();
         if(cu) castSeedGrove(cu, gx, gy);
@@ -446,6 +471,7 @@ class MainScene extends Phaser.Scene {
       economyTick();
       aiEconomyTick();
       groveEconomyTick();   // the Grove yields by living, not by gathering
+      heroManaTick();
     }
 
     // silent autosave
@@ -531,6 +557,8 @@ class MainScene extends Phaser.Scene {
     aiThink(delta);         // their economy: train, gather, build, expand
     if(state.faction==='tribe'){ updateForesters(delta); updateSaplings(delta); updateHunters(delta); }
     if(state.faction==='grove'){ updateGroveRoots(delta); updateGroveGrowth(delta); }
+    updateHeroSpells(delta);
+    updateRootedEnemies(delta);
     updateTelemetry(delta);
     updateAiBlight(delta);  // an undead enemy town spreads its own blight
     updateAiWar(delta);     // muster war parties and send them at you

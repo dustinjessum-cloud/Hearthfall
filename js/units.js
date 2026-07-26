@@ -11,6 +11,11 @@ function grantHeroXp(amount){
     state.hero.xp -= HERO.xpToNext(state.hero.level);
     state.hero.level++;
     if(cap){ cap.maxHp = heroMaxHp(); cap.hp = Math.min(cap.maxHp, cap.hp + HERO.hpPerLevel); }
+    // every level grants a pick: learn a new spell, or rank one up
+    if(state.hero.picks !== undefined) state.hero.picks++;
+    if(state.hero.mana !== undefined && typeof heroMaxMana === 'function'){
+      state.hero.mana = heroMaxMana();   // a level-up restores you
+    }
     flashWaveBanner(`The Minotaur reaches level ${state.hero.level}!`);
   }
 }

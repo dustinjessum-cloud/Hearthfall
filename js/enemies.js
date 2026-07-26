@@ -412,7 +412,14 @@ function updateEnemies(delta){
       e.hpBarFg.width = (TILE-8)*Math.max(0,e.hp/e.maxHp);
       continue;
     }
-    if(e.homeGuard && !e.respondingTo){
+    // held fast by Rootgrasp: it can still fight what is beside it, but it
+    // does not take a step
+    if(typeof isEnemyRooted === 'function' && isEnemyRooted(e)){
+      e.sprite.setPosition(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2);
+      e.hpBarBg.setPosition(e.gx*TILE+TILE/2, e.gy*TILE-2);
+      e.hpBarFg.setPosition(e.gx*TILE+4, e.gy*TILE-2);
+      e.hpBarFg.width = (TILE-8)*Math.max(0,e.hp/e.maxHp);
+    } else if(e.homeGuard && !e.respondingTo){
       // The enemy town's standing defenders hold their posts. Without this
       // they would path at YOUR Town Hall the moment the world loads and
       // pile up against a sealed pass forever. They still fall through to

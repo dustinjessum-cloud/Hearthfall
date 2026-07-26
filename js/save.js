@@ -184,6 +184,7 @@ function restoreGame(snapshot){
   state.evolutionInProgress = snapshot.evolutionInProgress;
   state.captainRecruited = snapshot.captainRecruited;
   Object.assign(state.hero, snapshot.hero);
+  if(typeof initHeroSpells === 'function') initHeroSpells();   // fill any field an older save lacks
   state.happiness = snapshot.happiness;
   state.wave = snapshot.wave;
   state.nextWaveInMs = snapshot.nextWaveInMs;

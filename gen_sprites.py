@@ -2137,30 +2137,55 @@ def draw_grove_thicket(d):
     scatter(d, 7761, 22, GV_LEAF_XL)
     scatter(d, 7767, 16, GV_LEAF_D)
 
-def draw_grove_sprout(d):
-    # A Sprout: a seedling that walks. Two broad leaves for arms, a pale stem
-    # body, a seed husk still clinging to its head — small and unthreatening,
-    # which is right for a unit that tends rather than fights.
-    STEM, STEM_D, STEM_L = (128, 170, 92), (96, 132, 66), (168, 204, 128)
-    HUSK = (150, 118, 74)
-    d.ellipse([11, 27, 21, 31], fill=(0, 0, 0, 70))
-    rect(d, 15, 14, 17, 27, STEM)
-    rect(d, 15, 14, 15, 27, STEM_L)
-    rect(d, 17, 14, 17, 27, STEM_D)
-    rect(d, 13, 27, 15, 29, STEM_D)                 # little root feet
-    rect(d, 17, 27, 19, 29, STEM_D)
-    # leaf arms
-    d.polygon([(15,17), (6,14), (14,21)], fill=GV_LEAF)
-    d.polygon([(15,17), (8,15), (14,19)], fill=GV_LEAF_L)
-    d.polygon([(17,17), (26,14), (18,21)], fill=GV_LEAF_D)
-    d.polygon([(17,17), (24,15), (18,19)], fill=GV_LEAF)
-    # head bud with the seed husk still on it
-    d.ellipse([12, 7, 20, 15], fill=STEM)
-    d.ellipse([12, 7, 17, 12], fill=STEM_L)
-    d.polygon([(12,9), (16,2), (20,9)], fill=HUSK)
-    d.polygon([(14,8), (16,4), (18,8)], fill=shade(HUSK, 1.25))
-    rect(d, 14, 11, 15, 12, (46, 40, 30))           # eyes
-    rect(d, 17, 11, 18, 12, (46, 40, 30))
+def draw_grove_ent(d):
+    # An Ent: a tree that walks. Deliberately NOT the old sprout — you get one
+    # of these, it is expensive, and it should look like something that has
+    # stood a long time. Broad bark body, a mossy canopy for a head, gnarled
+    # root feet, and long limbs that read as branches rather than arms.
+    BARK, BARK_D, BARK_L = (104, 78, 52), (74, 55, 36), (136, 106, 72)
+    MOSS, MOSS_D, MOSS_L = (76, 138, 58), (52, 102, 40), (112, 174, 86)
+    EYE = (226, 214, 120)
+    d.ellipse([8, 27, 24, 31], fill=(0, 0, 0, 75))          # ground shadow
+
+    # root feet, splayed and gripping
+    for fx in (11, 19):
+        rect(d, fx, 25, fx+2, 30, BARK_D)
+        rect(d, fx, 25, fx, 30, BARK)
+        d.line([fx+1, 30, fx-2, 31], fill=BARK_D)
+        d.line([fx+1, 30, fx+4, 31], fill=BARK_D)
+
+    # trunk body, wider at the base, with bark grain
+    rect(d, 12, 12, 19, 27, BARK)
+    rect(d, 11, 22, 20, 27, BARK)
+    rect(d, 12, 12, 13, 27, BARK_L)                          # lit left
+    rect(d, 18, 12, 19, 27, BARK_D)                          # shaded right
+    for gy in (15, 18, 21, 24):
+        rect(d, 14, gy, 17, gy, BARK_D)
+    # a knot-hollow in the trunk
+    d.ellipse([14, 18, 17, 22], fill=(46, 34, 24))
+
+    # branch arms, long and jointed — they hang like limbs, not like fists
+    d.line([12, 14, 5, 11], fill=BARK, width=3)
+    d.line([5, 11, 3, 18], fill=BARK_D, width=2)
+    d.line([12, 14, 6, 12], fill=BARK_L, width=1)
+    d.line([19, 14, 26, 11], fill=BARK, width=3)
+    d.line([26, 11, 28, 18], fill=BARK_D, width=2)
+    for tx, ty in ((2,19), (4,20), (27,19), (29,20)):        # twig fingers
+        rect(d, tx, ty, tx, ty+1, BARK_D)
+
+    # mossy canopy head
+    d.ellipse([8, 2, 24, 14], fill=MOSS_D)
+    d.ellipse([9, 3, 22, 12], fill=MOSS)
+    d.ellipse([10, 4, 17, 9], fill=MOSS_L)
+    for lx, ly in ((7,7), (24,8), (12,1), (19,2)):           # leafy fringe
+        d.ellipse([lx, ly, lx+3, ly+3], fill=MOSS)
+    # deep-set glowing eyes under the canopy
+    rect(d, 13, 10, 14, 11, (34, 30, 22))
+    rect(d, 17, 10, 18, 11, (34, 30, 22))
+    rect(d, 13, 10, 13, 10, EYE)
+    rect(d, 18, 10, 18, 10, EYE)
+    scatter(d, 7771, 10, MOSS_L)
+    scatter(d, 7777, 6, MOSS_D)
 
 DRAWERS = [
     ("grass", draw_grass),
@@ -2236,7 +2261,7 @@ DRAWERS = [
     ("grove_bough", draw_grove_bough),
     ("grove_spire", draw_grove_spire),
     ("grove_thicket", draw_grove_thicket),
-    ("grove_sprout", draw_grove_sprout),
+    ("grove_ent", draw_grove_ent),
     ("sealed_pass", draw_sealed_pass),
     ("bone_pile", draw_bone_pile),
     ("bone_pile_corrupted", draw_bone_pile_corrupted),

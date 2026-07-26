@@ -50,9 +50,12 @@ const GROVE = {
   rootMaxLen: 9,             // a seed further than this from the network is unreachable
   rootColor: 0x6b8f4a,
 
-  // --- sprouts: a small tending crew, not a workforce ---
-  sproutCap: 4,
-  sproutCost: { food: 15 },
+  // --- Ents: one at a time, and dear ---
+  // An Ent is not a workforce, it is a caretaker. You begin with ONE and
+  // every further one is a real decision, so tending is something you place
+  // deliberately rather than something you scale.
+  startingEnts: 1,
+  entCost: { food: 60, wood: 40 },
   tendRadius: 3,
   tendBonus: 0.25,           // a tended structure yields this much more
 
@@ -188,18 +191,65 @@ function updateGroveRoots(delta){
 
 // One graphics object for every root, redrawn per frame. Cheap, and it means
 // a severed root vanishes the moment its building dies.
+// Roots, drawn as roots rather than as a line. A straight segment read as a
+// wire between two boxes; real roots taper, wander, and throw off side
+// shoots. The wander is derived from the root's own endpoints so it is
+// identical every frame — no per-frame randomness, no crawling.
 function drawGroveRoots(){
   if(!scene || !scene.add) return;
   if(!scene._rootGfx) scene._rootGfx = scene.add.graphics().setDepth(1);
   const g = scene._rootGfx;
   g.clear();
+
+  const ROOT_D = 0x4a6b32, ROOT = 0x6b8f4a, ROOT_L = 0x8fb46a;
   for(const r of (state.groveRoots || [])){
-    g.lineStyle(r.done ? 3 : 2, GROVE.rootColor, r.done ? 0.85 : 0.5);
-    g.beginPath();
-    g.moveTo(r.x0*TILE + TILE/2, r.y0*TILE + TILE/2);
-    g.lineTo(r.x0*TILE + TILE/2 + (r.x1-r.x0)*TILE*r.progress,
-             r.y0*TILE + TILE/2 + (r.y1-r.y0)*TILE*r.progress);
-    g.strokePath();
+    const ax = r.x0*TILE + TILE/2, ay = r.y0*TILE + TILE/2;
+    const bx = r.x1*TILE + TILE/2, by = r.y1*TILE + TILE/2;
+    const dx = bx-ax, dy = by-ay;
+    const len = Math.hypot(dx,dy) || 1;
+    const nx = -dy/len, ny = dx/len;              // perpendicular, for the wander
+    // deterministic wobble seeded from the endpoints
+    const seed = (r.x0*73856093) ^ (r.y0*19349663) ^ (r.x1*83492791) ^ (r.y1*2971215073);
+    const amp = Math.min(10, len*0.16);
+    const pts = [];
+    const STEPS = 14;
+    for(let i=0;i<=STEPS;i++){
+      const t = i/STEPS;
+      if(t > r.progress + 0.0001) break;
+      // two offset sine waves so the curve is organic rather than a neat arc
+      const w = Math.sin(t*Math.PI) * (Math.sin(t*5.1 + (seed%7)) * 0.6 + Math.sin(t*2.3 + (seed%5)) * 0.4);
+      pts.push([ax + dx*t + nx*w*amp, ay + dy*t + ny*w*amp]);
+    }
+    if(pts.length < 2) continue;
+
+    // draw thick-to-thin in three passes: dark underside, body, lit top. The
+    // taper is what makes it read as a root instead of a cable.
+    for(const [col, wid, off] of [[ROOT_D, 5, 1], [ROOT, 3.5, 0], [ROOT_L, 1.5, -1]]){
+      for(let i=1;i<pts.length;i++){
+        const t = i/STEPS;
+        g.lineStyle(Math.max(1, wid*(1 - t*0.55)), col, r.done ? 0.95 : 0.65);
+        g.beginPath();
+        g.moveTo(pts[i-1][0], pts[i-1][1] + off);
+        g.lineTo(pts[i][0],   pts[i][1] + off);
+        g.strokePath();
+      }
+    }
+    // side shoots, so it branches the way a root does
+    for(let i=3;i<pts.length-1;i+=4){
+      const t=i/STEPS, sl = 5*(1-t*0.6), dir = (i%8===3)?1:-1;
+      g.lineStyle(Math.max(1, 2*(1-t*0.5)), ROOT_D, r.done ? 0.8 : 0.5);
+      g.beginPath();
+      g.moveTo(pts[i][0], pts[i][1]);
+      g.lineTo(pts[i][0] + nx*sl*dir + dx/len*sl*0.4,
+               pts[i][1] + ny*sl*dir + dy/len*sl*0.4);
+      g.strokePath();
+    }
+    // a bud at the growing tip while it is still travelling
+    if(!r.done){
+      const tip = pts[pts.length-1];
+      g.fillStyle(ROOT_L, 0.9);
+      g.fillCircle(tip[0], tip[1], 2.5);
+    }
   }
 }
 
@@ -209,7 +259,10 @@ function drawGroveRoots(){
 function groveEconomyTick(){
   if(state.faction !== 'grove') return;
   const connected = groveConnectedIds();
-  const sprouts = state.units.filter(u => u.type === 'sprout' && u.hp > 0);
+  // Grove workers are created through createVillager, so their type is
+  // 'villager' — this filtered on 'sprout', a type that never existed, so the
+  // tend bonus had NEVER applied to anything.
+  const tenders = state.units.filter(u => u.type === 'villager' && u.hp > 0 && !u.inTC);
   for(const b of groveStructures()){
     if(underConstruction(b)) continue;
     if(!connected.has(b.id)) continue;             // severed: yields nothing
@@ -217,7 +270,7 @@ function groveEconomyTick(){
     if(!def || !def.groveYield) continue;
     const st = groveStageDef(b);
     if(st.yieldMult <= 0) continue;                // a seed pays nothing
-    const tended = sprouts.some(s =>
+    const tended = tenders.some(s =>
       Phaser.Math.Distance.Between(s.gx, s.gy, b.gx, b.gy) <= GROVE.tendRadius);
     const mult = st.yieldMult * (tended ? 1 + GROVE.tendBonus : 1);
     for(const k in def.groveYield){
@@ -260,18 +313,23 @@ function applyGroveFaction(){
   delete SWORDSMAN_COST.stone;
   SWORDSMAN_COST.food = 30; SWORDSMAN_COST.wood = 20;
   ARCHER_COST.food = 20; ARCHER_COST.wood = 14;
+
+  // An Ent is a caretaker, not a workforce. Deliberately expensive so that
+  // a second one is a genuine decision rather than the obvious next click.
+  VILLAGER_COST.food = GROVE.entCost.food;
+  VILLAGER_COST.wood = GROVE.entCost.wood;
 }
 
 const GROVE_TEXT = [
   ['A Minotaur strides in, scythe in hand, to lead your soldiers!', 'The Elder Bough stirs, and the forest wakes to war!'],
   ['The Minotaur returns to the field!', 'The Elder Bough puts out new leaves!'],
   ['Population at cap — build more houses!', 'The grove is crowded — grow more Bowers!'],
-  ['A new villager joins the town!', 'A Sprout unfurls!'],
-  ['A villager reports for duty', 'A Sprout turns toward the light'],
+  ['A new villager joins the town!', 'An Ent stirs and takes a step.'],
+  ['A villager reports for duty', 'An Ent turns toward the light'],
   ['The Minotaur', 'The Elder Bough'], ['Minotaur', 'Elder Bough'],
   ['Town Hall', 'Heartwood'], ['Town Center', 'Heartwood'],
-  ['Villagers', 'Sprouts'], ['villagers', 'sprouts'],
-  ['Villager', 'Sprout'], ['villager', 'sprout'],
+  ['Villagers', 'Ents'], ['villagers', 'ents'],
+  ['Villager', 'Ent'], ['villager', 'ent'],
   ['Swordsman', 'Bramblekin'], ['swordsman', 'bramblekin'],
   ['Archer', 'Thornshot'], ['archer', 'thornshot'],
   ['soldiers', 'wardens'], ['Soldiers', 'Wardens'],

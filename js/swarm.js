@@ -25,6 +25,11 @@ const SWARM = {
     tileTint: 0x82945a,         // the sickly grave-green of spreading blight
     roadTint: 0x5f6b45,         // bone paths read darker than raw blight
   },
+  // Off their own blight the dead are sluggish and weak — they are animated
+  // by it, not merely standing on it. On blight they are normal. This is what
+  // makes spreading blight an OFFENSIVE act rather than only an economic one:
+  // to fight well somewhere, you must first grow your ground to it.
+  offBlight: { speedMult: 0.6, damageMult: 0.7 },
   corpseBiomass: 6,             // a dead human dissolves into this much
   outpostLoot: 130,             // biomass windfall for razing a human outpost
   upkeepPerBuildingPerTick: 0.02, // the hive feeds its growths (biomass)
@@ -465,4 +470,18 @@ function cancelBlightTargeting(){
     if(scene._blightRange){ scene._blightRange.destroy(); scene._blightRange = null; }
     if(scene._blightSpot){ scene._blightSpot.destroy(); scene._blightSpot = null; }
   }
+}
+
+// Is this unit standing on friendly blight? Only meaningful for the undead
+// player; every other faction is unaffected and returns true so callers need
+// no faction check of their own.
+function onFriendlyBlight(u){
+  if(!u || state.faction !== 'swarm') return true;
+  return isCreeped(Math.round(u.gx), Math.round(u.gy));
+}
+function blightSpeedMult(u){
+  return onFriendlyBlight(u) ? 1 : SWARM.offBlight.speedMult;
+}
+function blightDamageMult(u){
+  return onFriendlyBlight(u) ? 1 : SWARM.offBlight.damageMult;
 }

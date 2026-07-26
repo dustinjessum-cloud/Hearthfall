@@ -1457,7 +1457,9 @@ def draw_bone_pile(d):
     BONE, BONE_D, BONE_L = (226, 220, 198), (168, 162, 140), (246, 242, 226)
     BONE_XD = (128, 122, 104)
     EARTH = (96, 84, 68)
-    draw_dirt(d)
+    # grass base, not dirt: this sprite IS the tile, so a dirt fill painted a
+    # brown square onto green terrain. Matches how stone deposits blend.
+    draw_grass(d)
     d.ellipse([4, 24, 28, 31], fill=EARTH)                  # trampled ground
     ground_shadow(d, 5, 27, 28, 3)
 
@@ -1643,7 +1645,9 @@ def draw_flesh_golem(d):
 def draw_bandit_camp(d):
     # an outlaw camp: sharpened palisade stakes, a hide tent, a campfire and
     # a skull on a pike. Was a red-tinted wall GATE, of all things.
-    draw_dirt(d)
+    # NO ground fill: this is an entity drawn over the terrain, so a dirt
+    # base painted an opaque square around it. Transparency lets the real
+    # ground show through, same as every other unit sprite.
     ground_shadow(d, 3, 29, 29, 2)
     for sx in range(2, 30, 5):                               # palisade
         rect(d, sx, 7, sx+2, 19, WOOD)

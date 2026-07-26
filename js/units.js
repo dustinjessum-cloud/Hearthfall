@@ -753,8 +753,12 @@ function queueGroupMove(units, gx, gy){
 // movement isn't routed through isTileFreeForUnit's speed math anyway.
 function speedMultiplierAt(gx, gy){
   const rx = Math.round(gx), ry = Math.round(gy);
-  if(state.roads[ry] && state.roads[ry][rx]) return ROAD_SPEED;
-  return tileAt(rx, ry)==='forest' ? 0.5 : 1;
+  let m;
+  if(state.roads[ry] && state.roads[ry][rx]) m = ROAD_SPEED;
+  else m = tileAt(rx, ry)==='forest' ? 0.5 : 1;
+  // the dead drag off their own blight — see SWARM.offBlight
+  if(state.faction === 'swarm' && !isCreeped(rx, ry)) m *= SWARM.offBlight.speedMult;
+  return m;
 }
 
 // ---- friendly pathfinding ----

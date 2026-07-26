@@ -670,6 +670,11 @@ function updateCombat(delta, time){
       if(a.soldier && captain && Phaser.Math.Distance.Between(captain.gx, captain.gy, a.gx, a.gy) <= CAPTAIN.auraRange){
         dmg = Math.round(dmg * CAPTAIN.auraMult);
       }
+      // undead strike softly off their own blight (buildings are unaffected —
+      // a Bone Spire sits on blight by definition)
+      if(typeof blightDamageMult === 'function' && a.ent && a.ent.type){
+        dmg = Math.round(dmg * blightDamageMult(a.ent));
+      }
       // buildings go through damageBuilding so their HP bar updates and
       // removal (occupancy, rally flags, garrison eviction) actually runs
       if(bestIsBuilding){ damageBuilding(best, dmg); continue; }

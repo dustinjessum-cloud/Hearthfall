@@ -277,7 +277,13 @@ function refreshHud2Buttons(){
     const on = !!(state.session && state.session.recording);
     recBtn.classList.toggle('live', on);
     recBtn.classList.toggle('paused', !on);
-    recBtn.textContent = `${on ? '●' : '❚❚'} REC ${telemetryEventCount()}`;
+    // Say ON/OFF in words. A dot vs a pause glyph reads as decoration at a
+    // glance, and this button decides whether a whole session is captured —
+    // guessing wrong costs the run's data.
+    recBtn.textContent = `${on ? '●' : '○'} REC ${on ? 'ON' : 'OFF'} · ${telemetryEventCount()}`;
+    recBtn.title = on
+      ? `Recording — ${telemetryEventCount()} events captured. Click to pause.`
+      : `PAUSED — nothing is being captured. ${telemetryEventCount()} events so far. Click to resume.`;
   }
   const sbBtn = document.getElementById('sandboxBtn');
   if(sbBtn){

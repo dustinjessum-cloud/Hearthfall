@@ -52,9 +52,13 @@
   #hud2 button.devBtn.toggled-on { background: #5a3f8a; border-color: #b9a0e8; color: #fff; }
   /* recording indicator: red and gently pulsing while it is actually
      recording, flat grey when paused, so its state is readable at a glance */
-  #hud2 button#recBtn { background:#3a2028; border-color:#8a4a52; color:#e8b0b0; }
-  #hud2 button#recBtn.live { color:#ff8a8a; animation: recPulse 2s ease-in-out infinite; }
-  #hud2 button#recBtn.paused { opacity:.55; }
+  #hud2 button#recBtn { font-weight:bold; }
+  /* ON: red, lit, pulsing. OFF: flat grey and dimmed. The two states differ
+     in colour, weight AND wording, so the button can never be misread. */
+  #hud2 button#recBtn.live   { background:#4a1e26; border-color:#ff6b6b; color:#ffd0d0;
+                               animation: recPulse 2s ease-in-out infinite; }
+  #hud2 button#recBtn.paused { background:#2a2a2e; border-color:#5a5a60; color:#9a9aa0;
+                               opacity:.7; animation:none; }
   @keyframes recPulse { 0%,100%{ border-color:#8a4a52; } 50%{ border-color:#ff6b6b; } }
   @media (prefers-reduced-motion: reduce){ #hud2 button#recBtn.live { animation:none; border-color:#ff6b6b; } }
   #gameWrap { position: relative; width: 100%; max-width: 960px; min-height: 560px; }
@@ -309,7 +313,7 @@
 <script src="js/enemies.js?v=b4194990"></script>
 <script src="js/ai.js?v=ddd5061d"></script>
 <script src="js/save.js?v=74b5d2e9"></script>
-<script src="js/ui.js?v=ed35a989"></script>
+<script src="js/ui.js?v=20ffc736"></script>
 <script src="js/groups.js?v=0af99b0f"></script>
 <script src="js/telemetry.js?v=d297e1d8"></script>
 <script src="js/main.js?v=e7833df6"></script>

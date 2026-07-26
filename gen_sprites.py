@@ -1504,6 +1504,40 @@ def draw_bone_pile(d):
     scatter(d, 4441, 10, BONE_L)
     scatter(d, 4457, 8, BONE_XD)
 
+def draw_bone_pile_corrupted(d):
+    # The blighted twin of the bone pile. Under creep, forest and stone both
+    # switch to a corrupted variant so the RESOURCE stays readable; the bone
+    # pile had none, so blight erased it visually while it remained fully
+    # mineable — a deposit you could work but not see.
+    BONE, BONE_D, BONE_L = (198, 200, 176), (146, 148, 128), (222, 224, 200)
+    BONE_XD = (104, 106, 92)
+    draw_creep(d)
+    d.ellipse([5, 24, 27, 31], fill=CREEP_BLACK_T)
+    d.polygon([(16, 3), (27, 28), (5, 28)], fill=BONE_D)
+    d.polygon([(16, 5), (24, 28), (9, 28)], fill=BONE)
+    d.polygon([(15, 6), (12, 28), (9, 28)], fill=BONE_L)
+    for x1, y1 in [(6,27), (9,28), (13,28), (19,28), (23,28), (26,27)]:
+        d.line([16, 6, x1, y1], fill=BONE_XD)
+        d.line([15, 6, x1-1, y1], fill=BONE_L)
+    for bx in (6, 10, 14, 18, 22, 26):
+        rect(d, bx-1, 27, bx+1, 28, BONE)
+        rect(d, bx-1, 28, bx+1, 28, BONE_XD)
+    for x0, y0, x1, y1 in [(11,14, 3,11), (21,13, 29,10), (10,20, 2,20),
+                           (22,19, 30,21), (13,9, 7,4), (19,10, 25,5)]:
+        d.line([x0, y0, x1, y1], fill=BONE_XD, width=2)
+        d.line([x0, y0-1, x1, y1-1], fill=BONE, width=1)
+        rect(d, x1-1, y1-1, x1+1, y1+1, BONE_L)
+    d.line([16, 6, 19, 1], fill=BONE)
+    rect(d, 18, 0, 20, 2, BONE_L)
+    d.ellipse([11, 20, 20, 28], fill=BONE_XD)
+    d.ellipse([12, 21, 19, 27], fill=BONE)
+    d.ellipse([12, 21, 15, 24], fill=BONE_L)
+    rect(d, 14, 24, 15, 25, (30, 26, 24)); rect(d, 17, 24, 18, 25, (30, 26, 24))
+    rect(d, 15, 26, 17, 26, (30, 26, 24))
+    # creep veins climbing the stack, same tell the corrupted stone uses
+    d.line([9, 24, 14, 18, 17, 12], fill=(120, 160, 110), width=1)
+    scatter(d, 4463, 10, (120, 160, 110))
+
 def draw_bone_yard(d):
     # A rack-and-cauldron works: bones are hauled in, boiled down and stacked.
     # Undead structure, so it sits on blight and reads bone-white on green.
@@ -2045,6 +2079,7 @@ DRAWERS = [
     ("bandit_camp", draw_bandit_camp),
     ("sealed_pass", draw_sealed_pass),
     ("bone_pile", draw_bone_pile),
+    ("bone_pile_corrupted", draw_bone_pile_corrupted),
     ("bone_yard", draw_bone_yard),
     ("ritual_pit", draw_ritual_pit),
     ("flesh_golem", draw_flesh_golem),

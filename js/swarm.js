@@ -116,6 +116,11 @@ function frameForGroundTile(gx, gy){
     if(t === 'forest') return FRAME.forest_corrupted;
     if(t === 'stone_deposit') return FRAME.stone_deposit_corrupted;
     if(t === 'wildstone_deposit') return FRAME.wildstone_deposit_corrupted;
+    // Bone piles had no corrupted variant, so blight fell through to the
+    // generic creep frame below and ERASED the pile visually while leaving
+    // resourceQty untouched — a deposit you could still mine but could not
+    // see. Every resource under blight must keep showing what it is.
+    if(t === 'bone_pile') return FRAME.bone_pile_corrupted;
     // bare blighted ground — a rare skeletal hand claws up on some tiles.
     // Deterministic per-tile (hashed coords) so it stays put across re-skins
     // and save/load, and sparse (~1 in 19) so it reads as an occasional detail.

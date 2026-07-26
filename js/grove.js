@@ -142,115 +142,219 @@ function applyGroveStage(b){
 }
 
 // ---- roots -----------------------------------------------------------
-// A root is a growing line from an already-connected structure to a dormant
-// seed. It is an entity, not a rule: it takes time, it is visible, and the
-// seed stays inert until it lands.
-function nearestConnectedTo(gx, gy){
-  const connected = groveConnectedIds();
-  let best = null, bd = Infinity;
-  for(const b of groveStructures()){
-    if(!connected.has(b.id)) continue;
-    const d = Phaser.Math.Distance.Between(b.gx, b.gy, gx, gy);
-    if(d < bd){ bd = d; best = b; }
+// The network is a BRANCHING TREE, not a bundle of separate lines. Every
+// root ultimately traces back to the Heartwood, and a new structure forks
+// off the nearest point on the existing network — which may be partway along
+// another root rather than at a building. Roots therefore share their trunk
+// and only diverge where they must, which is both how roots actually grow
+// and far tidier than five separate lines fanning out of one tree.
+
+// Measured, not guessed: the Grove sprites put their trunk base at rows
+// 28-31 of a 32px tile. At the old 0.42 the collar landed at y=18.6 — twelve
+// pixels UP the trunk — so it read as a brown patch stuck to the middle of
+// the tree instead of a root swell at its foot.
+const ROOT_COLLAR_DROP = 0.09;   // tiles above the sprite's bottom edge
+
+function rootCollarPoint(gx, gy, size){
+  const s = size || 1;
+  return { x: gx*TILE + s*TILE/2, y: gy*TILE + s*TILE - TILE*ROOT_COLLAR_DROP };
+}
+function buildingCollar(b){ return rootCollarPoint(b.gx, b.gy, b.size); }
+
+let groveRootIdSeq = 1;
+
+// Sample a root's drawn path so a new branch can attach anywhere along it.
+function rootSamplePoints(r){
+  const out = [];
+  const STEPS = 10;
+  for(let i=1;i<=STEPS;i++){
+    const t=i/STEPS;
+    if(t > r.progress) break;
+    out.push(rootPointAt(r, t));
   }
-  return best ? { building: best, dist: bd } : null;
+  return out;
+}
+
+// Nearest attachment on the whole live network: the Heartwood's own collar,
+// or any point along a completed root.
+function nearestNetworkPoint(px, py){
+  const heart = groveHeartwood();
+  if(!heart) return null;
+  const hc = buildingCollar(heart);
+  let best = { x: hc.x, y: hc.y, parentRootId: null,
+               d: Math.hypot(hc.x-px, hc.y-py) };
+  for(const r of (state.groveRoots || [])){
+    if(!r.done) continue;
+    for(const pt of rootSamplePoints(r)){
+      const d = Math.hypot(pt[0]-px, pt[1]-py);
+      if(d < best.d) best = { x: pt[0], y: pt[1], parentRootId: r.id, d };
+    }
+  }
+  return best;
+}
+
+// A root is connected if it has finished AND everything it hangs off has too,
+// back to the Heartwood. Derived, never stored.
+function rootChainLive(r, seen){
+  if(!r || !r.done) return false;
+  if(r.parentRootId == null) return true;               // hangs off the Heartwood
+  seen = seen || new Set();
+  if(seen.has(r.id)) return false;                      // cycle guard
+  seen.add(r.id);
+  const p = (state.groveRoots || []).find(x => x.id === r.parentRootId);
+  return rootChainLive(p, seen);
+}
+
+function groveConnectedIds(){
+  const heart = groveHeartwood();
+  const live = new Set();
+  if(!heart) return live;
+  live.add(heart.id);
+  for(const r of (state.groveRoots || [])){
+    if(rootChainLive(r)) live.add(r.toId);
+  }
+  return live;
+}
+
+function isGroveConnected(b){
+  if(!b) return false;
+  if(b.isCore) return true;
+  return groveConnectedIds().has(b.id);
 }
 
 function startRootTo(b){
-  const src = nearestConnectedTo(b.gx, b.gy);
+  const dst = buildingCollar(b);
+  const src = nearestNetworkPoint(dst.x, dst.y);
   if(!src) return false;
-  if(src.dist > GROVE.rootMaxLen) return false;   // too far to reach
-  const r = {
-    fromId: src.building.id, toId: b.id,
-    x0: src.building.gx, y0: src.building.gy,
-    x1: b.gx, y1: b.gy,
-    progress: 0, done: false, gfx: null,
-  };
-  (state.groveRoots = state.groveRoots || []).push(r);
+  if(src.d > GROVE.rootMaxLen * TILE) return false;     // beyond reach
+  (state.groveRoots = state.groveRoots || []).push({
+    id: groveRootIdSeq++,
+    parentRootId: src.parentRootId,   // null = straight off the Heartwood
+    x0: src.x, y0: src.y,             // world px: the fork point
+    toId: b.id,
+    progress: 0, done: false,
+  });
   return true;
+}
+
+// Where a root is at fraction t. Roots reaching a structure ABOVE their fork
+// swing wide and come up underneath, so they never cross over the building
+// they are trying to reach.
+function rootPointAt(r, t){
+  const to = buildingById(r.toId);
+  if(!to) return [r.x0, r.y0];
+  const b = buildingCollar(to);
+  const a = { x: r.x0, y: r.y0 };
+  const around = (b.y < a.y - TILE*0.6);
+  let px, py;
+  if(around){
+    const side = (b.x >= a.x) ? 1 : -1;
+    const via = { x: b.x + side*((to.size||1)*TILE*0.55 + TILE*0.5), y: b.y + TILE*0.30 };
+    const u = 1-t;
+    px = u*u*a.x + 2*u*t*via.x + t*t*b.x;
+    py = u*u*a.y + 2*u*t*via.y + t*t*b.y;
+  } else {
+    px = a.x + (b.x-a.x)*t;
+    py = a.y + (b.y-a.y)*t;
+  }
+  // gentle deterministic wander, seeded from the endpoints
+  const dx=b.x-a.x, dy=b.y-a.y, len=Math.hypot(dx,dy)||1;
+  const nx=-dy/len, ny=dx/len;
+  const seed=(r.id*2654435761)>>>0;
+  const w = Math.sin(t*Math.PI) * (Math.sin(t*4.7 + (seed%7))*0.6 + Math.sin(t*2.1 + (seed%5))*0.4);
+  const amp = Math.min(8, len*0.08);
+  return [px + nx*w*amp, py + ny*w*amp];
 }
 
 function updateGroveRoots(delta){
   if(state.faction !== 'grove') return;
   const roots = state.groveRoots || [];
   for(const r of roots){
+    const to = buildingById(r.toId);
+    if(!to || to.hp <= 0){ r.dead = true; continue; }
     if(r.done) continue;
-    const from = buildingById(r.fromId), to = buildingById(r.toId);
-    // a root whose either end died is dead itself
-    if(!from || from.hp<=0 || !to || to.hp<=0){ r.dead = true; continue; }
-    const len = Math.hypot(r.x1-r.x0, r.y1-r.y0) || 1;
+    const b = buildingCollar(to);
+    const len = Math.hypot(b.x - r.x0, b.y - r.y0) / TILE || 1;
     r.progress = Math.min(1, r.progress + (GROVE.rootGrowTilesPerSec * (delta/1000)) / len);
     if(r.progress >= 1){
       r.done = true;
       if(scene && scene.add) floatResourceText(to.gx, to.gy, 'rooted', '#9fe08a');
     }
   }
-  state.groveRoots = roots.filter(r => !r.dead);
+  // a dead root orphans everything hanging off it
+  if(roots.some(r => r.dead)){
+    const gone = new Set(roots.filter(r=>r.dead).map(r=>r.id));
+    let changed = true;
+    while(changed){
+      changed = false;
+      for(const r of roots){
+        if(!r.dead && r.parentRootId != null && gone.has(r.parentRootId)){
+          r.dead = true; gone.add(r.id); changed = true;
+        }
+      }
+    }
+    state.groveRoots = roots.filter(r => !r.dead);
+  }
   drawGroveRoots();
 }
 
-// One graphics object for every root, redrawn per frame. Cheap, and it means
-// a severed root vanishes the moment its building dies.
-// Roots, drawn as roots rather than as a line. A straight segment read as a
-// wire between two boxes; real roots taper, wander, and throw off side
-// shoots. The wander is derived from the root's own endpoints so it is
-// identical every frame — no per-frame randomness, no crawling.
 function drawGroveRoots(){
   if(!scene || !scene.add) return;
   if(!scene._rootGfx) scene._rootGfx = scene.add.graphics().setDepth(1);
   const g = scene._rootGfx;
   g.clear();
-
   const ROOT_D = 0x4a6b32, ROOT = 0x6b8f4a, ROOT_L = 0x8fb46a;
+  const COL_D = 0x54402a, COL = 0x74583a, COL_L = 0x967650;
+
   for(const r of (state.groveRoots || [])){
-    const ax = r.x0*TILE + TILE/2, ay = r.y0*TILE + TILE/2;
-    const bx = r.x1*TILE + TILE/2, by = r.y1*TILE + TILE/2;
-    const dx = bx-ax, dy = by-ay;
-    const len = Math.hypot(dx,dy) || 1;
-    const nx = -dy/len, ny = dx/len;              // perpendicular, for the wander
-    // deterministic wobble seeded from the endpoints
-    const seed = (r.x0*73856093) ^ (r.y0*19349663) ^ (r.x1*83492791) ^ (r.y1*2971215073);
-    const amp = Math.min(10, len*0.16);
+    const STEPS = 16;
     const pts = [];
-    const STEPS = 14;
     for(let i=0;i<=STEPS;i++){
-      const t = i/STEPS;
+      const t=i/STEPS;
       if(t > r.progress + 0.0001) break;
-      // two offset sine waves so the curve is organic rather than a neat arc
-      const w = Math.sin(t*Math.PI) * (Math.sin(t*5.1 + (seed%7)) * 0.6 + Math.sin(t*2.3 + (seed%5)) * 0.4);
-      pts.push([ax + dx*t + nx*w*amp, ay + dy*t + ny*w*amp]);
+      pts.push(rootPointAt(r, t));
     }
     if(pts.length < 2) continue;
-
-    // draw thick-to-thin in three passes: dark underside, body, lit top. The
-    // taper is what makes it read as a root instead of a cable.
-    for(const [col, wid, off] of [[ROOT_D, 5, 1], [ROOT, 3.5, 0], [ROOT_L, 1.5, -1]]){
+    for(const [col, wid, off] of [[ROOT_D,5,1],[ROOT,3.5,0],[ROOT_L,1.5,-1]]){
       for(let i=1;i<pts.length;i++){
-        const t = i/STEPS;
-        g.lineStyle(Math.max(1, wid*(1 - t*0.55)), col, r.done ? 0.95 : 0.65);
+        const t=i/STEPS;
+        g.lineStyle(Math.max(1, wid*(1 - t*0.45)), col, r.done ? 0.95 : 0.65);
         g.beginPath();
-        g.moveTo(pts[i-1][0], pts[i-1][1] + off);
-        g.lineTo(pts[i][0],   pts[i][1] + off);
+        g.moveTo(pts[i-1][0], pts[i-1][1]+off);
+        g.lineTo(pts[i][0], pts[i][1]+off);
         g.strokePath();
       }
     }
-    // side shoots, so it branches the way a root does
-    for(let i=3;i<pts.length-1;i+=4){
-      const t=i/STEPS, sl = 5*(1-t*0.6), dir = (i%8===3)?1:-1;
-      g.lineStyle(Math.max(1, 2*(1-t*0.5)), ROOT_D, r.done ? 0.8 : 0.5);
-      g.beginPath();
-      g.moveTo(pts[i][0], pts[i][1]);
-      g.lineTo(pts[i][0] + nx*sl*dir + dx/len*sl*0.4,
-               pts[i][1] + ny*sl*dir + dy/len*sl*0.4);
-      g.strokePath();
-    }
-    // a bud at the growing tip while it is still travelling
     if(!r.done){
       const tip = pts[pts.length-1];
       g.fillStyle(ROOT_L, 0.9);
       g.fillCircle(tip[0], tip[1], 2.5);
     }
   }
+
+  // collars last so roots tuck under them
+  const drawn = new Set();
+  const collarFor = (bb)=>{
+    if(!bb || bb.hp<=0 || drawn.has(bb.id)) return;
+    drawn.add(bb.id);
+    const c = buildingCollar(bb);
+    // Flatter than it was: a wide shallow swell reads as roots gathering,
+    // where a tall oval read as a dirt patch the tree was planted in.
+    const w = Math.max(5, ((bb.size||1)*TILE) * 0.19);
+    g.fillStyle(COL_D, 0.9); g.fillEllipse(c.x, c.y+1, w*2.0, w*0.62);
+    g.fillStyle(COL, 0.95);  g.fillEllipse(c.x, c.y,   w*1.6,  w*0.46);
+    g.fillStyle(COL_L, 0.9); g.fillEllipse(c.x - w*0.3, c.y - w*0.1, w*0.66, w*0.22);
+    g.lineStyle(2, COL_D, 1);
+    for(let k=-1;k<=1;k++){
+      g.beginPath();
+      g.moveTo(c.x + k*(w*0.5), c.y + w*0.3);
+      g.lineTo(c.x + k*(w*0.62), c.y + w*0.8);
+      g.strokePath();
+    }
+  };
+  const heart = groveHeartwood();
+  if(heart && (state.groveRoots||[]).length) collarFor(heart);
+  for(const r of (state.groveRoots || [])) collarFor(buildingById(r.toId));
 }
 
 // ---- yield -----------------------------------------------------------

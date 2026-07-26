@@ -2032,7 +2032,8 @@ def draw_grove_heart(d):
     # growing. Rendered at 2x2 in game, so it can carry real detail — a
     # buttressed trunk, exposed roots gripping the ground, a canopy in
     # layers, and a hollow at the base where the grove's life is kept.
-    draw_grass(d)
+    # no ground fill: this is drawn OVER the terrain, so a grass base
+    # painted an opaque square and buried the roots running under it
     ground_shadow(d, 3, 29, 29, 3)
     # roots spreading from the base
     for x0, y0, x1, y1 in [(15,27, 5,30), (17,27, 27,30), (14,28, 9,31), (18,28, 23,31)]:
@@ -2058,7 +2059,8 @@ def draw_grove_heart(d):
 def draw_grove_bower(d):
     # A dwelling woven INTO a tree rather than built beside one — the Grove
     # does not put up walls, it makes room inside what already grows.
-    draw_grass(d)
+    # no ground fill: this is drawn OVER the terrain, so a grass base
+    # painted an opaque square and buried the roots running under it
     ground_shadow(d, 8, 24, 28, 3)
     rect(d, 14, 16, 18, 28, GV_BARK)
     rect(d, 14, 16, 14, 28, GV_BARK_L)
@@ -2074,7 +2076,8 @@ def draw_grove_bower(d):
 def draw_grove_bough(d):
     # Fruiting Bough: a low tree heavy with fruit. Red is used ONLY here and
     # on the Hollow, so anything feeding you is findable at a glance.
-    draw_grass(d)
+    # no ground fill: this is drawn OVER the terrain, so a grass base
+    # painted an opaque square and buried the roots running under it
     ground_shadow(d, 7, 25, 28, 3)
     rect(d, 15, 18, 17, 28, GV_BARK)
     rect(d, 15, 18, 15, 28, GV_BARK_L)
@@ -2096,7 +2099,8 @@ def draw_grove_spire(d):
     THORN, THORN_D, THORN_XD = (74, 88, 48), (50, 60, 32), (32, 40, 22)
     THORN_L = (126, 142, 84)
     SPIKE = (196, 202, 160)
-    draw_grass(d)
+    # no ground fill: this is drawn OVER the terrain, so a grass base
+    # painted an opaque square and buried the roots running under it
     ground_shadow(d, 9, 23, 29, 3)
     # dark central shaft, narrow so the thorns dominate the read
     d.polygon([(16,2), (21,29), (11,29)], fill=THORN_XD)
@@ -2187,6 +2191,85 @@ def draw_grove_ent(d):
     scatter(d, 7771, 10, MOSS_L)
     scatter(d, 7777, 6, MOSS_D)
 
+def draw_grove_elder(d):
+    # The Elder Bough — the Grove's hero, built on the Ent's silhouette so
+    # they read as the same kind of being, then raised to something worth
+    # following. Everything added is a sign of AGE and AUTHORITY rather than
+    # armour: a crown of blossom, a lichen beard, a heartwood scar down the
+    # trunk, one arm grown into a staff, and eyes lit like coals under the
+    # canopy. He is wider and heavier than an Ent and stands on gripping
+    # roots rather than feet.
+    BARK, BARK_D, BARK_L = (112, 84, 56), (78, 58, 38), (148, 116, 78)
+    BARK_XD = (54, 40, 26)
+    MOSS, MOSS_D, MOSS_L = (72, 132, 54), (48, 96, 38), (110, 172, 84)
+    BLOOM, BLOOM_L = (214, 160, 74), (244, 208, 128)
+    LICHEN = (168, 190, 150)
+    EYE, EYE_HOT = (255, 196, 84), (255, 240, 190)
+    HEART = (196, 118, 62)
+
+    d.ellipse([5, 27, 27, 31], fill=(0, 0, 0, 85))
+
+    # gripping roots — wider stance than the Ent's, so he plants
+    for fx in (9, 16, 22):
+        rect(d, fx, 25, fx+2, 30, BARK_D)
+        rect(d, fx, 25, fx, 30, BARK)
+        d.line([fx+1, 30, fx-3, 31], fill=BARK_XD)
+        d.line([fx+1, 30, fx+4, 31], fill=BARK_XD)
+
+    # broad trunk
+    rect(d, 10, 11, 21, 27, BARK)
+    rect(d,  9, 21, 22, 27, BARK)
+    rect(d, 10, 11, 11, 27, BARK_L)
+    rect(d, 20, 11, 21, 27, BARK_D)
+    for gy in (14, 17, 20, 23):
+        rect(d, 12, gy, 19, gy, BARK_D)
+    # trunk left as plain bark — a coloured heartwood stripe read as a glowing
+    # wound and fought the canopy for attention
+    rect(d, 14, 16, 14, 21, BARK_XD)
+    rect(d, 17, 15, 17, 22, BARK_XD)
+
+    # left arm grown long into a staff — the hero read at a glance
+    d.line([10, 13, 3, 9], fill=BARK, width=3)
+    d.line([3, 9, 2, 2], fill=BARK_D, width=3)
+    d.line([2, 2, 5, 1], fill=BARK, width=2)
+    d.ellipse([0, 0, 5, 5], fill=BLOOM)                 # a bloom at its head
+    d.ellipse([1, 1, 3, 3], fill=BLOOM_L)
+    # right arm, heavy and knotted
+    d.line([21, 13, 28, 16], fill=BARK, width=3)
+    d.line([28, 16, 29, 22], fill=BARK_D, width=2)
+    for tx, ty in ((28, 23), (30, 23)):
+        rect(d, tx, ty, tx, ty+1, BARK_D)
+
+    # canopy crown, larger and layered
+    d.ellipse([5, 1, 27, 14], fill=MOSS_D)
+    d.ellipse([6, 2, 25, 12], fill=MOSS)
+    d.ellipse([8, 3, 18, 9], fill=MOSS_L)
+    for lx, ly in ((4, 6), (26, 7), (10, 0), (19, 0), (22, 3)):
+        d.ellipse([lx, ly, lx+4, ly+4], fill=MOSS)
+    # blossom crown — the mark of the elder
+    for bx, by in ((8, 2), (13, 0), (18, 0), (23, 3), (5, 8), (26, 10)):
+        d.ellipse([bx, by, bx+2, by+2], fill=BLOOM)
+        rect(d, bx, by, bx, by, BLOOM_L)
+
+    # burning eyes set deep under the canopy
+    rect(d, 12, 10, 14, 12, (28, 22, 16))
+    rect(d, 18, 10, 20, 12, (28, 22, 16))
+    rect(d, 12, 10, 13, 11, EYE)
+    rect(d, 19, 10, 20, 11, EYE)
+    rect(d, 13, 10, 13, 10, EYE_HOT)
+    rect(d, 19, 10, 19, 10, EYE_HOT)
+
+    # A dark hollow for a mouth, like the Ent's knot. Teeth were tried and
+    # cut: at 32px the gaps between them close up and the whole thing reads as
+    # a pale slab, so the shape has to carry it rather than the detail.
+    d.ellipse([13, 14, 19, 20], fill=(26, 19, 14))
+    d.ellipse([14, 15, 18, 18], fill=(46, 34, 24))
+    rect(d, 13, 13, 19, 13, BARK_XD)                 # heavy brow above it
+    for bx in (9, 10, 22, 23):
+        d.line([bx, 13, bx-1, 13 + 3 + (bx % 3)], fill=LICHEN)
+    scatter(d, 7781, 12, MOSS_L)
+    scatter(d, 7787, 5, BLOOM)
+
 DRAWERS = [
     ("grass", draw_grass),
     ("forest", draw_forest),
@@ -2262,6 +2345,7 @@ DRAWERS = [
     ("grove_spire", draw_grove_spire),
     ("grove_thicket", draw_grove_thicket),
     ("grove_ent", draw_grove_ent),
+    ("grove_elder", draw_grove_elder),
     ("sealed_pass", draw_sealed_pass),
     ("bone_pile", draw_bone_pile),
     ("bone_pile_corrupted", draw_bone_pile_corrupted),

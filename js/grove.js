@@ -77,30 +77,12 @@ function groveStructures(){
   return myBuildings().filter(b => b.hp > 0);
 }
 
-// Flood out from the Heartwood along completed roots. Returns the set of
-// connected building ids.
-function groveConnectedIds(){
-  const heart = groveHeartwood();
-  const live = new Set();
-  if(!heart) return live;
-  live.add(heart.id);
-  const links = (state.groveRoots || []).filter(r => r.done);
-  let grew = true;
-  while(grew){
-    grew = false;
-    for(const r of links){
-      const a = live.has(r.fromId), b = live.has(r.toId);
-      if(a !== b){ live.add(r.fromId); live.add(r.toId); grew = true; }
-    }
-  }
-  return live;
-}
-
-function isGroveConnected(b){
-  if(!b) return false;
-  if(b.isCore) return true;
-  return groveConnectedIds().has(b.id);
-}
+// Membership is computed in groveConnectedIds(), below the root section —
+// it has to walk parentRootId chains, so it needs the roots defined first.
+// An earlier copy of it lived here and flooded over r.fromId/r.toId, a shape
+// roots never had (they hang off a parent ROOT, not a parent building). It
+// was dead because the later definition of the same name won; it is deleted
+// rather than left as a trap for whoever reorders this file.
 
 // ---- growth ----------------------------------------------------------
 function groveStage(b){ return Math.min(b.groveStage || 0, GROVE.stages.length - 1); }

@@ -21,7 +21,11 @@ const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker', 'garri
 // out-of-date. Additive fields (a new building property, say) do NOT need a
 // bump — restore overlays them onto freshly created objects, so anything
 // missing keeps its default.
-const SAVE_VERSION = 3;   // v3: bone resource + bone piles in the terrain grid
+// v4: the Grove's root network and the tribe's saplings are saved. Bumped
+// rather than treated as additive because a v3 Grove save carries no roots at
+// all, and restore no longer rebuilds them from scratch — it would load as a
+// grove severed from its own Heartwood.
+const SAVE_VERSION = 4;
 
 // A save is only offered if it can actually be restored, so the "Continue
 // Your Game" button can't appear for one this build would choke on.
@@ -98,6 +102,14 @@ function serializeGame(){
     roads: state.roads,
     creep: state.creep,
     creepCount: state._creepCount,
+    // The Grove IS its root network — without this a reloaded grove has a
+    // Heartwood and nothing connected to it. groveRootIdSeq goes too, or new
+    // roots reuse ids the restored ones already hold and parentRootId lookups
+    // start resolving to the wrong branch.
+    groveRoots: state.groveRoots,
+    groveRootIdSeq: (typeof groveRootIdSeq !== 'undefined') ? groveRootIdSeq : 1,
+    saplings: state.saplings,   // tribe: Seed Grove's whole payoff, mid-growth
+    corridorGraceMs: state.corridorGraceMs || 0,
     townHallPos: scene && scene.townHallPos,
     buildings: state.buildings,
     units: state.units,
@@ -145,6 +157,17 @@ function restoreHpBar(entity, barWidthFull){
 // Rebuilds the whole world (map, buildings, units, enemies) from a
 // snapshot produced by serializeGame().
 function restoreGame(snapshot){
+  // Every building below is created by createBuilding() and then has its SAVED
+  // id stamped over the fresh one. Anything createBuilding does that captures
+  // an id — the Grove's roots — must be suppressed while this is set, and done
+  // from the snapshot instead. Cleared in a finally, so a throw partway
+  // through can't leave the live game unable to root new growth.
+  state._restoring = true;
+  try { restoreGameInner(snapshot); }
+  finally { state._restoring = false; }
+}
+
+function restoreGameInner(snapshot){
   // MUST be set before drawMap(), which paints the unexplored veil over
   // everything past your band when the corridor is shut. Restored later, a
   // save taken AFTER the pass opened would be veiled again on load with
@@ -203,6 +226,10 @@ function restoreGame(snapshot){
   state.caravanActiveMs = snapshot.caravanActiveMs || 0;
   state.manualRecall = snapshot.manualRecall;
   state.starving = snapshot.starving;
+  // Restarting the grace clock on load hands back the full two minutes, so a
+  // save taken while one unreachable straggler holds the pass shut reloads
+  // into a longer wait than it left.
+  state.corridorGraceMs = snapshot.corridorGraceMs || 0;
 
   buildingIdCounter = snapshot.buildingIdCounter || buildingIdCounter;
   unitIdCounter = snapshot.unitIdCounter || unitIdCounter;
@@ -241,6 +268,39 @@ function restoreGame(snapshot){
   // wall sprite variants (straight/corner/junction) depend on neighbors, so
   // this needs a second pass once every building is in place.
   for(const b of state.buildings) if(b.type==='wall') refreshWallSprite(b);
+
+  // ---- the Grove's root network ----
+  // Restored wholesale, ids and progress intact, rather than regrown: a root
+  // half-finished when you saved is half-finished when you return, and the
+  // branching topology is the one you actually built rather than whatever
+  // rebuilding in array order would have produced.
+  state.groveRoots = snapshot.groveRoots || [];
+  if(typeof groveRootIdSeq !== 'undefined' && snapshot.groveRootIdSeq){
+    groveRootIdSeq = snapshot.groveRootIdSeq;
+  }
+  if(state.faction === 'grove'){
+    // groveStage survives on the building itself, but the stats and sprite
+    // scale it implies do not — without this a restored Ancient renders at
+    // seed size and carries a Grown structure's HP.
+    for(const b of myBuildings()) if(b.hp>0 && typeof applyGroveStage === 'function') applyGroveStage(b);
+    if(typeof drawGroveRoots === 'function') drawGroveRoots();
+  }
+
+  // ---- the tribe's saplings ----
+  // The sprite is dropped by the save (SAVE_SKIP_KEYS), so it is rebuilt here
+  // at the size its remaining growth time implies. Rebuilt directly rather
+  // than through plantSapling(), which re-runs canPlantAt() and would quietly
+  // discard any sapling whose ground has since changed.
+  state.saplings = [];
+  for(const ss of (snapshot.saplings || [])){
+    const s = { gx: ss.gx, gy: ss.gy, msLeft: ss.msLeft };
+    if(scene && scene.add && typeof FORESTER !== 'undefined'){
+      const grown = 1 - (s.msLeft / FORESTER.saplingMs);
+      s.sprite = scene.add.image(s.gx*TILE+TILE/2, s.gy*TILE+TILE/2, 'tiles', FRAME.forest)
+        .setDepth(2).setScale(0.4 + grown*0.6).setAlpha(0.55 + grown*0.45);
+    }
+    state.saplings.push(s);
+  }
 
   // ---- units ----
   const CREATORS = { villager: createVillager, archer: createArcher, swordsman: createSwordsman, captain: createCaptain, repairman: createRepairman, flesh_golem: createFleshGolem, forester: createForester };

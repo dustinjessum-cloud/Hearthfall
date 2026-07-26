@@ -532,7 +532,7 @@ function executeOrder(u, order){
   } else if(order.kind==='work'){
     const b = buildingById(order.buildingId);
     if(!b || b.hp<=0) return;
-    assignVillagerToBuilding(u, b);
+    assignVillagerToBuilding(u, b, true);   // hand-placed — exempt from auto-migration
     flashWaveBanner(`Villager assigned to ${BUILD_DEFS[b.type].name}.`);
   } else if(order.kind==='repair'){
     const b = buildingById(order.buildingId);

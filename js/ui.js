@@ -1006,7 +1006,18 @@ function updatePanelLive(type, ref){
     const bEl = document.getElementById('infoBuild');
     if(bEl) bEl.textContent = underConstruction(ref) ? `Under construction — ${Math.ceil(ref.buildMs/1000)}s` : '';
     const wEl2 = document.getElementById('infoWorkers');
-    if(wEl2) wEl2.textContent = `Workers: ${workersOf(ref).length}/${workerCapOf(ref)}`;
+    if(wEl2){
+      // A dry camp says so instead of reporting "Workers: 0/3", which reads as
+      // "needs staff" when the truth is the opposite — there is nothing here
+      // to work and staffing it would only strand villagers again.
+      if(ref.depleted){
+        wEl2.textContent = 'Depleted — nothing left in reach. Salvage it and rebuild nearer the resource.';
+        wEl2.style.color = '#e0a06b';
+      } else {
+        wEl2.textContent = `Workers: ${workersOf(ref).length}/${workerCapOf(ref)}`;
+        wEl2.style.color = '#d8c79a';
+      }
+    }
     if(ref.type==='mason'){
       const rb = document.getElementById('trainRepBtn');
       if(rb){
@@ -1424,7 +1435,47 @@ function updatePanelLive(type, ref){
   skinDomText(document.getElementById('infoPanel'));
 }
 
+// ---------------------------------------------------------------------
+// The faction briefing (#hint) — opened from the small Briefing button in
+// the bottom bar, closed by default.
+//
+// Open/closed is read from the COMPUTED style, never from an inline one.
+// The closed state comes from the stylesheet, so element.style.display is ''
+// on a fresh page — a `style.display === 'none'` test reads that as "open"
+// and the first click would close an already-closed panel, i.e. the button
+// would appear dead until clicked twice.
+// ---------------------------------------------------------------------
+function hintIsOpen(){
+  const h = document.getElementById('hint');
+  return !!h && getComputedStyle(h).display !== 'none';
+}
+function setHintOpen(open){
+  const h = document.getElementById('hint');
+  const btn = document.getElementById('helpBtn');
+  if(h){
+    h.style.display = open ? 'block' : 'none';
+    if(open) h.scrollTop = 0;   // always start at the top, however it was left
+  }
+  if(btn) btn.classList.toggle('toggled-on', !!open);
+}
+function toggleHint(){ setHintOpen(!hintIsOpen()); }
+function closeHint(){ setHintOpen(false); }
+
 function findFreeSpotNear(gx0, gy0, maxRadius){
+  // ROUNDED first. This returns a TILE, so a fractional origin was never
+  // meaningful — but several callers hand it a live entity position, which is
+  // fractional whenever that entity is mid-stride. The ring offsets are whole
+  // numbers, so a fractional origin makes every candidate fractional too:
+  // inBounds() passes (16.4 < MAP_H) while state.grid[16.4] is undefined, and
+  // tileAt() dies reading a property of undefined.
+  //
+  // That is not theoretical. AI workers move by fractions (aiStepToward) and
+  // their raw position is saved, so restoreGame() -> spawnAiWorker(se.gx,
+  // se.gy) threw for any save taken while an enemy worker was walking — which
+  // is nearly all of them, since they gather and haul continuously. The throw
+  // escaped to window.onerror and put up the fatal-error screen, so "Continue
+  // Your Game" was broken outright.
+  gx0 = Math.round(gx0); gy0 = Math.round(gy0);
   // spiral outward ring by ring until a genuinely free tile is found, so
   // archers never stack invisibly on top of each other or the barracks.
   for(let r=1; r<=maxRadius; r++){

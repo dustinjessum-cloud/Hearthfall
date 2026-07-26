@@ -195,11 +195,30 @@
   }
   .spellCast:disabled, .spellLearn:disabled, #blightBtn:disabled, #seedBtn:disabled, #trainForesterBtn:disabled, #trainBtn:disabled, #trainSwordBtn:disabled, #trainVillagerBtn:disabled, #trainRepBtn:disabled, #tcUpgradeBtn:disabled, #upgradeBtn:disabled, #captainBtn:disabled, #releaseBtn:disabled, #salvageBtn:disabled, #towerReleaseBtn:disabled, .tradeBtn:disabled { opacity: .4; cursor: not-allowed; }
   .tradeBtn { margin-top: 4px; font-size: 11px; padding: 4px; }
+  /* The faction briefing. CLOSED BY DEFAULT — it is several hundred words and
+     it sat open over the top-left of the map on every new game, covering the
+     ground you start on. It is reference material you want once, so it lives
+     behind the small Briefing button in the bottom bar now.
+     max-height + scroll because the swarm's version is longer than the human
+     one and used to run off the bottom of the map with no way to read it. */
   #hint {
-    position: absolute; left: 8px; top: 8px; max-width: 260px;
-    background: rgba(20,14,8,.85); border: 1px solid #7a5a34; border-radius: 6px;
-    padding: 6px 24px 6px 9px; font-size: 11px; color: #d8c79a; line-height:1.4;
+    display: none;
+    position: absolute; left: 8px; top: 8px; width: 300px; max-width: calc(100% - 16px);
+    max-height: calc(100% - 16px); overflow-y: auto;
+    background: rgba(20,14,8,.94); border: 1px solid #7a5a34; border-radius: 6px;
+    padding: 8px 26px 8px 10px; font-size: 11px; color: #d8c79a; line-height:1.45;
+    z-index: 15;
   }
+  /* the small toggle that opens it, tucked under the minimap where the map
+     slot already had dead space */
+  #helpBtn {
+    flex: 0 0 auto; align-self: flex-start; margin-top: 3px;
+    background: #33261a; border: 1px solid #5a4226; border-radius: 4px;
+    color: #a89878; font-size: 10px; font-weight: bold; padding: 3px 8px;
+    cursor: pointer; letter-spacing: .04em;
+  }
+  #helpBtn:hover { background: #4a3520; border-color: #ffd76b; color: #f0e6d2; }
+  #helpBtn.toggled-on { background: #4a3520; border-color: #ffd76b; color: #ffd76b; }
   #hintClose {
     position: absolute; top: 3px; right: 5px; cursor: pointer;
     color: #d8c79a; font-size: 14px; line-height: 1; background: none; border: none; padding: 2px;
@@ -208,15 +227,56 @@
   #overlay {
     position: absolute; inset: 0; background: rgba(10,7,4,.88);
     display: flex; align-items: center; justify-content: center; flex-direction: column;
-    text-align: center; padding: 20px; z-index: 20;
+    text-align: center; padding: 16px; z-index: 20;
+    /* Safety net. The start screen used to stack five full-size buttons and
+       four paragraphs in a 560px box with no scroll, so the bottom faction
+       and the footnote were simply cut off with no way to reach them. The
+       layout below now fits comfortably; this makes sure that a longer blurb,
+       a fifth faction or a shorter window degrades to a scroll rather than
+       silently hiding a button. */
+    overflow-y: auto;
   }
-  #overlay h1 { color: #ffd76b; margin-bottom: 6px; }
-  #overlay p { max-width: 480px; line-height: 1.5; color: #e8dcc0; }
+  #overlay h1 { color: #ffd76b; margin: 0 0 4px 0; font-size: 30px; letter-spacing: .02em; }
+  #overlay p { max-width: 620px; line-height: 1.45; color: #e8dcc0; margin: 0 auto; }
+  /* the plain-button style still serves the fatal-error and end-of-run screens,
+     which replace this overlay's contents wholesale */
   #overlay button {
     margin-top: 14px; background: #6b4a26; border: 2px solid #ffd76b; color: #fff;
     padding: 10px 22px; font-size: 15px; border-radius: 6px; cursor: pointer;
   }
   #overlay button:hover { background: #855b30; }
+
+  #introBox { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
+  .introTag { font-size: 13px; color: #c8b898 !important; max-width: 560px !important; }
+  #continueBtn { margin-top: 2px; padding: 7px 20px; font-size: 14px; }
+
+  /* Four factions across, one row, at 960px — the whole point is that no
+     choice sits below the fold. Falls to 2x2 if the window is narrower. */
+  #factionGrid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 8px; width: 100%; max-width: 900px; margin-top: 2px;
+  }
+  @media (max-width: 760px){ #factionGrid { grid-template-columns: repeat(2, 1fr); } }
+  #overlay .factionCard {
+    margin-top: 0; padding: 10px 10px 11px; font-size: 13px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    text-align: left; background: #3a2a19; border: 2px solid #7a5a34;
+    border-radius: 7px; color: #f0e6d2; cursor: pointer;
+    transition: transform .08s, border-color .08s;
+  }
+  #overlay .factionCard:hover { background: #4a3520; transform: translateY(-2px); }
+  .fcName { font-size: 14px; font-weight: bold; line-height: 1.15; }
+  .fcTag  { font-size: 9px; letter-spacing: .1em; text-transform: uppercase; color: #a89878; }
+  .fcDesc { font-size: 11px; line-height: 1.35; color: #d0c0a0; font-weight: normal; }
+  #overlay .fc-human { border-color: #ffd76b; }
+  #overlay .fc-swarm { border-color: #9fb877; background: #2f3a24; }
+  #overlay .fc-tribe { border-color: #c8a06a; background: #3d2f1e; }
+  #overlay .fc-grove { border-color: #8fbf6a; background: #2b3a24; }
+  #overlay .fc-human .fcName { color: #ffd76b; }
+  #overlay .fc-swarm .fcName { color: #c3dd99; }
+  #overlay .fc-tribe .fcName { color: #e0b781; }
+  #overlay .fc-grove .fcName { color: #a8dd80; }
+  .introNote { font-size: 11px !important; color: #9a8a6c !important; max-width: 620px !important; }
   canvas.gameCanvas { image-rendering: pixelated; display: block; }
 </style>
 </head>
@@ -253,20 +313,34 @@
   <div id="gameWrap">
     <div id="hint"><button id="hintClose" title="Dismiss">✕</button>Click a building below, then click the map to place it. Right-click or Esc cancels. Arrow keys/WASD to pan, wheel to zoom. Click a villager, then right-click a Farm/Lumber Camp/Quarry to put them to work there (or an empty tile to send them off, unassigning them). Click a Barracks to convert a villager into an Archer (ranged, fragile) or Swordsman (tough melee — auto-charges nearby raiders). Select the Town Hall, Barracks or Mason and right-click the map to set a RALLY POINT — new units march there automatically (right-click the building to clear it). P pauses the game. Damaged walls &amp; towers are fixed by REPAIRMEN (trained at the Mason, from a villager): right-click damage with one selected; they only work on your orders. Buildings take time to construct, and any building can be salvaged for 15% of its cost (3 gold fee). NEW: placing a building only reserves the site — a villager must physically walk over before construction actually starts (the game auto-sends an idle one; the faint "foundation" look means nobody's arrived yet). Walls (and Towers) now block your OWN units' movement too, just like they block raiders — build a GATE into a wall line to let your people through while still stopping the enemy. Water is impassable to everyone, no exceptions. Lumber camps &amp; quarries employ up to 3 villagers each. NEW: a few remote deposits of WILDSTONE dot the map (pinkish crystal) — once your Town Hall reaches level 3, build a REFINERY directly on one to start extracting it (same idea as a lumber camp, just built right on the vein). Not required for anything basic, but it funds permanent EVOLUTIONS at the Barracks — Veteran Training and Masterwork Bows upgrade every Swordsman/Archer you have, forever, once researched. Click the Town Hall to upgrade it: more HP, storage, population, faster settlers — and at level 3 it shoots back. NEW: upgrades (Town Hall and storage buildings alike) now take real time to complete once started, not just resources — the cost is paid up front, then a countdown runs before the bonus actually lands. Raids no longer pause your economy — workers keep toiling unless YOU act: Recall Workers garrisons every worker INSIDE the Town Hall (each adds defense damage, capped, at any TC level); press it again and they walk back to the exact jobs they left. Single villagers can also be garrisoned by right-clicking the TC. NEW: Farms grow wheat → staffed Mills grind flour → staffed Bakeries bake food (1.5x). Houses pay gold taxes; Wells &amp; Taverns raise happiness. Soldiers eat double rations and buildings sip wood upkeep — keep the woodpile stocked or things decay. Bandit camps on the frontier send PILLAGERS (orange) who ignore your walls' purpose — they hunt farms, camps, mills and markets directly; from wave 2 raids bring them too. Raze camps with soldiers for loot. Recruit a Minotaur hero at the Town Hall (gold) — nearby soldiers fight 25% harder, but HE fights only on your command: J hurls a javelin toward the mouse, K slashes adjacent foes. He levels up from kills near him and keeps his level through revival. NEW: the fallen leave CORPSES — right-click one with any of your living selected — villager, soldier, or hero — to BURY them; honoring the dead lifts the town's spirits for a while. Unburied corpses fade away on their own.</div>
     <div id="overlay">
-      <h1>Hearthfall</h1>
-      <p id="factionBlurbHuman">Found a medieval town. Gather food, timber and stone, train villagers at your Town Hall, and raise walls, towers and archers to survive raids that grow stronger over time. Your Town Hall must not fall.</p>
-      <p id="factionBlurbTribe" style="color:#c8a06a;">— or lead the Tribe. Ogres and hobgoblins hold the high wild: hunters and scavengers who take what they need rather than tend it. Your Great Lodge must not fall.</p>
-      <p id="factionBlurbSwarm" style="color:#9fb877;">— or raise the Undead. Spread blight across the land, harvest the forests and the fallen into carrion, raise ghouls and skeletons from your Necropolis, and outlast the human knights who march to burn you out. Your Necropolis must not fall.</p>
-      <button id="continueBtn" style="display:none; border-color:#a8e6a1;">Continue Your Game</button>
-      <button id="startBtn">Found Your Town</button>
-      <button id="startSwarmBtn" style="border-color:#9fb877; background:#2f3a24;">Raise the Dead</button>
-      <button id="startTribeBtn" style="border-color:#c8a06a; background:#3d2f1e;">Lead your Tribe</button>
-      <button id="startGroveBtn" style="border-color:#8fbf6a; background:#2b3a24;">Wake the Grove</button>
-      <p id="tribePreviewNote" style="margin-top:6px; font-size:12px; color:#b8a888; max-width:480px;">
-        The Tribe is a <b>work in progress</b> — ogres and hobgoblins with their own
-        art, but for now they still build the human roster. Their economy and
-        signature mechanic are not written yet.
-      </p>
+      <div id="introBox">
+        <h1>Hearthfall</h1>
+        <p class="introTag">Raise a settlement and survive five raids. The mountain passes then open onto a rich neutral middle — race a real rival economy for it, and raze their heart to win.</p>
+        <button id="continueBtn" style="display:none; border-color:#a8e6a1;">Continue Your Game</button>
+        <div id="factionGrid">
+          <button id="startBtn" class="factionCard fc-human">
+            <span class="fcName">Found Your Town</span>
+            <span class="fcTag">Humans</span>
+            <span class="fcDesc">The full town-builder: seven resources, a wheat&nbsp;→&nbsp;flour&nbsp;→&nbsp;bread chain, happiness, taxes and trade. Your Town Hall must not fall.</span>
+          </button>
+          <button id="startSwarmBtn" class="factionCard fc-swarm">
+            <span class="fcName">Raise the Dead</span>
+            <span class="fcTag">Undead</span>
+            <span class="fcDesc">Spread blight to build on at all, render forests and the fallen into carrion, and bank corpses into Flesh Golems. Your Necropolis must not fall.</span>
+          </button>
+          <button id="startTribeBtn" class="factionCard fc-tribe">
+            <span class="fcName">Lead your Tribe</span>
+            <span class="fcTag">Ogres &amp; Hobgoblins</span>
+            <span class="fcDesc">Hunt the treeline instead of farming it — no cooking chain, but Foresters replant the woods, so your supply is the one that never runs out.</span>
+          </button>
+          <button id="startGroveBtn" class="factionCard fc-grove">
+            <span class="fcName">Wake the Grove</span>
+            <span class="fcTag">A Living Forest</span>
+            <span class="fcDesc">No gatherers at all. Structures lie dormant until a root creeps out and reaches them, then yield simply by living — and cutting the trunk kills the canopy.</span>
+          </button>
+        </div>
+        <p class="introNote">The Tribe's signature mechanic and the Grove's later spells are still unwritten — both are playable, neither is finished.</p>
+      </div>
     </div>
   </div>
   <!-- FIXED SLOTS. Every slot is always present and always the same width.
@@ -278,6 +352,7 @@
     <div class="barSlot" id="mapSlot">
       <div class="slotLabel">Map</div>
       <div id="minimapWrap" title="Click to jump the camera"><canvas id="minimap"></canvas></div>
+      <button id="helpBtn" title="Show or hide the faction briefing — how this faction works, its buildings and its hero">? Briefing</button>
     </div>
 
     <div class="barSlot" id="selSlot">
@@ -305,20 +380,20 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
-<script src="js/content.js?v=c98baf8c"></script>
+<script src="js/content.js?v=4fee56ae"></script>
 <script src="js/spells.js?v=16643486"></script>
-<script src="js/grove.js?v=9461e097"></script>
+<script src="js/grove.js?v=4f305868"></script>
 <script src="js/tribe.js?v=26bf1247"></script>
 <script src="js/swarm.js?v=a699cd7c"></script>
 <script src="js/state.js?v=4bb54e17"></script>
-<script src="js/economy.js?v=7df809a3"></script>
-<script src="js/units.js?v=2e2b1e65"></script>
+<script src="js/economy.js?v=e06c1933"></script>
+<script src="js/units.js?v=ffce9664"></script>
 <script src="js/enemies.js?v=34b61701"></script>
 <script src="js/ai.js?v=ddd5061d"></script>
-<script src="js/save.js?v=e8113577"></script>
-<script src="js/ui.js?v=bb48013e"></script>
+<script src="js/save.js?v=5afbb8d8"></script>
+<script src="js/ui.js?v=cb705de0"></script>
 <script src="js/groups.js?v=0af99b0f"></script>
 <script src="js/telemetry.js?v=1f64313f"></script>
-<script src="js/main.js?v=54ea8e2f"></script>
+<script src="js/main.js?v=2e53c95c"></script>
 </body>
 </html>

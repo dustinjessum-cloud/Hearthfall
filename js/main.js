@@ -722,10 +722,16 @@ window.addEventListener('DOMContentLoaded', ()=>{
   bindBtn('skipBtn',    'skipToCorridor');
   bindBtn('recBtn',     'toggleRecording');
   bindBtn('exportLogBtn','exportSessionLog');
-  const hintCloseBtn = document.getElementById('hintClose');
-  if(hintCloseBtn){
-    hintCloseBtn.addEventListener('click', ()=>{
-      document.getElementById('hint').style.display = 'none';
+  bindBtn('helpBtn',    'toggleHint');
+  // The ✕ is bound by DELEGATION on the container, not on the button itself.
+  // applySwarmFaction() rewrites hint.innerHTML wholesale to swap in the
+  // undead briefing, which destroys the original ✕ and any listener on it —
+  // the container survives, so a listener here keeps working across that swap
+  // and the Briefing button's lit state stays in sync however it was closed.
+  const hintEl = document.getElementById('hint');
+  if(hintEl){
+    hintEl.addEventListener('click', (ev)=>{
+      if(ev.target && ev.target.id === 'hintClose') closeHint();
     });
   }
 });

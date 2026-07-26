@@ -639,7 +639,16 @@ function createBuilding(type, gx, gy, override, owner){
   // toward the nearest connected neighbour. It is inert until that root
   // lands — that delay is the whole faction, and it is what the enemy gets
   // to interrupt.
-  if(state.faction === 'grove' && (b.owner || OWNER_PLAYER) === OWNER_PLAYER && !b.isCore){
+  //
+  // NOT during a restore. restoreGame() stamps the SAVED id over the fresh one
+  // immediately after this returns (Object.assign(b, sb)), so a root started
+  // here would hold the discarded id: buildingById(toId) then returns null,
+  // updateGroveRoots marks the root dead, the cascade takes every root hanging
+  // off it, and nothing anywhere re-roots an existing structure. The entire
+  // Grove was left permanently severed — no yield, no growth — by any reload.
+  // The saved roots are restored wholesale instead, progress and all.
+  if(state.faction === 'grove' && !state._restoring
+     && (b.owner || OWNER_PLAYER) === OWNER_PLAYER && !b.isCore){
     b.groveStage = 0; b.groveAgeMs = 0;
     if(typeof startRootTo === 'function') startRootTo(b);
   }
@@ -661,7 +670,12 @@ function createBuilding(type, gx, gy, override, owner){
   // housing silently raised your cap by 36 the instant the world loaded.
   if(def.popCap && !underConstruction(b) && isMine(b)) state.population.cap += def.popCap;
   if(type==='wall') refreshWallNeighborhood(gx, gy);
-  if(def.needsWorker && !underConstruction(b)) autoAssignIdleVillagers();
+  // Same reason as the root guard above: dispatch stamps b.id onto a worker
+  // (assignedBuildingId / buildTaskId) and restore is about to replace that id.
+  // Harmless today only because units are rebuilt AFTER buildings, so there is
+  // nobody to dispatch — restoreGame runs its own pass at the end, once the
+  // world is real. Guarded rather than left to depend on that ordering.
+  if(def.needsWorker && !underConstruction(b) && !state._restoring) autoAssignIdleVillagers();
   updateHUD();
   return b;
 }
@@ -957,6 +971,34 @@ function updateGatherer(u, delta){
     return;
   }
 
+  // ---- ran out, or there's a better camp now ----------------------------
+  // Both checks sit here, ahead of the per-type branches, so they cover the
+  // haulers (Lumber Camp/Quarry/Refinery/Bone Yard) and the tribe's Hunting
+  // Camp — which takes the farm path below — in one place.
+  if(isResourceCamp(b)){
+    if(u.migrateCoolMs > 0) u.migrateCoolMs -= delta;
+    // Dry: let them go. A worker carrying a load finishes the trip first, so
+    // a full haul is never dropped on the ground.
+    if(b.depleted && !u.carrying){
+      unassignVillager(u);
+      return;
+    }
+    // Transfer to a nearer camp of the same type. Only BETWEEN trips
+    // (gatherPhase is null exactly when a haul has just been banked, or when
+    // the job is brand new) so nobody abandons a walk halfway. The cooldown
+    // is a stop against two near-equidistant camps trading a worker forever —
+    // CAMP_MIGRATE_MARGIN handles the common case, this bounds the worst one.
+    if(!u.carrying && !u.gatherPhase && !u.moving && !(u.migrateCoolMs > 0)){
+      const better = nearerCampFor(u, b, workedTileOf(u, b));
+      if(better){
+        assignVillagerToBuilding(u, better);
+        u.migrateCoolMs = 10000;
+        if(scene && scene.add) floatResourceText(b.gx, b.gy, 'closer camp', '#b6c98a');
+        return;
+      }
+    }
+  }
+
   if(b.type==='farm' || def.staffed){
     // farms, mills and bakeries don't commute — but they only produce (in
     // economyTick) while the worker is physically standing on the tile.
@@ -1010,14 +1052,14 @@ function updateGatherer(u, delta){
     default: {
       const t = gatherTargetFor(b);
       if(!t){
-        if(!b._depletedWarned){
-          flashWaveBanner(`${def.name} has no ${def.bonusNear==='forest'?'trees':def.bonusNear==='stone_deposit'?'stone':'wildstone'} left nearby!`);
-          b._depletedWarned = true;
-        }
+        // Discovered mid-run rather than on the economy tick — flag it here
+        // too, so the crew is released on the very next frame instead of
+        // milling about the dead camp until refreshDryCamps() catches up.
+        markCampDry(b, true);
         if(!atHome && !u.moving){ u.tx=b.gx; u.ty=b.gy; u.moving=true; }
         return;
       }
-      b._depletedWarned = false;
+      markCampDry(b, false);
       u.gatherTarget = t;
       u.gatherPhase = 'toResource';
       return;
@@ -1089,7 +1131,10 @@ function workersOf(building){
   return state.units.filter(u=> u.type==='villager' && u.hp>0 && u.assignedBuildingId===building.id);
 }
 
-function assignVillagerToBuilding(v, building){
+// byPlayer marks a posting the player made by hand (right-click "work here").
+// Auto-migration to a nearer camp leaves those alone — a deliberate placement
+// is not something to quietly undo. Every automatic dispatch omits the flag.
+function assignVillagerToBuilding(v, building, byPlayer){
   // join the crew if there's room; if the building is fully crewed, bump
   // the longest-serving worker (keeps the old replace behavior for farms)
   const crew = workersOf(building).filter(w=>w!==v);
@@ -1097,6 +1142,7 @@ function assignVillagerToBuilding(v, building){
     crew[0].assignedBuildingId = null;
   }
   if(v.inTowerId && v.inTowerId !== building.id) exitTower(v); // new job elsewhere — climb down first
+  v.jobByPlayer = !!byPlayer;
   v.assignedBuildingId = building.id;
   v.buildTaskId = null; // now actually working — any pending build task is abandoned
   v.path = null;
@@ -1108,6 +1154,7 @@ function assignVillagerToBuilding(v, building){
 function unassignVillager(v){
   if(v.inTowerId) exitTower(v); // no longer posted — climb down
   v.assignedBuildingId = null;
+  v.jobByPlayer = false;   // off the job entirely — the hand-placement no longer applies
   v.buildTaskId = null; // an explicit new order always cancels a pending build task, human or swarm
   v.path = null;
   v.gatherWorking = false;
@@ -1196,8 +1243,12 @@ function autoAssignIdleVillagers(){
     builder.tx = b.gx; builder.ty = b.gy; builder.moving = true;
   }
 
+  // A DRY camp is deliberately not needy. Without this, releasing its crew and
+  // re-staffing it are the same loop: the workers go idle, the very next
+  // dispatch pass sees an understaffed camp and sends them straight back, and
+  // the idle counter flickers between 0 and 3 forever.
   const needy = myBuildings().filter(b=> BUILD_DEFS[b.type] && BUILD_DEFS[b.type].needsWorker
-    && !(b.buildMs>0) && workersOf(b).length < workerCapOf(b));
+    && !(b.buildMs>0) && !b.depleted && workersOf(b).length < workerCapOf(b));
   for(const b of needy){
     while(workersOf(b).length < workerCapOf(b)){
       const w = pickWorkerFor(b);
@@ -1239,7 +1290,91 @@ function findNearestResourceTile(gx0, gy0, resourceType, maxRadius){
 function gatherTargetFor(b){
   const def = BUILD_DEFS[b.type];
   if(!def.bonusNear) return null;
-  return findNearestResourceTile(b.gx, b.gy, def.bonusNear, 10);
+  return findNearestResourceTile(b.gx, b.gy, def.bonusNear, CAMP_DRY_RADIUS);
+}
+
+// ---------------------------------------------------------------------
+// Depleted camps, and moving crews to a nearer one
+//
+// Both of these exist because an assigned villager is invisible. idleWorkers()
+// skips anyone with an assignedBuildingId and so does pickWorkerFor(), so a
+// worker standing at a worked-out Lumber Camp is neither gathering nor
+// available nor counted anywhere — the idle box reads 0 while three villagers
+// do nothing. The camp has to let them go for them to exist again.
+// ---------------------------------------------------------------------
+
+// Camps that draw on a terrain resource: Lumber Camp, Quarry, Refinery, Bone
+// Yard, and the tribe's Hunting Camp. Keyed on bonusNear rather than a type
+// list so a faction adding its own camp is covered without touching this.
+function isResourceCamp(b){
+  const d = b && BUILD_DEFS[b.type];
+  return !!(d && d.bonusNear && d.needsWorker);
+}
+
+// The tile a worker is drawing from, which is what "a camp closer to the
+// resource" is measured against. Haulers have an explicit gatherTarget;
+// hunters roam, so their reference is the nearest live tile to the camp.
+function workedTileOf(u, b){
+  if(u && u.gatherTarget){
+    const t = u.gatherTarget;
+    if((state.resourceQty[t.gy] && state.resourceQty[t.gy][t.gx] || 0) > 0) return t;
+  }
+  return gatherTargetFor(b);
+}
+
+// A camp is dry when nothing it can harvest remains within CAMP_DRY_RADIUS.
+// The result is cached on the building because this is a ring search and it
+// would otherwise run per worker per frame; refreshDryCamps() re-tests it on
+// the economy tick, so a camp comes back to life on its own when the ground
+// does (tribe saplings maturing into forest is the case that matters).
+function markCampDry(b, dry){
+  if(!!b.depleted === !!dry) return;
+  b.depleted = !!dry;
+  // A washed-out tint is the whole marker: at 32px a badge is unreadable, and
+  // "this camp is grey" is legible at a glance across a whole town.
+  if(b.sprite && b.sprite.setTint){
+    if(dry) b.sprite.setTint(0x6e6a63);
+    else if(BUILD_DEFS[b.type] && BUILD_DEFS[b.type].tint) b.sprite.setTint(BUILD_DEFS[b.type].tint);
+    else if(b.sprite.clearTint) b.sprite.clearTint();
+  }
+  if(dry){
+    const def = BUILD_DEFS[b.type] || {};
+    const what = def.bonusNear==='forest' ? 'trees'
+               : def.bonusNear==='stone_deposit' ? 'stone'
+               : def.bonusNear==='bone_pile' ? 'bone' : 'wildstone';
+    flashWaveBanner(`${def.name} has no ${what} left in reach — its workers are idle.`);
+  }
+}
+
+// Re-test every camp's ground. Cheap (one ring search per camp, once per 3s
+// tick) and it is what lets a dry camp restaff itself rather than staying
+// dead for the rest of the run.
+function refreshDryCamps(){
+  for(const b of myBuildings()){
+    if(!isResourceCamp(b) || b.hp<=0 || underConstruction(b)) continue;
+    markCampDry(b, !gatherTargetFor(b));
+  }
+}
+
+// The camp this worker SHOULD be at: one of the same type, with a free slot,
+// meaningfully closer to the tile they are actually working. Building a new
+// Lumber Camp beside the wood you are already walking to should pull the crew
+// over instead of leaving them on the long commute forever.
+//
+// Skipped for a villager the player placed by hand (jobByPlayer) — a
+// deliberate posting is not something to quietly undo.
+function nearerCampFor(u, camp, tile){
+  if(!tile || u.jobByPlayer) return null;
+  const cur = Phaser.Math.Distance.Between(camp.gx, camp.gy, tile.gx, tile.gy);
+  let best = null, bestD = cur - CAMP_MIGRATE_MARGIN;
+  for(const c of myBuildings()){
+    if(c === camp || c.type !== camp.type || c.hp<=0) continue;
+    if(underConstruction(c) || c.depleted) continue;
+    if(workersOf(c).length >= workerCapOf(c)) continue;   // never bump someone else out to move in
+    const d = Phaser.Math.Distance.Between(c.gx, c.gy, tile.gx, tile.gy);
+    if(d < bestD){ bestD = d; best = c; }
+  }
+  return best;
 }
 
 function depleteResourceTile(gx, gy, amount){
@@ -1297,6 +1432,7 @@ function economyTick(){
   if(typeof sandboxTopUp === 'function') sandboxTopUp();  // testing mode: refill first
   snapshotResourceRates(); // bracket the tick — see updateResourceRates
   const recalled = isRecalled();
+  refreshDryCamps();   // release crews from worked-out sites, revive camps whose ground came back
   // the honor of a burial fades with time — mourning isn't forever
   if(state.burialBoost > 0) state.burialBoost = Math.max(0, state.burialBoost - CORPSE.buryDecayPerTick);
   state.happiness = computeHappiness();

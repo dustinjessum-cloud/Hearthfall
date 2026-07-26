@@ -575,6 +575,20 @@ const FARM_MIN_FERTILITY = 0.25;
 const AUTO_ASSIGN_RADIUS = 4;           // how far pickWorkerFor() will look for an idle villager on its own — an explicit player order (right-click) always ignores this
 const ORDER_QUEUE_MAX = 3;              // shift-click order queue depth — bump this alone to allow longer queues
 
+// ---- resource camps: reach, depletion and migration ----
+// How far a Lumber Camp/Quarry/Refinery/Hunting Camp will send its crew for
+// the resource it needs. Nothing left inside this radius means the camp is
+// DRY: it releases its workers to idle and stops asking for more, rather than
+// holding three villagers hostage at a site with nothing to gather. This was
+// hardcoded inside gatherTargetFor(); it is the definition of "run out", so
+// it belongs with the other economy tuning.
+const CAMP_DRY_RADIUS = 10;
+// A worker only transfers to a nearer camp of the same type if that camp is
+// at least this many tiles closer TO THE TILE THEY ARE WORKING. Without the
+// margin two roughly-equidistant camps trade the same villager back and forth
+// every haul, and nobody ever finishes a trip.
+const CAMP_MIGRATE_MARGIN = 2;
+
 // ---- corpses: the shared raise/bury resource ----
 // Dead humans (raiders, skirmishers, and the human player's own villagers &
 // soldiers) leave a corpse where they fall. The undead raise them as

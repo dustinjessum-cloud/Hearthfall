@@ -1155,6 +1155,9 @@ function updateUnits(delta){
       // archers march 25% slower — longbows and quivers are heavy
       let typeSpeed = u.type==='archer' ? baseSpeed*0.75
                     : (u.type==='flesh_golem' ? baseSpeed*FLESH_GOLEM.speedMult : baseSpeed);
+      // an Ent is a walking tree — it goes everywhere at its own pace
+      const gm = (typeof groveGatherMods === 'function') ? groveGatherMods(u) : null;
+      if(gm) typeSpeed *= gm.speedMult;
       if(u.carryingCorpse) typeSpeed *= RITUAL.dragSlow;   // a body is dead weight
       const speed = typeSpeed * speedMultiplierAt(u.gx, u.gy) * (delta/1000);
       const dx = u.tx - u.gx, dy = u.ty - u.gy;

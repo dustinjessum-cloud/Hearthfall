@@ -60,6 +60,24 @@ const GROVE = {
   tendRadius: 3,
   tendBonus: 0.25,           // a tended structure yields this much more
 
+  // --- an Ent CAN gather, it is just bad at it ---
+  // The Grove still earns most of what it earns by being connected and alive.
+  // Gathering is a way to convert an Ent's TIME into resources when you need a
+  // push, and it costs something real: an Ent out chopping is an Ent that is
+  // not standing next to a structure adding its tendBonus. That trade is the
+  // point, so these numbers are deliberately unflattering — a tree is slow,
+  // and it does not have hands.
+  //
+  // Hauling is unchanged from every other faction: the Ent walks to the
+  // resource, works it, and carries the load back to the camp it is assigned
+  // to (Heartroot for timber, Stonebark for stone), which is what makes
+  // WHERE you put those two structures matter for the first time.
+  entGather: {
+    harvestMult: 1.8,   // 1.8x as long at the tile as a villager
+    carryMult:   0.6,   // and comes home with less
+    speedMult:   0.75,  // and walks slower carrying it
+  },
+
   // --- yield ---
   // Structures pay out on the economy tick. Everything is per-tick and
   // multiplied by stage, so growth compounds naturally without a chain.
@@ -384,6 +402,16 @@ function groveEconomyTick(){
   }
 }
 
+// How much worse than a villager this unit is at gathering, or null if it is
+// an ordinary gatherer. Consulted defensively (typeof) from economy.js and
+// units.js so those files stay faction-agnostic, matching how isHuntCamp() is
+// reached from the shared economy tick.
+function groveGatherMods(u){
+  if(state.faction !== 'grove') return null;
+  if(!u || u.type !== 'villager') return null;   // Ents are villagers under the hood
+  return GROVE.entGather;
+}
+
 // ---- roster ----------------------------------------------------------
 function applyGroveFaction(){
   // Yields are per-tick and flow home along the roots; there is no gathering
@@ -391,10 +419,18 @@ function applyGroveFaction(){
   BUILD_DEFS.house       = { name:'Bower', cost:{wood:16}, hp:60, frame:'grove_bower', popCap:3 };
   BUILD_DEFS.farm        = { name:'Fruiting Bough', cost:{wood:14}, hp:55, frame:'grove_bough',
                              groveYield:{ food: GROVE.tickYield.food } };
+  // These two are BOTH a passive yield and a place to work. Connected, they
+  // pay out on their own like every other Grove structure; staffed by an Ent,
+  // they also run the ordinary walk-harvest-haul loop against the forest or
+  // rock nearby. needsWorker + bonusNear is all it takes — the gatherer,
+  // hauling, depletion, dry-camp and crew-migration code is shared with every
+  // other faction and needs no Grove special case.
   BUILD_DEFS.lumber_camp = { name:'Heartroot', cost:{wood:16}, hp:55, frame:'tribe_timber',
-                             groveYield:{ wood: GROVE.tickYield.wood } };
+                             groveYield:{ wood: GROVE.tickYield.wood },
+                             needsWorker:true, bonusNear:'forest' };
   BUILD_DEFS.quarry      = { name:'Stonebark', cost:{wood:24}, hp:65, frame:'tribe_pit',
-                             groveYield:{ stone: 0.7 } };
+                             groveYield:{ stone: 0.7 },
+                             needsWorker:true, bonusNear:'stone_deposit' };
   BUILD_DEFS.barracks    = { name:'Thornhall', cost:{wood:34}, hp:100, frame:'tribe_warlodge',
                              trains:'archer' };
   BUILD_DEFS.tower       = { name:'Bramble Spire', cost:{wood:26}, hp:130, frame:'grove_spire',

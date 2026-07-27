@@ -66,6 +66,7 @@ const state = {
   corridorOpen: false,   // set once RAIDS_BEFORE_CORRIDOR raids are survived
   aiTownSpawned: false,  // guards the victory check before the town exists
   aiTownCenter: null,
+  aiFaction: null,       // which of the four the enemy town plays — drawn per run, never yours
   gameOver: false,
   selected: null,        // {type:'building'|'unit', ref}
   selectedGroup: [],     // drag-box multi-selection of friendly units

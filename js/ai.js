@@ -127,7 +127,10 @@ function spawnAiGarrison(){
   // its ideal spot is unusable, and guards posted around the old midpoint
   // would be defending an empty field next to the town
   const c = state.aiTownCenter || aiTownCenter();
-  const race = aiTownRace() === 'undead' ? 'undead' : 'human';
+  // aiTownRace() already resolves to a key ENEMY_RACES holds (human/undead/
+  // troll) — the old ternary flattened everything that was not undead to
+  // human, which would have put human knights in a tribe town's garrison.
+  const race = aiTownRace();
   const hp = 34, dmg = 6;
   const out = [];
   for(const [dx,dy] of AI_TOWN_PLAN.garrison.melee){
@@ -348,14 +351,18 @@ function spawnAiWorker(gx, gy){
   const race = aiTownRace();
   const e = {
     id: enemyIdCounter++, gx:spot.gx, gy:spot.gy,
+    aiFaction: aiTownFaction(),
     hp:AI_TUNING.workerHp, maxHp:AI_TUNING.workerHp, dmg:0,
     kind:'ai_worker', race, ranged:false, speedMult:1,
     path:null, pathIdx:0, lastMoveAt:0, lastAttackAt:0, target:null,
     job:null, carrying:0, harvestMs:0, stuckMs:0,
   };
-  // reuses the villager/ghoul frame — it is a worker, and reading as one at a
-  // glance is exactly the point when you are deciding what to raid
-  const frame = race === 'undead' ? 'ghoul' : 'villager';
+  // Reuses whatever worker sprite that FACTION uses for itself — reading as a
+  // worker at a glance is exactly the point when you are deciding what to
+  // raid, and a grove town crewed by human villagers gave the whole thing
+  // away. Keyed off faction, not race, since tribe and grove share a race.
+  const AI_WORKER_FRAME = { human:'villager', swarm:'ghoul', tribe:'tribe_worker', grove:'grove_ent' };
+  const frame = AI_WORKER_FRAME[aiTownFaction()] || 'villager';
   e.sprite = scene.add.image(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2, 'tiles', FRAME[frame]);
   e.baseTint = 0xff9a7a;   // hostile wash so they never read as your own
   if(e.sprite.setTint) e.sprite.setTint(e.baseTint);
@@ -550,7 +557,7 @@ function aiTryTrain(delta){
     if(ai.training.what === 'worker'){
       spawnAiWorker(c.gx, c.gy);
     } else {
-      const race = aiTownRace()==='undead' ? 'undead' : 'human';
+      const race = aiTownRace();   // already an ENEMY_RACES key — see spawnAiGarrison
       const spot = findFreeSpotNear(c.gx, c.gy, 4) || c;
       const ranged = Math.random() < 0.35;
       const e = spawnEnemy(34, 7, 4, ranged ? 'raider' : 'swordsman',
@@ -739,13 +746,23 @@ function updateAiWar(delta){
 function aiThink(delta){
   if(!state.ai || state.gameOver) return;
   if(!aiTownHall()) return;   // headless: no core, no orders
-  // The race starts when BOTH sides can reach the middle. Their economy runs
-  // from world creation otherwise, and since the pass stays shut until five
-  // raids are survived, the enemy would spend ~25 uncontested minutes
-  // colonising the neutral zone before you could set foot in it — arriving
-  // to a finished map is not a race. Until then the town is what Phase 2
-  // made it: static infrastructure that defends itself.
-  if(!state.corridorOpen) return;
+  // NO corridor gate here. There used to be a blanket `if(!state.corridorOpen)
+  // return` guarding this whole function, to stop the enemy colonising the
+  // neutral middle before you could contest it. It did far more than that:
+  // aiEconomyTick() and updateAiWorkers() run unconditionally from the main
+  // loop, so the enemy GATHERED for the entire pre-corridor game and could
+  // not spend a single resource. Measured over a full 46-minute run: their
+  // building count sat at exactly 29 for the first 32 minutes while wood and
+  // stone climbed to ~1500 each, they never trained past their starting 3
+  // workers (aiTryTrain lives in here too), and the instant the pass opened
+  // they began spending. You arrived to a static museum, not a rival.
+  //
+  // The neutral-zone concern it was written for is already handled where it
+  // belongs — `intoNeutral` in aiTryBuild() carries its own corridorOpen
+  // check, so their expansion still cannot cross until you can. Verified:
+  // over 32 simulated minutes with this open, buildings in the neutral zone
+  // stayed at 0 while their home town grew to 80 (against a player's 79) and
+  // ended resource-bound, which is the loop costMult was built for.
   aiTryTrain(delta);
   if(state.ai.buildCdMs > 0) state.ai.buildCdMs -= delta;
   state.ai.thinkMs += delta;

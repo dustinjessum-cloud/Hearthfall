@@ -90,6 +90,7 @@ function serializeGame(){
     corridorOpen: state.corridorOpen,
     aiTownSpawned: state.aiTownSpawned,
     aiTownCenter: state.aiTownCenter,
+    aiFaction: state.aiFaction,   // drawn per run — the town's art and roster hang off it
     ai: state.ai,   // their stockpile, build index and training timer
     controlGroups: state.controlGroups,   // ids, so they survive a reload
     nextSkirmishInMs: state.nextSkirmishInMs,
@@ -215,6 +216,10 @@ function restoreGameInner(snapshot){
   // aiTownHall() is momentarily null before the buildings are rebuilt
   state.aiTownSpawned = !!snapshot.aiTownSpawned;
   state.aiTownCenter = snapshot.aiTownCenter || null;
+  // MUST land before the buildings loop below — every AI building resolves its
+  // sprite through aiDef(), which reads this. Restored without it, a grove
+  // enemy town would rebuild itself as whatever the fallback pairing says.
+  state.aiFaction = snapshot.aiFaction || null;
   state.controlGroups = snapshot.controlGroups || {};
   // Rebuild the economy from the snapshot, or from scratch for a save taken
   // before it existed — a null state.ai would make aiThink() a no-op and
@@ -267,7 +272,7 @@ function restoreGameInner(snapshot){
   }
   // wall sprite variants (straight/corner/junction) depend on neighbors, so
   // this needs a second pass once every building is in place.
-  for(const b of state.buildings) if(b.type==='wall') refreshWallSprite(b);
+  for(const b of state.buildings) if(isWallType(b.type)) refreshWallSprite(b);
 
   // ---- the Grove's root network ----
   // Restored wholesale, ids and progress intact, rather than regrown: a root

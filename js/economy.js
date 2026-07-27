@@ -233,7 +233,8 @@ function updateConstruction(delta){
     if(b.upgradeMs > 0){
       b.upgradeMs -= delta;
       if(b.upgradeMs <= 0){
-        if(STORAGE_LEVELS[b.type]) completeStorageUpgrade(b);
+        if(b.upgradeToBone) completeWallUpgrade(b);
+        else if(STORAGE_LEVELS[b.type]) completeStorageUpgrade(b);
         else if(b.isCore) completeTownCenterUpgrade(b);
       }
     }
@@ -489,6 +490,15 @@ function addResource(key, amt){
 // like a pokemon line — new sacks and gilt on storage, towers on the keep
 function evolutionFrameFor(b){
   const lvl = b.level || 1;
+  // YOUR buildings only. The enemy core carries isCore too, and its art comes
+  // from AI_BUILD_DEFS through aiDef() — but every branch below reads
+  // state.faction, i.e. the PLAYER's faction. Without this guard the restore
+  // pass (save.js calls refreshEvolution on every rebuilt building) stamped
+  // your core's sprite onto theirs: an undead enemy's crypt came back from a
+  // reload as a human town hall, and a human enemy's town hall came back as a
+  // crypt. It bit the enemy's whole roster the moment they stopped being
+  // one of two fixed skins.
+  if(!isMine(b)) return null;
   // the undead core is the crypt at every level — the human town-hall tiers
   // would otherwise get re-set onto it when it upgrades
   if(b.isCore && state.faction==='swarm') return 'crypt';
@@ -532,6 +542,48 @@ function completeStorageUpgrade(b){
   b.maxHp += 40; b.hp += 40; // sturdier with each expansion
   refreshEvolution(b);
   flashWaveBanner(`${BUILD_DEFS[b.type].name} upgraded to level ${b.level}!`);
+  updateHUD();
+}
+
+// ---------------------------------------------------------------------
+// Wall upgrades — the undead's bone tier.
+//
+// WALL_UPGRADE is null for every faction that has no second wall tier, so
+// every check below is also the "does this faction do this at all" check.
+// Set by applySwarmFaction(); see there for the numbers.
+//
+// Per-wall rather than a one-time unlock: a wall you have paid bone for is a
+// wall you chose to reinforce, so a long screen can be part fence, part
+// crypt, and the bone goes where you expect the assault.
+// ---------------------------------------------------------------------
+function canUpgradeWall(b){
+  if(!WALL_UPGRADE || !b || b.type !== 'wall') return false;
+  if(b.boneWall || b.hp <= 0) return false;
+  if(underConstruction(b) || b.upgradeMs > 0) return false;
+  return true;
+}
+
+function upgradeWall(b){
+  if(!canUpgradeWall(b)) return false;
+  const cost = WALL_UPGRADE.cost;
+  for(const k in cost) if((state.resources[k] || 0) < cost[k]) return false;
+  for(const k in cost) state.resources[k] -= cost[k];
+  b.upgradeMs = WALL_UPGRADE.ms;
+  b.upgradeToBone = true;    // tells updateConstruction which completer to run
+  flashWaveBanner(`${WALL_UPGRADE.name} rising...`);
+  updateHUD();
+  return true;
+}
+
+function completeWallUpgrade(b){
+  b.upgradeMs = 0; b.upgradeToBone = false;
+  b.boneWall = true;
+  const gain = WALL_UPGRADE.hp - b.maxHp;
+  b.maxHp = WALL_UPGRADE.hp;
+  b.hp = Math.min(b.maxHp, b.hp + Math.max(0, gain));   // reinforced, not healed to full
+  refreshWallSprite(b);
+  refreshWallNeighborhood(b.gx, b.gy);   // neighbours may now want a corner piece
+  if(scene && scene.add) floatResourceText(b.gx, b.gy, WALL_UPGRADE.name + '!', '#e2e0ce');
   updateHUD();
 }
 
@@ -669,7 +721,7 @@ function createBuilding(type, gx, gy, override, owner){
   // dwellings (popCap 4) and a core (popCap 8), so without this their
   // housing silently raised your cap by 36 the instant the world loaded.
   if(def.popCap && !underConstruction(b) && isMine(b)) state.population.cap += def.popCap;
-  if(type==='wall') refreshWallNeighborhood(gx, gy);
+  if(isWallType(type)) refreshWallNeighborhood(gx, gy);
   // Same reason as the root guard above: dispatch stamps b.id onto a worker
   // (assignedBuildingId / buildTaskId) and restore is about to replace that id.
   // Harmless today only because units are rebuilt AFTER buildings, so there is
@@ -683,29 +735,49 @@ function createBuilding(type, gx, gy, override, owner){
 // Walls are drawn as a horizontal stone segment by default. When a wall
 // tile's only wall neighbors are above/below it (not left/right), switch
 // to the vertical-facing sprite so vertical runs connect visually too.
+// 'wall' is the player's; 'ai_wall' is the enemy town's. Both are walls and
+// both need to pick a straight/vertical/corner variant from their neighbours.
+function isWallType(t){ return t === 'wall' || t === 'ai_wall'; }
+
 function refreshWallSprite(b){
-  if(!b || b.type!=='wall' || !b.sprite) return;
+  if(!b || !isWallType(b.type) || !b.sprite) return;
+  // Only ever connect to walls of the SAME kind. Yours and theirs can end up
+  // adjacent once the corridor opens and the fight reaches their screen; a
+  // shared run would have your masonry growing a bone corner.
+  const same = (nb)=> nb && nb.type === b.type;
   const left = occAt(b.gx-1, b.gy), right = occAt(b.gx+1, b.gy);
   const up = occAt(b.gx, b.gy-1), down = occAt(b.gx, b.gy+1);
-  const horiz = (left && left.type==='wall') || (right && right.type==='wall');
-  const vert = (up && up.type==='wall') || (down && down.type==='wall');
+  const horiz = same(left) || same(right);
+  const vert = same(up) || same(down);
   // corners, T-junctions and crossings use the junction sprite so
   // perpendicular wall runs read as one continuous wall
-  // Variant names come off the faction def, not hardcoded. These three were
-  // literal human frame names, so they overwrote whatever a faction had set
-  // the moment a wall was placed or a neighbour updated — which is why the
-  // tribe kept building human masonry despite frame:stake_wall.
-  const wd = BUILD_DEFS.wall || {};
-  const v = wd.variants || { corner:'wall_corner', vert:'wall_v', straight:'wall' };
+  // Variant names come off the def, not hardcoded. These three were literal
+  // human frame names, so they overwrote whatever a faction had set the moment
+  // a wall was placed or a neighbour updated — which is why the tribe kept
+  // building human masonry despite frame:stake_wall.
+  //
+  // The enemy town reads its variants off AI_BUILD_DEFS the same way. Until
+  // this existed refreshWallSprite early-returned on anything that was not
+  // exactly 'wall', so ai_wall never picked a variant at all — and the town
+  // plan's screen is a VERTICAL run, so it rendered as six horizontal
+  // segments stacked on top of one another with the courses running the wrong
+  // way and the crown repeating down the middle.
+  const wd = (b.type === 'ai_wall')
+    ? (typeof aiDef === 'function' ? (aiDef('ai_wall') || {}) : {})
+    : (BUILD_DEFS.wall || {});
+  // an upgraded wall wears the bone tier's sprites, not its base tier's
+  const v = (b.boneWall && WALL_UPGRADE && WALL_UPGRADE.variants)
+    ? WALL_UPGRADE.variants
+    : (wd.variants || { corner:'wall_corner', vert:'wall_v', straight:'wall' });
   const frame = (vert && horiz) ? v.corner : ((vert && !horiz) ? v.vert : v.straight);
-  b.sprite.setFrame(FRAME[frame]);
+  if(FRAME[frame] !== undefined) b.sprite.setFrame(FRAME[frame]);
 }
 
 function refreshWallNeighborhood(gx, gy){
   const spots = [[0,0],[1,0],[-1,0],[0,1],[0,-1]];
   for(const [dx,dy] of spots){
     const nb = occAt(gx+dx, gy+dy);
-    if(nb && nb.type==='wall') refreshWallSprite(nb);
+    if(isWallType(nb && nb.type)) refreshWallSprite(nb);
   }
 }
 
@@ -875,6 +947,20 @@ function damageBuilding(b, dmg){
 // walk-home loop; distance to the resource (and depletion pushing tiles
 // further away) directly costs you income now.
 // ---------------------------------------------------------------------
+// Per-unit gather rate. A villager is the baseline (1x); a Grove Ent is
+// deliberately worse at both halves of the job. Kept as two small functions
+// rather than inlined so a future faction with, say, a fast miner is a data
+// change here and not another branch inside updateGatherer.
+function gatherHarvestMs(u){
+  const m = (typeof groveGatherMods === 'function') ? groveGatherMods(u) : null;
+  return HARVEST_MS * (m ? m.harvestMult : 1);
+}
+function gatherCarryAmount(u, carry){
+  const m = (typeof groveGatherMods === 'function') ? groveGatherMods(u) : null;
+  // never rounds to zero — a slow gatherer is slow, not useless
+  return Math.max(1, Math.round(carry.amt * (m ? m.carryMult : 1)));
+}
+
 function bankCarry(u, b){
   const wanted = u.carrying.amt;
   const gained = addResource(u.carrying.key, wanted);
@@ -1027,10 +1113,10 @@ function updateGatherer(u, delta){
     }
     case 'harvesting': {
       u.harvestMs += delta;
-      if(u.harvestMs >= HARVEST_MS){
+      if(u.harvestMs >= gatherHarvestMs(u)){
         const t = u.gatherTarget;
         const avail = (t && state.resourceQty[t.gy] && state.resourceQty[t.gy][t.gx]) || 0;
-        const amt = Math.min(carry.amt, avail);
+        const amt = Math.min(gatherCarryAmount(u, carry), avail);
         if(t && amt>0) depleteResourceTile(t.gx, t.gy, amt);
         u.carrying = amt>0 ? { key:carry.key, amt } : null;
         u.gatherWorking = false;
@@ -1242,6 +1328,14 @@ function autoAssignIdleVillagers(){
     builder.buildTaskId = b.id;
     builder.tx = b.gx; builder.ty = b.gy; builder.moving = true;
   }
+
+  // The Grove staffs its camps BY HAND only. Its structures already pay out
+  // just for being connected, and an Ent that wanders off to chop is an Ent no
+  // longer adding its tendBonus — so sending one to work is a trade the player
+  // should make deliberately. Auto-dispatch would grab the starting Ent (there
+  // is exactly one) the moment a Heartroot finished and quietly rewrite how the
+  // faction plays. Explicit right-click assignment still works normally.
+  if(state.faction === 'grove') return;
 
   // A DRY camp is deliberately not needy. Without this, releasing its crew and
   // re-staffing it are the same loop: the workers go idle, the very next

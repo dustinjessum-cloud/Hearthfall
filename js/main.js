@@ -107,6 +107,12 @@ class MainScene extends Phaser.Scene {
       // bandit camps take root on the frontier from day one
       spawnBanditCamps();
 
+      // WHICH faction the enemy town plays, drawn once and never your own.
+      // Must be set before generateAiTown(), which resolves every building's
+      // art and name through aiDef() as it places them.
+      state.aiFaction = pickAiFaction();
+      logEvent('ai_faction', { faction: state.aiFaction });
+
       // The enemy town is built at world creation, not when the pass opens —
       // it is meant to have been there all along, and the veil is what keeps
       // you from reading its layout before you can reach it.

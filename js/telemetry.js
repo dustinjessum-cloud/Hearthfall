@@ -99,15 +99,19 @@ function logSnapshot(){
           const st = (typeof groveStageDef === 'function') ? groveStageDef(b).name : '?';
           out[k].stages = out[k].stages || {};
           out[k].stages[st] = (out[k].stages[st] || 0) + 1;
+          // Heartroots and Stonebarks can ALSO be worked by an Ent now, so the
+          // passive yield is no longer the whole story for them — record the
+          // crew separately from `staffed`, which still means "connected".
+          if(d.needsWorker) out[k].ents = (out[k].ents || 0) + workersOf(b).length;
         }
       }
       return out;
     })(),
-    // "Idle" is meaningless for the Grove — it has no gathering jobs, so
-    // every Sprout reads idle forever. Reported as null rather than a
-    // misleading number.
-    idle: (state.faction === 'grove') ? null
-        : ((typeof idleWorkers === 'function') ? idleWorkers().length : null),
+    // Meaningful for every faction now. This used to be null for the Grove
+    // because it had no gathering jobs at all, so every Ent read idle forever
+    // and the number said nothing. Ents can be put to work at a Heartroot or
+    // Stonebark, so an idle one is once again a real thing to notice.
+    idle: (typeof idleWorkers === 'function') ? idleWorkers().length : null,
     // The Grove IS its network, so record the network: how much is connected,
     // how much is stranded, and how many roots are still creeping.
     grove: (state.faction === 'grove' && typeof groveConnectedIds === 'function') ? (function(){
@@ -129,6 +133,8 @@ function logSnapshot(){
     // the AI's side of the race, so their economy can be compared to yours
     aiRes: state.ai ? { f:Math.round(state.ai.resources.food), w:Math.round(state.ai.resources.wood), s:Math.round(state.ai.resources.stone) } : null,
     aiBldgs: (typeof aiBuildings === 'function') ? aiBuildings().filter(b=>b.hp>0).length : 0,
+    aiFac: state.aiFaction || null,   // which faction you were actually racing
+    aiUnits: state.enemies.filter(e=>e.hp>0 && (e.homeGuard || e.mustering || e.aiAttacker)).length,
   });
 }
 

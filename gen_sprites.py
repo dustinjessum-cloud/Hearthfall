@@ -2270,6 +2270,229 @@ def draw_grove_elder(d):
     scatter(d, 7781, 12, MOSS_L)
     scatter(d, 7787, 5, BLOOM)
 
+# ---------------------------------------------------------------------
+# The enemy town's UNDEAD skin.
+#
+# AI_BUILD_DEFS carries a frame per race, and four of its undead entries used
+# to point straight at the player's own human sprites — the wall, the quarry,
+# the lumber camp, and (worse) the human lumber camp standing in for a farm.
+# That was 14 of the enemy town's 29 buildings wearing human masonry, with the
+# six walls being the first thing you meet coming through the pass.
+#
+# These four fill that gap. They deliberately echo the LAYOUT of their human
+# counterparts — a wall still reads as a wall, a pit still reads as a pit — so
+# the enemy town stays legible at a glance; only the material changes, from
+# cut stone and timber to bone and grave dirt.
+# ---------------------------------------------------------------------
+
+GRAVE_DIRT   = (74, 68, 58)
+GRAVE_DIRT_D = (52, 48, 40)
+GRAVE_DIRT_L = (96, 88, 74)
+SOUL         = (110, 176, 104)
+SOUL_L       = (162, 236, 146)
+VOID         = (18, 16, 20)
+
+
+def bone_courses(d, x0, y0, x1, y1):
+    """Bone masonry: the same staggered-joint idea as stone_courses, in bone."""
+    rect(d, x0, y0, x1, y1, BONE)
+    dk = BONE_D
+    for i, y in enumerate(range(y0 + 3, y1, 5)):
+        rect(d, x0, y, x1, y, dk)
+        off = 0 if i % 2 == 0 else 4
+        for x in range(x0 + off, x1 + 1, 8):
+            rect(d, x, y, x, min(y + 4, y1), dk)
+    rect(d, x0, y0, x1, y0, BONE_L)
+    rect(d, x0, y0, x0, y1, BONE_L)
+    rect(d, x1, y0, x1, y1, dk)
+
+
+def draw_crypt_wall(d):
+    # The undead answer to a stone wall: courses of packed bone on a dark
+    # grave-dirt footing, topped with skulls where a human wall has merlons.
+    # Tiles horizontally exactly like draw_wall — same 10/31 course band and
+    # same 4..10 tooth band — so a mixed run of the two still lines up.
+    rect(d, 0, 26, 31, 31, GRAVE_DIRT_D)          # footing it is rammed into
+    bone_courses(d, 0, 10, 31, 29)
+    rect(d, 0, 10, 31, 10, BONE_D)                # shadow under the crown
+    # skull teeth along the top, on the same 8px pitch as the human merlons
+    for x in range(0, 32, 8):
+        d.ellipse([x, 3, x + 5, 9], fill=BONE, outline=BONE_D)
+        rect(d, x + 1, 5, x + 1, 6, VOID)         # eye
+        rect(d, x + 4, 5, x + 4, 6, VOID)         # eye
+        rect(d, x + 2, 8, x + 3, 8, BONE_D)       # jaw line
+    # a few ribs jutting from the courses, and rot in the joints
+    for rx, ry in ((3, 15), (14, 20), (25, 16)):
+        d.line([rx, ry, rx + 3, ry - 2], fill=BONE_L, width=1)
+    rect(d, 7, 22, 9, 23, (86, 104, 74))
+    rect(d, 20, 13, 22, 14, (86, 104, 74))
+
+
+def draw_bone_fence(d):
+    # The undead's BASE wall, and the thing a Crypt Wall is upgraded from: a
+    # cheap palisade of femurs lashed into grave dirt. Deliberately low and
+    # gappy so it reads as a fence rather than a fortification — the whole
+    # point of the bone upgrade is that this is not good enough.
+    #
+    # ONE frame serving straight/vert/corner, the way the Grove's thicket
+    # does: a scrappy palisade has no grain to line up, so it tiles in any
+    # direction without needing three sprites.
+    rect(d, 0, 22, 31, 31, GRAVE_DIRT)            # turned earth it is set into
+    rect(d, 0, 22, 31, 23, GRAVE_DIRT_D)
+    scatter(d, 5501, 14, GRAVE_DIRT_D)
+    # staves of bone at irregular heights, leaning slightly
+    for i, x in enumerate((1, 6, 11, 16, 21, 26)):
+        top = 8 + (i % 3) * 3
+        lean = -1 if i % 2 else 1
+        rect(d, x, top, x + 2, 26, BONE)
+        rect(d, x, top, x, 26, BONE_L)            # lit edge
+        rect(d, x + 2, top, x + 2, 26, BONE_D)    # shadow edge
+        d.ellipse([x - 1, top - 2, x + 3, top + 2], fill=BONE, outline=BONE_D)  # knuckle top
+        rect(d, x + lean, 24, x + 1 + lean, 25, BONE_D)
+    # a sagging cross-lash holding them together
+    d.line([0, 17, 31, 19], fill=(96, 82, 62), width=2)
+    d.line([0, 18, 31, 20], fill=(70, 58, 44), width=1)
+
+
+def _skull_tooth(d, x, y):
+    """One skull in a crenellation run, drawn from its top-left corner."""
+    d.ellipse([x, y, x + 5, y + 6], fill=BONE, outline=BONE_D)
+    rect(d, x + 1, y + 2, x + 1, y + 3, VOID)
+    rect(d, x + 4, y + 2, x + 4, y + 3, VOID)
+    rect(d, x + 2, y + 5, x + 3, y + 5, BONE_D)
+
+
+def draw_crypt_wall_v(d):
+    # 90-degree rotated crypt wall, so VERTICAL runs connect cleanly. Without
+    # this a north-south wall was six copies of the horizontal segment stacked
+    # on top of each other — the courses ran the wrong way and the skull crown
+    # repeated down the middle of the run instead of facing outward. Mirrors
+    # draw_wall_v's geometry exactly (shaft at x=10..31, teeth at x=4..10) so
+    # bone and stone walls can share a line and still meet correctly.
+    # NO ground footing on this one. The horizontal segment has grave dirt
+    # along its bottom edge because that is where it meets the ground; a
+    # north-south segment has no base in view, and adding one put a dark
+    # grave-dirt stripe down the right of every tile, which read as a seam
+    # between segments instead of a continuous wall. Fills 10..31 like the
+    # human wall_v so consecutive tiles butt together invisibly.
+    bone_courses(d, 10, 0, 31, 31)
+    for y in range(0, 32, 8):
+        _skull_tooth(d, 4, y)
+    rect(d, 10, 0, 10, 31, BONE_D)                # shadow under the crown
+    for ry, rx in ((6, 14), (17, 22), (26, 16)):
+        d.line([rx, ry, rx - 2, ry + 3], fill=BONE_L, width=1)
+    rect(d, 20, 9, 21, 11, (86, 104, 74))
+    rect(d, 14, 24, 16, 25, (86, 104, 74))
+
+
+def draw_crypt_wall_corner(d):
+    # Junction piece: both arms crossing, so L-corners, T-junctions and 4-way
+    # crossings read as one continuous bone wall. Same arm geometry as
+    # draw_wall_corner.
+    bone_courses(d, 0, 10, 31, 31)      # horizontal arm
+    bone_courses(d, 10, 0, 31, 31)      # vertical arm
+    for x in range(0, 10, 8):
+        _skull_tooth(d, x, 4)
+    for y in range(0, 10, 8):
+        _skull_tooth(d, 4, y)
+    rect(d, 0, 10, 9, 10, BONE_D)       # parapet shadow, west arm
+    rect(d, 10, 0, 10, 9, BONE_D)       # parapet shadow, north arm
+    rect(d, 14, 18, 16, 19, (86, 104, 74))
+
+
+def draw_corpse_field(d):
+    # The undead "farm": not a crop at all, but a worked burial field. Keeps
+    # draw_farm's furrow rhythm so it still reads as cultivated ground from
+    # across the map — the rows are grave mounds and what stands in them is
+    # bone rather than wheat.
+    rect(d, 0, 0, 31, 31, GRAVE_DIRT)
+    scatter(d, 4211, 26, GRAVE_DIRT_D)
+    for y in range(4, 28, 6):
+        rect(d, 3, y, 28, y + 2, GRAVE_DIRT_D)        # trough between mounds
+        rect(d, 3, y - 1, 28, y - 1, GRAVE_DIRT_L)    # lit crest of the mound
+        for x in range(4, 28, 6):
+            # a bone standing where a crop tuft would be
+            rect(d, x, y - 3, x + 1, y, BONE_D)
+            rect(d, x, y - 3, x, y, BONE)
+    # two half-buried skulls and a wisp of soul-light rising off the field
+    d.ellipse([6, 17, 11, 22], fill=BONE, outline=BONE_D)
+    rect(d, 7, 19, 7, 20, VOID); rect(d, 10, 19, 10, 20, VOID)
+    d.ellipse([21, 8, 25, 12], fill=BONE, outline=BONE_D)
+    rect(d, 22, 9, 22, 10, VOID); rect(d, 24, 9, 24, 10, VOID)
+    rect(d, 16, 12, 16, 16, SOUL)
+    rect(d, 16, 13, 16, 14, SOUL_L)
+    # bone posts instead of the human field's timber rails
+    rect(d, 0, 0, 31, 2, BONE_D)
+    rect(d, 0, 0, 31, 0, BONE)
+    rect(d, 0, 29, 31, 31, BONE_D)
+    rect(d, 0, 29, 31, 29, BONE)
+
+
+def draw_bone_quarry(d):
+    # The undead quarry: the same stepped excavation as the human one, but
+    # they are digging bone out of the ground, not rock — pale strata, bone
+    # slabs stacked at the rim, and a gibbet where the timber crane goes.
+    rect(d, 0, 0, 31, 31, GRAVE_DIRT)
+    scatter(d, 991, 20, GRAVE_DIRT_D)
+    # The steps must get DARKER as they descend or the pit reads as a flat
+    # pale slab — the depth is carried entirely by that gradient, exactly as
+    # in the human quarry. Only the thin lit tread on each step is bone-pale;
+    # a first pass made whole steps bone-coloured and the hole vanished.
+    for x0, y0, x1, y1, c in [(4, 14, 27, 29, (96, 92, 80)),
+                              (6, 16, 25, 27, (68, 65, 56)),
+                              (8, 18, 23, 25, (42, 40, 34))]:
+        rect(d, x0, y0, x1, y1, c)
+        rect(d, x0, y0, x1, y0, BONE_D)               # bone stratum in the cut
+        rect(d, x0, y0 + 1, x0, y1, shade(c, 1.25))   # lit left face
+    # ribs breaking out of the lowest cut face — this is a seam of bodies
+    for rx in (11, 15, 19):
+        d.line([rx, 19, rx + 2, 23], fill=BONE, width=1)
+        rect(d, rx, 19, rx, 19, BONE_L)
+    # cut bone slabs stacked at the rim
+    shaded_box(d, 3, 8, 9, 13, BONE)
+    shaded_box(d, 10, 10, 15, 13, BONE_D)
+    # gibbet: a bone post and arm with a skull swinging from it
+    rect(d, 22, 2, 24, 14, BONE_D)
+    rect(d, 22, 2, 22, 14, BONE)
+    d.line([23, 3, 29, 5], fill=BONE, width=2)
+    d.line([29, 5, 29, 9], fill=VOID, width=1)
+    d.ellipse([27, 9, 31, 13], fill=BONE, outline=BONE_D)
+    rect(d, 28, 10, 28, 11, VOID); rect(d, 30, 10, 30, 11, VOID)
+
+
+def draw_charnel_rack(d):
+    # The undead lumber camp: they are not cutting timber, they are stripping
+    # and stacking the dead. Keeps draw_lumber_camp's stacked-pile silhouette
+    # and lean-to shed so the building type is still readable, in bone and
+    # grave dirt rather than fresh-cut wood.
+    rect(d, 0, 0, 31, 31, GRAVE_DIRT)
+    scatter(d, 3307, 22, GRAVE_DIRT_D)
+    ground_shadow(d, 4, 27, 27, 3)
+    # Stacked long-bones seen SIDE-ON, in the same three receding rows as the
+    # logs. Drawn end-on first (a ring with a lit centre, mirroring the log
+    # pile's end grain) and it read as a heap of eyeballs at 32px — the pale
+    # ring around a paler middle is just too close to a pupil. Side-on with
+    # knuckled ends reads unmistakably as bone and keeps the woodpile mass.
+    for i, y in enumerate([22, 18, 14]):
+        off = i * 2
+        for x in range(5 + off, 25 - off, 7):
+            rect(d, x + 1, y + 1, x + 5, y + 3, BONE)          # shaft
+            rect(d, x + 1, y + 1, x + 5, y + 1, BONE_L)        # lit top
+            rect(d, x + 1, y + 3, x + 5, y + 3, BONE_D)        # underside
+            d.ellipse([x, y, x + 2, y + 4], fill=BONE, outline=BONE_D)      # knuckle
+            d.ellipse([x + 4, y, x + 6, y + 4], fill=BONE, outline=BONE_D)  # knuckle
+    # a drying rack where the sawyer's shed stands on the human version
+    shaded_box(d, 20, 6, 29, 18, GRAVE_DIRT)
+    rect(d, 20, 6, 29, 6, BONE_D)
+    for px in (21, 24, 27):
+        rect(d, px, 6, px, 18, BONE_D)
+    d.polygon([(18, 6), (31, 6), (31, 1)], fill=BONE_D)
+    d.polygon([(19, 6), (30, 6), (30, 3)], fill=BONE)
+    # a skull hung on the rack
+    d.ellipse([23, 8, 27, 12], fill=BONE, outline=BONE_D)
+    rect(d, 24, 9, 24, 10, VOID); rect(d, 26, 9, 26, 10, VOID)
+
+
 DRAWERS = [
     ("grass", draw_grass),
     ("forest", draw_forest),
@@ -2364,6 +2587,13 @@ DRAWERS = [
     ("tribe_hut", draw_tribe_hut),
     ("tribe_totem", draw_tribe_totem),
     ("tribe_worker", draw_tribe_worker),
+    ("crypt_wall", draw_crypt_wall),
+    ("corpse_field", draw_corpse_field),
+    ("bone_quarry", draw_bone_quarry),
+    ("charnel_rack", draw_charnel_rack),
+    ("crypt_wall_v", draw_crypt_wall_v),
+    ("crypt_wall_corner", draw_crypt_wall_corner),
+    ("bone_fence", draw_bone_fence),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

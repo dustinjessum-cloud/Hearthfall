@@ -912,6 +912,7 @@ function buildPanelMarkup(panel, type, ref){
           <button class="tradeBtn" id="buy_stone"></button>
           <button class="tradeBtn" id="buy_food"></button>` : ''}
         ${STORAGE_LEVELS[ref.type] ? `<div id="infoStorage" style="margin-top:4px;color:#d8c79a;"></div><button id="upgradeBtn"></button>` : ''}
+        ${(WALL_UPGRADE && ref.type==='wall') ? `<div id="infoWallTier" style="margin-top:4px;color:#d8c79a;"></div>${ref.boneWall ? '' : `<button id="boneWallBtn"></button>`}` : ''}
         ${(ref.type==='barracks' || ref.type==='town_hall_core') ? `<div id="prodStatus" style="margin-top:4px;color:#d8c79a;"></div>` : ''}
         ${ref.type==='town_hall_core' ? `<div id="infoTC" style="margin-top:4px;color:#d8c79a;"></div><div id="infoGarrisonTC" style="margin-top:4px;color:#d8c79a;"></div><button id="tcUpgradeBtn"></button><button id="trainVillagerBtn"></button>${state.faction==='tribe' ? `<button id="trainForesterBtn"></button>` : ''}<button id="captainBtn"></button><button id="releaseBtn"></button>` : ''}
         ${ref.type==='barracks' ? `<button id="trainBtn"></button><button id="trainSwordBtn"></button>
@@ -934,6 +935,10 @@ function buildPanelMarkup(panel, type, ref){
       }
       if(STORAGE_LEVELS[ref.type]){
         document.getElementById('upgradeBtn').addEventListener('click', ()=> upgradeStorageBuilding(ref));
+      }
+      const bwBtn = document.getElementById('boneWallBtn');
+      if(bwBtn){
+        bwBtn.addEventListener('click', ()=>{ if(upgradeWall(ref)) refreshInfoPanel(); });
       }
       if(ref.type==='mason'){
         document.getElementById('trainRepBtn').addEventListener('click', ()=> trainRepairman(ref));
@@ -1235,6 +1240,21 @@ function updatePanelLive(type, ref){
     const lvl = ref.level || 1;
     const stEl = document.getElementById('infoStorage');
     if(stEl) stEl.textContent = `Level ${lvl} — +${conf.bonus[lvl-1]} ${ref.type==='granary'?'food':'wood & stone'} storage`;
+    const wtEl = document.getElementById('infoWallTier');
+    if(wtEl && WALL_UPGRADE){
+      wtEl.textContent = ref.boneWall ? `${WALL_UPGRADE.name} — reinforced`
+        : (ref.upgradeMs > 0 ? `${WALL_UPGRADE.name} rising — ${Math.ceil(ref.upgradeMs/1000)}s`
+                             : `${BUILD_DEFS.wall.name} — can be reinforced with bone`);
+    }
+    const bwb = document.getElementById('boneWallBtn');
+    if(bwb && WALL_UPGRADE){
+      const affordable = Object.keys(WALL_UPGRADE.cost)
+        .every(k => (state.resources[k]||0) >= WALL_UPGRADE.cost[k]);
+      bwb.disabled = !canUpgradeWall(ref) || !affordable;
+      bwb.textContent = ref.upgradeMs > 0
+        ? `Reinforcing... ${Math.ceil(ref.upgradeMs/1000)}s`
+        : `Reinforce to ${WALL_UPGRADE.name} (${fmtCost(WALL_UPGRADE.cost)})`;
+    }
     const upBtn = document.getElementById('upgradeBtn');
     if(upBtn){
       if(underConstruction(ref)){

@@ -349,7 +349,10 @@ function applyFaction(faction){
   if(faction !== 'swarm') return;
 
   // -- building roster: rename/re-cost the types the undead keep --
-  BUILD_DEFS.lumber_camp = { name:'Charnel Pit', cost:{food:15}, hp:50, frame:'lumber_camp', tint:0x9aae78, produces:{food:4}, needsWorker:true, bonusNear:'forest' };
+  // Its own art now, not a green-tinted human lumber camp. The charnel rack
+  // IS a rack of stacked bone, which is what a Charnel Pit is — so the tint
+  // hack goes with it (a tint over timber never stopped reading as timber).
+  BUILD_DEFS.lumber_camp = { name:'Charnel Pit', cost:{food:15}, hp:50, frame:'charnel_rack', produces:{food:4}, needsWorker:true, bonusNear:'forest' };
   BUILD_DEFS.granary     = { name:'Ossuary', cost:{food:25}, hp:80, frame:'granary', tint:0x9aae78, nearTC:true };
   BUILD_DEFS.barracks    = { name:'Mass Grave', cost:{food:35}, hp:100, frame:'graveyard', trains:'archer' }; // dedicated graveyard sprite, baked colors — no tint
   BUILD_DEFS.tower       = { name:'Bone Spire', cost:{food:30}, hp:150, frame:'bone_spire', blocksPath:true, garrison:true, attack:{range:4.2,damage:7,damageLow:4,cooldownMs:900} }; // dedicated bone-spire sprite, baked colors — no tint
@@ -366,6 +369,23 @@ function applyFaction(faction){
   // forward camp you sneak next to a battlefield.
   BUILD_DEFS.ritual_pit  = { name:'Ritual Pit', cost:{food:40, bone:25}, hp:90,
                              frame:'ritual_pit', nearTC:true };
+  // -- walls, in two tiers --
+  // The undead had NO wall at all before this: their defense tab was tower,
+  // barracks, ritual pit. The Bone Fence is a cheap lashed-femur palisade they
+  // can throw up early on carrion alone; it is deliberately flimsy, because
+  // the point of it is to be upgraded. One frame serves all three variants —
+  // a scrappy palisade has no courses to line up.
+  BUILD_DEFS.wall = { name:'Bone Fence', cost:{food:8}, hp:70, frame:'bone_fence',
+                      variants:{ straight:'bone_fence', vert:'bone_fence', corner:'bone_fence' },
+                      blocksPath:true };
+  // ...and the tier it becomes. Paid PER SEGMENT in bone, so a long screen can
+  // be part fence and part crypt and the bone goes where you expect the blow.
+  // Bone is their scarcest resource (one Bone Yard, on a rare pile, reachable
+  // only by pushing blight), which is what makes a fully-crypted wall a
+  // statement rather than a default.
+  WALL_UPGRADE = { name:'Crypt Wall', cost:{bone:12}, ms:9000, hp:180,
+                   variants:{ straight:'crypt_wall', vert:'crypt_wall_v', corner:'crypt_wall_corner' } };
+
   BUILD_TIME.bone_yard  = 9000;
   BUILD_TIME.ritual_pit = 14000;
   BUILD_TIME.creep_tumor = 5000;
@@ -375,7 +395,7 @@ function applyFaction(faction){
   BUILD_CATEGORIES.splice(0, BUILD_CATEGORIES.length,
     { key:'economy', label:'Blight',   types:['lumber_camp','creep_tumor','road','wildstone_refinery','bone_yard'] },
     { key:'trade',   label:'Storage',  types:['granary'] },
-    { key:'defense', label:'Undead',   types:['tower','barracks','ritual_pit'] },
+    { key:'defense', label:'Undead',   types:['wall','tower','barracks','ritual_pit'] },
   );
 
   // -- unit costs collapse to pure biomass --

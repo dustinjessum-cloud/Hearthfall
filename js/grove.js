@@ -359,7 +359,11 @@ const COLLAR_PALETTE = { dark: 0x54402a, mid: 0x74583a, light: 0x967650 };
 
 function drawGroveRoots(){
   if(!scene || !scene.add) return;
-  if(!scene._rootGfx) scene._rootGfx = scene.add.graphics().setDepth(1);
+  // Below DEPTH.building on purpose — see the note on DEPTH in content.js.
+  // Roots and collars tuck UNDER the structures they reach; they show only
+  // where the sprite is transparent, which for a tree is either side of the
+  // trunk, exactly where a root swell belongs.
+  if(!scene._rootGfx) scene._rootGfx = scene.add.graphics().setDepth(DEPTH.roots);
   const g = scene._rootGfx;
   g.clear();
   const ROOT_D = ROOT_PALETTE.dark, ROOT = ROOT_PALETTE.mid, ROOT_L = ROOT_PALETTE.light;
@@ -493,8 +497,13 @@ function applyGroveFaction(){
   BUILD_DEFS.tower       = { name:'Bramble Spire', cost:{wood:26}, hp:130, frame:'grove_spire',
                              blocksPath:true, garrison:true,
                              attack:{ range:4.0, damage:6, damageLow:4, cooldownMs:950 } };
-  BUILD_DEFS.granary     = { name:'Hollow', cost:{wood:22}, hp:80, frame:'tribe_cache', nearTC:true };
-  BUILD_DEFS.warehouse   = { name:'Deep Hollow', cost:{wood:28}, hp:80, frame:'tribe_stock', nearTC:true };
+  // The Grove does not stack crates in a yard — it keeps things in the hill.
+  // These wore the tribe's basket platform and hide-covered stockpile, which
+  // read as a camp belonging to a different faction sitting in the middle of
+  // a forest. They are now cave mouths: boulders shouldering the opening,
+  // vines over it, moss on the crown.
+  BUILD_DEFS.granary     = { name:'Hollow', cost:{wood:22}, hp:80, frame:'grove_hollow', nearTC:true };
+  BUILD_DEFS.warehouse   = { name:'Deep Hollow', cost:{wood:28}, hp:80, frame:'grove_deep_hollow', nearTC:true };
   BUILD_DEFS.wall        = { name:'Thicket', cost:{wood:5}, hp:90, frame:'grove_thicket',
                              variants:{ straight:'grove_thicket', vert:'grove_thicket', corner:'grove_thicket' },
                              blocksPath:true };

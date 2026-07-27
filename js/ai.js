@@ -456,7 +456,10 @@ function spawnAiWorker(gx, gy){
   // away. Keyed off faction, not race, since tribe and grove share a race.
   const AI_WORKER_FRAME = { human:'villager', swarm:'ghoul', tribe:'tribe_worker', grove:'grove_ent' };
   const frame = AI_WORKER_FRAME[aiTownFaction()] || 'villager';
-  e.sprite = scene.add.image(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2, 'tiles', FRAME[frame]);
+  // DEPTH.unit, not the implicit 0 this used to get: on 0 an enemy worker
+  // walking behind one of its own structures disappeared into it.
+  e.sprite = scene.add.image(e.gx*TILE+TILE/2, e.gy*TILE+TILE/2, 'tiles', FRAME[frame])
+    .setDepth(DEPTH.unit);
   e.baseTint = 0xff9a7a;   // hostile wash so they never read as your own
   if(e.sprite.setTint) e.sprite.setTint(e.baseTint);
   e.hpBarBg = scene.add.rectangle(e.gx*TILE+TILE/2, e.gy*TILE-2, TILE-8, 4, 0x2a1c10).setDepth(5);

@@ -489,22 +489,23 @@ function addResource(key, amt){
 // three-stage building evolution: upgrades physically change the sprite,
 // like a pokemon line — new sacks and gilt on storage, towers on the keep
 function evolutionFrameFor(b){
-  const lvl = b.level || 1;
   // YOUR buildings only. The enemy core carries isCore too, and its art comes
-  // from AI_BUILD_DEFS through aiDef() — but every branch below reads
-  // state.faction, i.e. the PLAYER's faction. Without this guard the restore
-  // pass (save.js calls refreshEvolution on every rebuilt building) stamped
-  // your core's sprite onto theirs: an undead enemy's crypt came back from a
-  // reload as a human town hall, and a human enemy's town hall came back as a
-  // crypt. It bit the enemy's whole roster the moment they stopped being
-  // one of two fixed skins.
+  // from AI_BUILD_DEFS through aiDef() — but this reads factionDef(), i.e. the
+  // PLAYER's faction. Without this guard the restore pass (save.js calls
+  // refreshEvolution on every rebuilt building) stamped your core's sprite
+  // onto theirs: an undead enemy's crypt came back from a reload as a human
+  // town hall, and a human enemy's town hall came back as a crypt. It bit the
+  // enemy's whole roster the moment they stopped being one of two fixed skins.
   if(!isMine(b)) return null;
-  // the undead core is the crypt at every level — the human town-hall tiers
-  // would otherwise get re-set onto it when it upgrades
-  if(b.isCore && state.faction==='swarm') return 'crypt';
-  if(b.isCore) return lvl >= 3 ? 'town_hall_3' : (lvl === 2 ? 'town_hall_2' : 'town_hall');
-  if(b.type==='granary') return lvl >= 4 ? 'granary_3' : (lvl >= 2 ? 'granary_2' : 'granary');
-  if(b.type==='warehouse') return lvl >= 4 ? 'warehouse_3' : (lvl >= 2 ? 'warehouse_2' : 'warehouse');
+  // The ladders live in FACTION_DEFS.evolutionFrames so every faction has to
+  // STATE its upgrade art. This used to be a chain of ifs that special-cased
+  // the undead core and then fell through to the human tiers for everyone
+  // else, which is why an upgraded Heartwood became a town hall and an
+  // upgraded Hollow or tribe Cache became a human granary.
+  const ladder = factionDef().evolutionFrames[b.isCore ? 'core' : b.type];
+  if(!ladder) return null;
+  const lvl = b.level || 1;
+  for(const [minLevel, frame] of ladder) if(lvl >= minLevel) return frame;
   return null;
 }
 function refreshEvolution(b){
@@ -711,7 +712,7 @@ function createBuilding(type, gx, gy, override, owner){
     if(typeof startRootTo === 'function' && !startRootTo(b)) b.groveRootFailed = true;
   }
   const px = gx*TILE + size*TILE/2, py = gy*TILE + size*TILE/2;
-  b.sprite = scene.add.image(px, py, 'tiles', FRAME[def.frame]);
+  b.sprite = scene.add.image(px, py, 'tiles', FRAME[def.frame]).setDepth(DEPTH.building);
   if(def.tint && b.sprite.setTint) b.sprite.setTint(def.tint); // reused frames get a signature tint
   if(size>1 && b.sprite.setDisplaySize) b.sprite.setDisplaySize(size*TILE, size*TILE);
   b.hpBarBg = scene.add.rectangle(px, gy*TILE+2, size*TILE-6, 4, 0x2a1c10).setDepth(5);

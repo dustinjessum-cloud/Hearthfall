@@ -9,8 +9,11 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 17  # 6x17 = 102 slots (grew from 6x15 for the Grove roster)
-           # headroom on purpose so the rest of the tribe needs no regrow)
+ROWS = 18  # 6x18 = 108 slots (6x15 -> 6x17 for the Grove roster, -> 6x18 for
+           # the Heartwood's upgrade tiers and the Hollows). MUST move in
+           # lockstep with `rows` in setupFrames() in main.js — the sheet and
+           # the frame indices are two halves of one number, and changing one
+           # alone silently reads garbage off the end of the texture.
 
 frames = {}
 order = []
@@ -40,6 +43,19 @@ def scatter(d, seed, n, color, size=1):
     for _ in range(n):
         x = next(g) % (TILE - size + 1)
         y = next(g) % (TILE - size + 1)
+        rect(d, x, y, x+size-1, y+size-1, color)
+
+def scatter_in(d, seed, n, color, box, size=1):
+    """scatter() confined to a box. The whole-tile version is right for ground
+    tiles, which are opaque corner to corner — but the Grove's structures are
+    drawn over the terrain on a TRANSPARENT background, so an unbounded
+    scatter leaves grain hanging in mid-air beside the canopy. Pass the
+    foliage's bounding box and the grain stays on the leaves."""
+    x0, y0, x1, y1 = box
+    g = _prng(seed)
+    for _ in range(n):
+        x = x0 + next(g) % max(1, x1 - x0 - size + 2)
+        y = y0 + next(g) % max(1, y1 - y0 - size + 2)
         rect(d, x, y, x+size-1, y+size-1, color)
 
 # ---- palette ----
@@ -2493,6 +2509,256 @@ def draw_charnel_rack(d):
     rect(d, 24, 9, 24, 10, VOID); rect(d, 26, 9, 26, 10, VOID)
 
 
+# ---- The Grove: the Heartwood's later ages -----------------------------
+# The Heartwood is the only Grove structure that keeps growing, and it is the
+# one you spend resources to UPGRADE. It had no art past level 1, so
+# evolutionFrameFor's human fall-through re-skinned an upgraded Heartwood as a
+# town hall — a stone keep sprouting in the middle of a forest faction.
+#
+# The three ages deliberately SHARE a silhouette (central trunk, layered
+# canopy, hollow at the foot) and escalate on four axes, so the tier is
+# readable at a glance without the tree turning into a different plant:
+#   root flare — reaches further and grips harder
+#   trunk      — thicker, and buttressed lower
+#   canopy     — taller and denser, gaining a crown
+#   the hollow — dark at first, then lit, then burning
+# The last is the one that carries at true size: a 2x2 tree is mostly canopy,
+# and canopy mass alone is a weak read between adjacent tiers.
+GV_BLOOM, GV_BLOOM_D = (246, 238, 212), (198, 186, 144)
+GV_GLOW, GV_GLOW_D = (255, 212, 120), (196, 138, 56)
+
+def _gv_roots(d, runs):
+    """Exposed roots gripping the ground: a dark limb with a lit top edge."""
+    for x0, y0, x1, y1 in runs:
+        d.line([x0, y0, x1, y1], fill=GV_BARK_D, width=2)
+        d.line([x0, y0-1, x1, y1-1], fill=GV_BARK, width=1)
+
+def _gv_trunk(d, x0, x1, ytop, foot):
+    """Buttressed trunk: a column that flares into a wider foot. `foot` is how
+    many pixels the base widens on each side.
+
+    The flare is a TAPER, not a rectangle. Drawn as a wider box bolted across
+    the bottom of the column it read as two brown blocks stuck to the front of
+    the tree rather than as roots spreading out of it."""
+    rect(d, x0, ytop, x1, 28, GV_BARK)
+    d.polygon([(x0, 21), (x0-foot, 28), (x1+foot, 28), (x1, 21)], fill=GV_BARK)
+    d.polygon([(x0, 21), (x0-foot, 28), (x0+1, 28)], fill=GV_BARK_L)
+    d.polygon([(x1, 21), (x1+foot, 28), (x1-1, 28)], fill=GV_BARK_D)
+    rect(d, x0, ytop, x0+1, 28, GV_BARK_L)
+    rect(d, x1-1, ytop, x1, 28, GV_BARK_D)
+    for gy in range(ytop+3, 21, 4):
+        rect(d, x0+2, gy, x1-2, gy, GV_BARK_D)
+
+def _gv_hollow(d, x0, y0, x1, y1, glow=None):
+    """The hollow at the Heartwood's foot — dark on the young tree, lit once
+    there is something alight in it."""
+    d.ellipse([x0, y0, x1, y1], fill=(34, 26, 18))
+    if not glow:
+        return
+    # Guard the insets: the third age opens a SECOND, much smaller hollow
+    # higher up the trunk, and blindly insetting it by 2 and 3 inverted the
+    # inner ellipse and threw out of PIL.
+    if x1-x0 >= 3 and y1-y0 >= 3:
+        d.ellipse([x0+1, y0+2, x1-1, y1-1], fill=GV_GLOW_D)
+    if x1-x0 >= 6 and y1-y0 >= 7:
+        d.ellipse([x0+2, y0+3, x1-2, y1-3], fill=glow)
+    else:
+        rect(d, (x0+x1)//2, (y0+y1)//2, (x0+x1)//2, (y0+y1)//2, glow)
+
+def _gv_bloom(d, spots):
+    """Pale blossom. Cream, not white: white reads as snow against these
+    greens, and not red, which this faction reserves for food."""
+    for bx, by in spots:
+        rect(d, bx, by, bx+1, by+1, GV_BLOOM_D)
+        rect(d, bx, by, bx, by, GV_BLOOM)
+
+def draw_grove_heart_2(d):
+    # Second age: the tree LIFTS. The first pass grew the canopy instead, and
+    # that read as nothing at all — level 1's canopy already fills the tile, so
+    # there is no room to grow into. What actually separates a young tree from
+    # an old one at 32px is how much TRUNK is showing: a sapling is a bush on a
+    # stick, an old tree is a column holding a crown up off the ground.
+    # So the canopy rises and flattens, and eight rows of bark appear.
+    ground_shadow(d, 1, 30, 28, 4)
+    _gv_roots(d, [(15,26, 2,30), (17,26, 30,30), (14,27, 6,31),
+                  (18,27, 26,31), (15,28, 10,31), (17,28, 22,31)])
+    _gv_trunk(d, 12, 19, 12, 3)
+    # broad, FLAT crown with boughs pushing out past it on both sides — a
+    # wider, lower silhouette than the young tree's tidy dome
+    _gv_canopy(d, 16, 8, 14, 7)
+    _gv_canopy(d, 4, 12, 7, 5)
+    _gv_canopy(d, 28, 12, 7, 5)
+    _gv_canopy(d, 6, 17, 4, 3)      # bough tips beginning to droop
+    _gv_canopy(d, 26, 17, 4, 3)
+    # the first light in the hollow — an ember, not a blaze
+    _gv_hollow(d, 13, 19, 19, 27, GV_GLOW)
+    scatter_in(d, 7761, 14, GV_LEAF_XL, (2, 2, 29, 16))
+    scatter_in(d, 7767, 8, GV_LEAF_D, (2, 3, 29, 17))
+
+def draw_grove_heart_3(d):
+    # Third age: the crown BREAKS UP. Two ages of one round mass would still
+    # read as one thing, so the oldest tree gets a notched, multi-lobed
+    # outline — the single most reliable read at any size is the silhouette —
+    # over a trunk that is now the widest thing on the tile, and a hollow that
+    # has gone from ember to open fire, spilling light onto its own roots.
+    ground_shadow(d, 0, 31, 27, 5)
+    _gv_roots(d, [(15,25, 0,29), (17,25, 31,29), (14,26, 3,31),
+                  (18,26, 29,31), (14,27, 8,31), (18,27, 24,31)])
+    _gv_trunk(d, 11, 20, 13, 5)
+    # lobed crown: a tall centre peak flanked by two lower shoulders, so the
+    # top edge is notched rather than a clean arc
+    _gv_canopy(d, 16, 6, 9, 6)
+    _gv_canopy(d, 7, 9, 7, 5)
+    _gv_canopy(d, 25, 9, 7, 5)
+    _gv_canopy(d, 16, 11, 15, 5)     # the spreading tier below them
+    _gv_canopy(d, 3, 15, 5, 4)       # boughs sweeping wide and down
+    _gv_canopy(d, 29, 15, 5, 4)
+    _gv_canopy(d, 6, 19, 4, 3)
+    _gv_canopy(d, 26, 19, 4, 3)
+    # the fire in the heart. A wider light spill on the ground turned the whole
+    # foot — roots, shadow and glow — into one orange smear, so it is kept to a
+    # single line right under the opening.
+    _gv_hollow(d, 12, 18, 20, 27, GV_GLOW)
+    rect(d, 14, 28, 18, 28, GV_GLOW_D)
+    # blossom, in CLUSTERS on the lit edge of each lobe. Scattered single
+    # pixels just read as dirt on the screen at true size.
+    _gv_bloom(d, [(11,3), (13,2), (5,8), (7,7), (23,7), (25,8),
+                  (2,14), (29,14), (17,2)])
+    scatter_in(d, 7773, 16, GV_LEAF_XL, (1, 1, 30, 20))
+    scatter_in(d, 7779, 10, GV_LEAF_D, (1, 2, 30, 21))
+
+# ---- The Grove: the Hollows --------------------------------------------
+# Storage. The Grove does not stack crates in a yard — it keeps things in the
+# hill, in a cave mouth the forest has already taken back: boulders
+# shouldering the opening, vines curtaining it, moss over the crown of rock.
+#
+# Two tiers of one idea, and they must not be confusable at 32px, so they
+# differ in SHAPE rather than in size:
+#   Hollow      — a low wide dome, one clean arch, and RED berries in the vine
+#                 (red is the Grove's food colour and appears nowhere else)
+#   Deep Hollow — an angular crag, the mouth a narrow slot with a second
+#                 shadow inside it so it reads as DEEP, and cut stone and cut
+#                 log stacked at the entrance for the two things it holds
+# Rock kept LIGHT on purpose. The first pass used a mid-grey body against a
+# near-black mouth and a near-black outer rim, and at true size the rim, the
+# mouth and the boulders' shadows all merged into one dark smear — the hole
+# stopped reading as a hole. The body is now well clear of the cave colour so
+# the opening is the darkest thing on the tile by a wide margin.
+GV_ROCK, GV_ROCK_D, GV_ROCK_L = (142, 139, 133), (106, 103, 99), (178, 175, 168)
+GV_ROCK_XD = (74, 72, 69)
+GV_CAVE, GV_CAVE_D = (38, 32, 26), (16, 13, 11)
+
+def _gv_boulder(d, x0, y0, x1, y1):
+    """A rounded rock lit from the top-left, matching the world's stone."""
+    d.ellipse([x0, y0, x1, y1], fill=GV_ROCK_D)
+    d.ellipse([x0, y0, x1-1, y1-1], fill=GV_ROCK)
+    d.ellipse([x0+1, y0+1, x0+(x1-x0)//2, y0+(y1-y0)//2], fill=GV_ROCK_L)
+
+def _gv_arch(d, x0, x1, ytop, ybot, fill):
+    """A rounded-top opening: a half dome capping a straight-sided shaft. Built
+    from two primitives rather than one ellipse so the sides stay parallel and
+    the mouth reads as cut INTO the rock instead of pasted onto it."""
+    r = (x1 - x0) // 2
+    d.ellipse([x0, ytop, x1, ytop + 2*r], fill=fill)
+    rect(d, x0, ytop + r, x1, ybot, fill)
+
+def _gv_fringe(d, x0, x1, y, seed, berry=None):
+    """A curtain of leaves hanging over an opening, drawn as overlapping 4px
+    clumps. The first pass used pixel-wide strands and they vanished outright
+    at true size — a vine has to be a SHAPE to survive 32px, not a line."""
+    g = _prng(seed)
+    x = x0
+    while x <= x1:
+        w = 3 + next(g) % 2
+        h = 3 + next(g) % 3
+        d.ellipse([x, y-3, x+w, y+h], fill=GV_LEAF_D)
+        d.ellipse([x, y-3, x+w-1, y+h-1], fill=GV_LEAF)
+        rect(d, x+1, y-2, x+1, y-1, GV_LEAF_L)
+        if berry and next(g) % 3 == 0:
+            rect(d, x+1, y+h+1, x+2, y+h+2, shade(berry, 0.7))
+            rect(d, x+1, y+h+1, x+1, y+h+1, berry)
+        x += w - 1
+
+def _gv_strand(d, x, y0, y1, seed):
+    """A single vine trailing down over the mouth, two pixels wide with a leaf
+    clump on the end so it terminates in something visible."""
+    g = _prng(seed)
+    px = x
+    for y in range(y0, y1+1):
+        if (y - y0) % 4 == 3:
+            px += (next(g) % 3) - 1
+        rect(d, px, y, px+1, y, GV_LEAF_D)
+        rect(d, px, y, px, y, GV_LEAF)
+    d.ellipse([px-1, y1, px+2, y1+3], fill=GV_LEAF_D)
+    d.ellipse([px-1, y1, px+1, y1+2], fill=GV_LEAF)
+
+def draw_grove_hollow(d):
+    # The Hollow: food. A low WIDE dome with one broad arch — the silhouette
+    # that has to stay distinct from the Deep Hollow's tall crag.
+    #
+    # Bare rock on top. A green moss cap with red berries in it turned the
+    # whole thing into a fruit tree growing out of a rock, which is the read
+    # the Fruiting Bough already owns; the two are told apart by SHAPE now.
+    # The vines stay, but only where they were asked for — over the entrance.
+    #
+    # No ground fill: every Grove structure is drawn OVER the terrain so the
+    # root network can run underneath it.
+    ground_shadow(d, 2, 30, 28, 4)
+    # Kept LOW and wide. Once the moss cap came off I raised the dome to fill
+    # the space it left, which made this nearly as tall as the Deep Hollow's
+    # crag — and with both now bare grey, height was the only thing still
+    # telling them apart.
+    d.ellipse([0, 9, 31, 34], fill=GV_ROCK_D)
+    d.ellipse([1, 10, 30, 33], fill=GV_ROCK)
+    d.ellipse([4, 12, 18, 22], fill=GV_ROCK_L)         # lit shoulder
+    for cx0, cy0, cx1, cy1 in [(5,15, 10,18), (21,13, 26,17), (13,11, 18,12)]:
+        d.line([cx0, cy0, cx1, cy1], fill=GV_ROCK_D)   # weathering, not moss
+    scatter_in(d, 8101, 14, GV_ROCK_L, (3, 11, 28, 19))
+    scatter_in(d, 8103, 10, GV_ROCK_D, (3, 12, 28, 21))
+    _gv_arch(d, 9, 23, 15, 31, GV_ROCK_XD)             # the mouth, cut in
+    _gv_arch(d, 11, 21, 17, 31, GV_CAVE)
+    _gv_arch(d, 13, 19, 21, 31, GV_CAVE_D)
+    rect(d, 11, 22, 11, 31, shade(GV_ROCK_XD, 1.25))   # lit inner lip, left
+    _gv_boulder(d, 0, 20, 10, 31)                      # shouldering the arch
+    _gv_boulder(d, 22, 21, 31, 31)
+    _gv_boulder(d, 25, 13, 31, 21)
+    _gv_fringe(d, 8, 23, 16, 8111)                     # vines over the mouth
+    _gv_strand(d, 12, 18, 23, 8117)
+    _gv_strand(d, 20, 18, 21, 8123)
+
+def draw_grove_deep_hollow(d):
+    # The Deep Hollow: timber and stone. A TALL angular crag where the Hollow
+    # is a low dome, and a narrow slot where the Hollow is a broad arch — the
+    # two are told apart by outline alone, which is the only thing that
+    # reliably survives at this size.
+    ground_shadow(d, 1, 31, 28, 4)
+    # Leaned and asymmetric. A symmetrical crag with full-width horizontal
+    # bedding lines and stacked cut blocks at its foot read as MASONRY — a
+    # built stone gateway, which is the one thing this faction never does. The
+    # outline is now off-centre and the cracks are short and irregular.
+    d.polygon([(1,31), (3,17), (7,6), (14,1), (21,3), (27,10), (30,19), (31,31)], fill=GV_ROCK_D)
+    d.polygon([(4,31), (5,18), (9,8), (15,3), (20,5), (25,12), (27,20), (29,31)], fill=GV_ROCK)
+    d.polygon([(6,26), (7,18), (10,9), (15,5), (17,11), (12,18), (10,26)], fill=GV_ROCK_L)
+    for cx0, cy0, cx1, cy1 in [(7,20, 11,23), (22,14, 26,19), (6,13, 9,15), (24,24, 28,27)]:
+        d.line([cx0, cy0, cx1, cy1], fill=GV_ROCK_XD)
+    scatter_in(d, 8151, 12, GV_ROCK_L, (5, 4, 27, 16))  # bare rock on the crown
+    scatter_in(d, 8153, 8, GV_ROCK_XD, (5, 6, 27, 18))
+    _gv_arch(d, 11, 21, 13, 31, GV_ROCK_XD)            # a narrow, tall slot
+    _gv_arch(d, 13, 19, 16, 31, GV_CAVE)
+    _gv_arch(d, 15, 18, 21, 31, GV_CAVE_D)
+    rect(d, 13, 20, 13, 31, shade(GV_ROCK_XD, 1.25))   # lit inner lip
+    _gv_boulder(d, 0, 20, 8, 30)                       # tumbled spoil, not
+    _gv_boulder(d, 2, 25, 11, 31)                      # dressed courses
+    _gv_boulder(d, 23, 24, 31, 31)
+    for lx, ly in ((23, 18), (27, 21)):                # cut log ends: the wood
+        d.ellipse([lx, ly, lx+6, ly+6], fill=GV_BARK_D)
+        d.ellipse([lx+1, ly+1, lx+5, ly+5], fill=GV_BARK)
+        rect(d, lx+3, ly+3, lx+4, ly+4, GV_BARK_L)
+    _gv_fringe(d, 9, 23, 14, 8131)                     # heavier curtain
+    _gv_strand(d, 14, 16, 22, 8137)
+    _gv_strand(d, 19, 16, 20, 8143)
+
+
 DRAWERS = [
     ("grass", draw_grass),
     ("forest", draw_forest),
@@ -2594,6 +2860,13 @@ DRAWERS = [
     ("crypt_wall_v", draw_crypt_wall_v),
     ("crypt_wall_corner", draw_crypt_wall_corner),
     ("bone_fence", draw_bone_fence),
+    # Appended, never inserted: FRAME in content.js is generated from this
+    # order, so a sprite added mid-list shifts every index after it and the
+    # stale entries render the WRONG sprite rather than failing.
+    ("grove_heart_2", draw_grove_heart_2),
+    ("grove_heart_3", draw_grove_heart_3),
+    ("grove_hollow", draw_grove_hollow),
+    ("grove_deep_hollow", draw_grove_deep_hollow),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

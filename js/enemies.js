@@ -81,7 +81,8 @@ function spawnBanditCamps(){
       id: enemyIdCounter++, gx, gy, hp:BANDIT_CAMP.hp, maxHp:BANDIT_CAMP.hp, dmg:0,
       kind:'camp', speedMult:0, path:null, pathIdx:0, lastMoveAt:0, lastAttackAt:0, target:null,
     };
-    e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME.bandit_camp); // own sprite now — was a tinted wall gate
+    e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME.bandit_camp)
+      .setDepth(DEPTH.building); // own sprite now — was a tinted wall gate
     e.hpBarBg = scene.add.rectangle(gx*TILE+TILE/2, gy*TILE-2, TILE-8, 4, 0x2a1c10).setDepth(5);
     e.hpBarFg = scene.add.rectangle(gx*TILE+4, gy*TILE-2, TILE-8, 4, 0xd85a3a).setOrigin(0,0.5).setDepth(6);
     state.enemies.push(e);
@@ -139,7 +140,8 @@ function spawnEnemy(hp, dmg, wave, kind, at, opts){
     race, ranged, speedMult: spd,
     path: null, pathIdx: 0, lastMoveAt:0, lastAttackAt:0, target:null,
   };
-  e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME[frame]);
+  e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME[frame])
+    .setDepth(DEPTH.unit);
   // trolls loom; hobgoblins are a touch smaller — sizes come from the race def
   if(rc && !ranged && rc.meleeSize && rc.meleeSize!==1 && e.sprite.setScale) e.sprite.setScale(rc.meleeSize);
   else if(rc && ranged && rc.rangedSize && rc.rangedSize!==1 && e.sprite.setScale) e.sprite.setScale(rc.rangedSize);

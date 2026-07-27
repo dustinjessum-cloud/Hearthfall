@@ -42,7 +42,10 @@ class MainScene extends Phaser.Scene {
   }
 
   setupFrames(texture){
-    const cols=6, rows=17, size=32;
+    // MUST match COLS/ROWS in gen_sprites.py. The sheet and these indices are
+    // two halves of one number: bump one without the other and every frame
+    // past the old end silently reads garbage off the texture.
+    const cols=6, rows=18, size=32;
     let idx=0;
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){
@@ -373,7 +376,11 @@ class MainScene extends Phaser.Scene {
     if(!def) return;
     const valid = isPlacementValid(state.buildMode, gx, gy);
     if(!this.ghost){
-      this.ghost = this.add.image(0,0,'tiles', FRAME[def.frame]).setAlpha(0.75);
+      // Explicitly above buildings: the ghost used to sit on depth 0 with them
+      // and won only because it was created last. It has to be visible over
+      // whatever you are about to build next to.
+      this.ghost = this.add.image(0,0,'tiles', FRAME[def.frame])
+        .setAlpha(0.75).setDepth(DEPTH.ghost);
     }
     if(inBounds(gx,gy)){
       this.ghost.setVisible(true);

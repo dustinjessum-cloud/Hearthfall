@@ -26,9 +26,8 @@ PIL) into a spritesheet that is base64-embedded into `js/content.js`.
 for a rich neutral zone → raze their Town Hall to win.
 
 **The enemy town plays one of the four factions too**, drawn at world creation
-and never your own — and an undead or Grove enemy plays by that faction's own
-rules, not a reskinned human one. See below. None of it has been seen in a
-real playthrough yet.
+and never your own — and it plays by that faction's own rules, not a reskinned
+human one. See below. None of it has been seen in a real playthrough yet.
 
 ---
 
@@ -121,9 +120,9 @@ Plays one of the four factions, drawn per run, never your own. It builds,
 trains and looks like that faction. Tribe and Grove reuse exactly the frames
 those factions use for themselves, placeholders included.
 
-**Undead and Grove enemies play by their own rules.** Per-faction behaviour
-lives in `AI_FACTION_RULES` in `ai.js` rather than in scattered
-`aiTownFaction()==='swarm'` branches:
+**All four play by their own rules.** Per-faction behaviour lives in
+`AI_FACTION_RULES` in `ai.js` rather than in scattered
+`aiTownFaction()==='swarm'` branches — human is the baseline profile:
 
 - **Undead** — carrion is its only resource (a `costMap` collapses wood and
   stone into food, and its workers render forest rather than cutting timber);
@@ -136,13 +135,19 @@ lives in `AI_FACTION_RULES` in `ai.js` rather than in scattered
   structures that fail to root at birth retry as the network grows toward
   them, while ones whose root was CUT stay cut. Cutting its trunk cascades
   against it exactly as it does against you.
-- **Tribe** — still on the human profile. Hunting is the last piece (step 4).
+- **Tribe** — food is hunted, not farmed: a camp feeds nobody unless its
+  hunter is out on live forest within `HUNT.radius`, and camps are sited to
+  have a treeline. Their timber and their dinner are the same finite
+  resource, so they replant — but only at a camp whose treeline has actually
+  thinned, or it becomes afforestation rather than restoration.
 
 `state.creep` and `state.groveRoots` are each shared by whichever side is
 using them, which is only safe because **a mirror match cannot happen** — the
 enemy's faction is drawn from the three you are not playing, so at most one
 side is ever undead and at most one is ever Grove. Add a mirror mode and both
-become two networks in one container.
+become two networks in one container. `state.saplings` is different: it is
+shared TERRAIN — a planted tree becomes forest either side can use — so it
+runs whenever anyone is Tribe.
 
 Raid waves are a **separate system** and still use the old `oppositeRace()`
 troll/undead logic rather than following the AI's drawn faction. Left alone
@@ -166,26 +171,24 @@ deliberately so tuned raid balance was not disturbed.
    only counterplay. An undead enemy's single-resource economy never hits the
    have-wood-need-stone stalls that gate the others. **Play a run and export
    the log before tuning any of this.**
-3. **Tribe AI mechanics** (step 4) — hunting camps and Foresters. The last of
-   the four; the scaffolding and rules table are already in place for it.
-4. **The Heartwood cannot grow past Ancient.**
+3. **The Heartwood cannot grow past Ancient.**
    `groveMaxStage()` computes `min(heartwoodMaxStage: 5, stages.length-1: 3)`
    = 3, identical to the ordinary cap. It maxes out 45s in, so "the oldest
    tree is always the heart" is unimplemented. Needs two more stage entries.
-5. **The Grove's second Ent is unaffordable when it matters.** 60 food + 40
+4. **The Grove's second Ent is unaffordable when it matters.** 60 food + 40
    wood; in a recorded run both were first affordable at t=210 — the exact
    moment wave 1 landed. The faction played the whole run on one unit and lost
    it to the first raid.
-6. **The Grove's stone is unspendable.** Stonebark produces it; every Grove
+5. **The Grove's stone is unspendable.** Stonebark produces it; every Grove
    building costs wood only.
-7. **Undead wood and stone are dead resources** — should be hidden from their HUD.
-8. **Every undead building consumes a drone**, so population oscillates while
+6. **Undead wood and stone are dead resources** — should be hidden from their HUD.
+7. **Every undead building consumes a drone**, so population oscillates while
    the cap climbs. The faction can't grow.
-9. **`updateUnits()` is still ~300 lines** of interleaved movement/gather/
+8. **`updateUnits()` is still ~300 lines** of interleaved movement/gather/
    build/combat. The remaining big refactor. Use brace-MATCHED extraction,
    never hardcoded line numbers.
-10. **No sound at all.** Biggest perceived-quality gap.
-11. Grove's Heartroot, Stonebark and Thornhall still wear tribe art (the
+9. **No sound at all.** Biggest perceived-quality gap.
+10. Grove's Heartroot, Stonebark and Thornhall still wear tribe art (the
     player's versions do too, so at least they match).
 
 ---

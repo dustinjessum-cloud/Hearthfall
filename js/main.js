@@ -562,7 +562,13 @@ class MainScene extends Phaser.Scene {
 
     aiThink(delta);         // their economy: train, gather, build, expand
     if(state.faction==='tribe'){ updateForesters(delta); updateSaplings(delta); updateHunters(delta); }
-    if(state.faction==='grove'){ updateGroveRoots(delta); updateGroveGrowth(delta); }
+    // Runs for whichever side is playing Grove, not just you. Gated on
+    // state.faction here, an ENEMY grove's roots never advanced: 26 of them
+    // sat at progress 0 forever, so 30 of its 31 structures stayed severed
+    // Seeds and its economy never started.
+    if(typeof groveActive === 'function' && groveActive()){
+      updateGroveRoots(delta); updateGroveGrowth(delta);
+    }
     updateHeroSpells(delta);
     updateRootedEnemies(delta);
     updateTelemetry(delta);

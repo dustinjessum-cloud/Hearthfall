@@ -85,15 +85,34 @@ const GROVE = {
 };
 
 // ---- the network -----------------------------------------------------
+// WHICH SIDE is playing the Grove — you, the enemy town, or nobody.
+//
+// At most one ever is: the enemy's faction is drawn from the three you are
+// not playing, so a grove-vs-grove mirror cannot happen and there is only
+// ever ONE root network on the map. That is what lets state.groveRoots stay a
+// single flat list with no owner stamped on each root, exactly as state.creep
+// is shared by whichever side is undead. If a mirror mode is ever added, both
+// of those become two networks sharing one container and will need splitting.
+function groveOwner(){
+  if(state.faction === 'grove') return OWNER_PLAYER;
+  if(typeof aiTownFaction === 'function' && aiTownFaction() === 'grove') return OWNER_AI;
+  return null;
+}
+function groveActive(){ return groveOwner() !== null; }
+
 // Membership is derived, never stored: a structure is connected if a chain
 // of live roots reaches the Heartwood. Recomputing means a severed limb goes
 // dormant the instant the trunk dies, with no bookkeeping to get wrong.
 function groveHeartwood(){
-  return state.buildings.find(b => b.isCore && isMine(b) && b.hp > 0) || null;
+  const o = groveOwner();
+  if(!o) return null;
+  return state.buildings.find(b => b.isCore && (b.owner || OWNER_PLAYER) === o && b.hp > 0) || null;
 }
 
 function groveStructures(){
-  return myBuildings().filter(b => b.hp > 0);
+  const o = groveOwner();
+  if(!o) return [];
+  return buildingsOf(o).filter(b => b.hp > 0);
 }
 
 // Membership is computed in groveConnectedIds(), below the root section —
@@ -114,7 +133,7 @@ function groveMaxStage(b){
 // stop producing, it stops growing — so severing is a real setback, not a
 // pause.
 function updateGroveGrowth(delta){
-  if(state.faction !== 'grove') return;
+  if(!groveActive()) return;
   const connected = groveConnectedIds();
   for(const b of groveStructures()){
     if(underConstruction(b)) continue;
@@ -267,8 +286,29 @@ function rootPointAt(r, t){
   return [px + nx*w*amp, py + ny*w*amp];
 }
 
+// A structure that was out of root reach when it was raised gets another go
+// as the network grows toward it. ONLY those: a structure whose root was cut
+// stays cut, or severing would heal itself and the whole mechanic would mean
+// nothing. The flag is set once at creation and cleared the moment a root
+// takes, so this is a no-op in the normal case.
+//
+// It matters most for the enemy town, whose 29-building opening plan is laid
+// out before any network exists — four of its structures were dead Seeds on
+// day one and stayed that way for the entire run. It helps you too: placing a
+// Bough just past the edge used to leave you a building that could never
+// wake, with nothing to say why.
+function retryUnrootedGrove(){
+  const owner = groveOwner();
+  if(!owner) return;
+  for(const b of groveStructures()){
+    if(!b.groveRootFailed || b.isCore || b.hp <= 0) continue;
+    if(startRootTo(b)) b.groveRootFailed = false;
+  }
+}
+
 function updateGroveRoots(delta){
-  if(state.faction !== 'grove') return;
+  if(!groveActive()) return;
+  retryUnrootedGrove();
   const roots = state.groveRoots || [];
   for(const r of roots){
     const to = buildingById(r.toId);
@@ -380,16 +420,28 @@ function drawGroveRoots(){
 // Called from the economy tick. No gatherers: a connected, grown structure
 // simply pays out, scaled by its stage and by whether a Sprout is tending it.
 function groveEconomyTick(){
-  if(state.faction !== 'grove') return;
+  const owner = groveOwner();
+  if(!owner) return;
+  const forAi = (owner === OWNER_AI);
   const connected = groveConnectedIds();
+  // Whoever is tending. Yours are villagers (Ents are villagers under the
+  // hood); the enemy town's are ai_worker entities in state.enemies. Both get
+  // the same proximity bonus, because tending is a property of the faction,
+  // not of who is playing it.
+  //
   // Grove workers are created through createVillager, so their type is
   // 'villager' — this filtered on 'sprout', a type that never existed, so the
   // tend bonus had NEVER applied to anything.
-  const tenders = state.units.filter(u => u.type === 'villager' && u.hp > 0 && !u.inTC);
+  const tenders = forAi
+    ? state.enemies.filter(e => e.kind === 'ai_worker' && e.hp > 0)
+    : state.units.filter(u => u.type === 'villager' && u.hp > 0 && !u.inTC);
   for(const b of groveStructures()){
     if(underConstruction(b)) continue;
     if(!connected.has(b.id)) continue;             // severed: yields nothing
-    const def = BUILD_DEFS[b.type];
+    // The enemy town's roster lives in AI_BUILD_DEFS, not BUILD_DEFS, and its
+    // yields are stated there per ai_ type — looking it up in the player's
+    // table would silently find nothing and the AI grove would earn zero.
+    const def = forAi ? aiDef(b.aiType || b.type) : BUILD_DEFS[b.type];
     if(!def || !def.groveYield) continue;
     const st = groveStageDef(b);
     if(st.yieldMult <= 0) continue;                // a seed pays nothing
@@ -397,7 +449,12 @@ function groveEconomyTick(){
       Phaser.Math.Distance.Between(s.gx, s.gy, b.gx, b.gy) <= GROVE.tendRadius);
     const mult = st.yieldMult * (tended ? 1 + GROVE.tendBonus : 1);
     for(const k in def.groveYield){
-      addResource(k, def.groveYield[k] * mult);
+      const amt = def.groveYield[k] * mult;
+      if(forAi){
+        if(state.ai) state.ai.resources[k] = (state.ai.resources[k] || 0) + amt;
+      } else {
+        addResource(k, amt);
+      }
     }
   }
 }
@@ -478,8 +535,11 @@ const GROVE_TEXT = [
 ];
 
 // Called once when a Grove world is created: the Heartwood begins mature.
+// Runs for whichever side is playing Grove — an enemy Heartwood that started
+// at stage 0 would render as a sapling-sized speck and, worse, be the root of
+// a network that produces nothing until it had aged through three stages.
 function initGroveHeartwood(){
-  if(state.faction !== 'grove') return;
+  if(!groveActive()) return;
   const h = groveHeartwood();
   if(!h) return;
   h.groveStage = GROVE.heartwoodStartStage;

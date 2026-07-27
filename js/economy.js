@@ -699,10 +699,16 @@ function createBuilding(type, gx, gy, override, owner){
   // off it, and nothing anywhere re-roots an existing structure. The entire
   // Grove was left permanently severed — no yield, no growth — by any reload.
   // The saved roots are restored wholesale instead, progress and all.
-  if(state.faction === 'grove' && !state._restoring
-     && (b.owner || OWNER_PLAYER) === OWNER_PLAYER && !b.isCore){
+  // Whichever side is playing Grove — you or the enemy town. groveOwner()
+  // returns null when nobody is, so this is also the "is this game a Grove
+  // game at all" check.
+  if(!state._restoring && typeof groveOwner === 'function'
+     && groveOwner() === (b.owner || OWNER_PLAYER) && !b.isCore){
     b.groveStage = 0; b.groveAgeMs = 0;
-    if(typeof startRootTo === 'function') startRootTo(b);
+    // Out of root reach right now is not necessarily out of reach forever —
+    // the network may grow toward it later. Flagged rather than abandoned; see
+    // retryUnrootedGrove().
+    if(typeof startRootTo === 'function' && !startRootTo(b)) b.groveRootFailed = true;
   }
   const px = gx*TILE + size*TILE/2, py = gy*TILE + size*TILE/2;
   b.sprite = scene.add.image(px, py, 'tiles', FRAME[def.frame]);

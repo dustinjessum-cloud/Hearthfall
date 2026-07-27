@@ -89,15 +89,23 @@ const AI_BUILD_DEFS = {
   ai_farm:     { name:'Enemy Farm',        hp:50,  produces:{food:4}, needsWorker:true,
                  cost:{wood:15},
                  names:{ swarm:'Enemy Corpse Field', tribe:'Enemy Hunting Camp', grove:'Enemy Fruiting Bough' },
-                 frames:{ human:'farm', swarm:'corpse_field', tribe:'tribe_hunt', grove:'grove_bough' } },
+                 frames:{ human:'farm', swarm:'corpse_field', tribe:'tribe_hunt', grove:'grove_bough' },
+                 // grove only: pays out for being CONNECTED rather than staffed.
+                 // Mirrors the player's Fruiting Bough exactly.
+                 groveYields:{ food: 1.2 } },
   ai_lumber:   { name:'Enemy Lumber Camp', hp:50,  produces:{wood:4}, needsWorker:true, bonusNear:'forest',
                  cost:{wood:15},
                  names:{ swarm:'Enemy Charnel Pit', tribe:'Enemy Timber Fell', grove:'Enemy Heartroot' },
-                 frames:{ human:'lumber_camp', swarm:'charnel_rack', tribe:'tribe_timber', grove:'tribe_timber' } },
+                 frames:{ human:'lumber_camp', swarm:'charnel_rack', tribe:'tribe_timber', grove:'tribe_timber' },
+                 groveYields:{ wood: 1.0 } },
   ai_quarry:   { name:'Enemy Quarry',      hp:60,  produces:{stone:3}, needsWorker:true, bonusNear:'stone_deposit',
                  cost:{wood:20,stone:10},
                  names:{ swarm:'Enemy Bone Quarry', tribe:'Enemy Digging Pit', grove:'Enemy Stonebark' },
-                 frames:{ human:'quarry', swarm:'bone_quarry', tribe:'tribe_pit', grove:'tribe_pit' } },
+                 frames:{ human:'quarry', swarm:'bone_quarry', tribe:'tribe_pit', grove:'tribe_pit' },
+                 // Mirrors the player's Stonebark, unspendable stone and all —
+                 // the Grove's dead-stone problem is a FACTION bug, and hiding
+                 // it from the AI would just make it harder to see.
+                 groveYields:{ stone: 0.7 } },
   ai_barracks: { name:'Enemy Barracks',    hp:100, trains:'ai_soldier',
                  cost:{wood:35},
                  names:{ swarm:'Enemy Mass Grave', tribe:'Enemy War Lodge', grove:'Enemy Thornhall' },
@@ -321,6 +329,9 @@ function aiDef(type){
   const out = Object.assign({}, d, { frame: d.frames[f] || d.frames.human });
   if(d.variantSets) out.variants = d.variantSets[f] || d.variantSets.human;
   if(d.names && d.names[f]) out.name = d.names[f];
+  // Yield-by-connection is a Grove-only property. Exposed as `groveYield` so
+  // groveEconomyTick reads AI and player structures through the same field.
+  if(f === 'grove' && d.groveYields) out.groveYield = d.groveYields;
   return out;
 }
 

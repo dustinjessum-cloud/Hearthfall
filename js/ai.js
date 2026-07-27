@@ -355,8 +355,21 @@ const AI_FACTION_RULES = {
   },
   tribe: { costMap:null, gather:[ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
            buildsOnBlight:false, buildConsumesWorker:false, foodComfort:null },
-  grove: { costMap:null, gather:[ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
-           buildsOnBlight:false, buildConsumesWorker:false, foodComfort:null },
+  grove: {
+    // The Grove pays for everything in timber, as the player's does.
+    costMap: { stone:'wood' },
+    // Ents tend, and can chop badly — the same secondary trickle the player's
+    // Ents get. It is not where the income comes from.
+    gather: [ {tile:'forest', res:'wood'} ],
+    buildsOnBlight: false,
+    buildConsumesWorker: false,
+    foodComfort: null,
+    // The whole faction, in one flag: structures are inert until a root
+    // reaches them, and then pay out for being CONNECTED rather than staffed.
+    // Handled by the shared grove system in grove.js, which now runs for
+    // whichever side is playing Grove.
+    rootNetwork: true,
+  },
 };
 function aiRules(){ return AI_FACTION_RULES[aiTownFaction()] || AI_FACTION_RULES.human; }
 function aiFoodComfort(){ const r = aiRules(); return r.foodComfort || AI_TUNING.foodComfort; }
@@ -539,6 +552,11 @@ function updateAiWorkers(delta){
 // Farm yield, on the same 3s cadence as your own economy.
 function aiEconomyTick(){
   if(!state.ai) return;
+  // A Grove town earns nothing this way: its structures pay out through
+  // groveEconomyTick for being connected, and a worker standing next to one is
+  // adding a tend BONUS to that, not a second independent harvest. Paying both
+  // would double-count every tended Bough.
+  if(aiRules().rootNetwork) return;
   let tended = 0;
   for(const w of aiWorkers()) if(w.job && w.job.kind==='farm' && w.job.phase==='tend') tended++;
   state.ai.resources.food += tended * AI_TUNING.farmFoodPerTick;
@@ -592,7 +610,30 @@ function aiFindBuildSpot(size, intoNeutral){
   const onFrontier = (gx, gy)=>
     !isCreeped(gx-1,gy) || !isCreeped(gx+1,gy) || !isCreeped(gx,gy-1) || !isCreeped(gx,gy+1);
 
+  // A Grove structure is inert until a root reaches it, and a root can only
+  // stretch GROVE.rootMaxLen. Placing beyond that produces a building that is
+  // severed on the day it is raised and stays severed forever — nothing
+  // retries startRootTo. Measured before this check: four of the enemy's
+  // structures were permanently dead Seeds, and the count grew as it built.
+  //
+  // Deliberately budgeted. The reachability test samples every root in the
+  // network, so running it on every candidate tile of a 26-ring scan would
+  // cost thousands of those per build attempt. `fits` filters first and this
+  // only ever sees tiles that already passed, with a hard cap on how many get
+  // tested before we accept that nothing nearby is rootable.
+  const needsRoot = aiRules().rootNetwork;
+  let rootChecks = 0;
+  const rootReachable = (gx, gy)=>{
+    if(!needsRoot) return true;
+    if(rootChecks++ > 60) return false;
+    if(typeof nearestNetworkPoint !== 'function') return true;
+    const c = rootCollarPoint(gx, gy, size);
+    const src = nearestNetworkPoint(c.x, c.y);
+    return !!src && src.d <= GROVE.rootMaxLen * TILE;
+  };
+
   const ringSearch = (maxR, wantFrontier)=>{
+    rootChecks = 0;
     for(let r=2; r<=maxR; r++){
       for(let dy=-r; dy<=r; dy++){
         for(let dx=-r; dx<=r; dx++){
@@ -600,6 +641,7 @@ function aiFindBuildSpot(size, intoNeutral){
           const gx = origin.gx+dx, gy = origin.gy+dy;
           if(!fits(gx, gy)) continue;
           if(wantFrontier && !onFrontier(gx, gy)) continue;
+          if(!rootReachable(gx, gy)) continue;
           return {gx, gy};
         }
       }

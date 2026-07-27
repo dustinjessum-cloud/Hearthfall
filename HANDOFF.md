@@ -1,7 +1,7 @@
 # Hearthfall — handoff
 
 Paste this into a new chat to pick up where we left off. Current as of the
-last commit on `fix/grove-restore-dry-camps-intro`.
+last commit on `main`.
 
 ---
 
@@ -26,7 +26,9 @@ PIL) into a spritesheet that is base64-embedded into `js/content.js`.
 for a rich neutral zone → raze their Town Hall to win.
 
 **The enemy town plays one of the four factions too**, drawn at world creation
-and never your own. See below — this is new and only half-built.
+and never your own — and an undead or Grove enemy plays by that faction's own
+rules, not a reskinned human one. See below. None of it has been seen in a
+real playthrough yet.
 
 ---
 
@@ -119,10 +121,28 @@ Plays one of the four factions, drawn per run, never your own. It builds,
 trains and looks like that faction. Tribe and Grove reuse exactly the frames
 those factions use for themselves, placeholders included.
 
-**It still runs ONE generic brain.** Per-faction *mechanics* are not written —
-the undead AI does not gate on blight, the Grove AI has no root network, the
-Tribe AI does not hunt. That is the next big piece, agreed to be staged:
-undead → grove → tribe.
+**Undead and Grove enemies play by their own rules.** Per-faction behaviour
+lives in `AI_FACTION_RULES` in `ai.js` rather than in scattered
+`aiTownFaction()==='swarm'` branches:
+
+- **Undead** — carrion is its only resource (a `costMap` collapses wood and
+  stone into food, and its workers render forest rather than cutting timber);
+  every structure consumes a drone, never below a floor of 3; it can only
+  build on blight, prefers the frontier tile nearest the middle so the stain
+  grows toward you, and may build in the OPEN pass because its territory has
+  to be physically continuous.
+- **Grove** — structures are inert until a root reaches them and then pay out
+  for being connected, not staffed. Placement respects `rootMaxLen`;
+  structures that fail to root at birth retry as the network grows toward
+  them, while ones whose root was CUT stay cut. Cutting its trunk cascades
+  against it exactly as it does against you.
+- **Tribe** — still on the human profile. Hunting is the last piece (step 4).
+
+`state.creep` and `state.groveRoots` are each shared by whichever side is
+using them, which is only safe because **a mirror match cannot happen** — the
+enemy's faction is drawn from the three you are not playing, so at most one
+side is ever undead and at most one is ever Grove. Add a mirror mode and both
+become two networks in one container.
 
 Raid waves are a **separate system** and still use the old `oppositeRace()`
 troll/undead logic rather than following the AI's drawn faction. Left alone
@@ -137,25 +157,35 @@ deliberately so tuned raid balance was not disturbed.
    foundation 5.8 tiles from an idle villager is never built, and it never
    retries. Measured in a normal opening: wood income zero for a whole run
    while upkeep drained the pile. Two small changes; deliberately deferred.
-2. **AI per-faction mechanics** — see above.
-3. **The Heartwood cannot grow past Ancient.**
+2. **Nothing built since the AI rework has been seen in a real game.** Every
+   number below comes from simulated runs, not play. Enemy building counts by
+   minute 24: human ~59, Grove ~77, undead ~110. A Grove enemy banks huge
+   inert piles (food only buys units and its army caps at 22 by minute eight;
+   stone it cannot spend at all) and is structurally immune to worker
+   harassment — correct for the faction, but it means cutting roots is the
+   only counterplay. An undead enemy's single-resource economy never hits the
+   have-wood-need-stone stalls that gate the others. **Play a run and export
+   the log before tuning any of this.**
+3. **Tribe AI mechanics** (step 4) — hunting camps and Foresters. The last of
+   the four; the scaffolding and rules table are already in place for it.
+4. **The Heartwood cannot grow past Ancient.**
    `groveMaxStage()` computes `min(heartwoodMaxStage: 5, stages.length-1: 3)`
    = 3, identical to the ordinary cap. It maxes out 45s in, so "the oldest
    tree is always the heart" is unimplemented. Needs two more stage entries.
-4. **The Grove's second Ent is unaffordable when it matters.** 60 food + 40
+5. **The Grove's second Ent is unaffordable when it matters.** 60 food + 40
    wood; in a recorded run both were first affordable at t=210 — the exact
    moment wave 1 landed. The faction played the whole run on one unit and lost
    it to the first raid.
-5. **The Grove's stone is unspendable.** Stonebark produces it; every Grove
+6. **The Grove's stone is unspendable.** Stonebark produces it; every Grove
    building costs wood only.
-6. **Undead wood and stone are dead resources** — should be hidden from their HUD.
-7. **Every undead building consumes a drone**, so population oscillates while
+7. **Undead wood and stone are dead resources** — should be hidden from their HUD.
+8. **Every undead building consumes a drone**, so population oscillates while
    the cap climbs. The faction can't grow.
-8. **`updateUnits()` is still ~300 lines** of interleaved movement/gather/
+9. **`updateUnits()` is still ~300 lines** of interleaved movement/gather/
    build/combat. The remaining big refactor. Use brace-MATCHED extraction,
    never hardcoded line numbers.
-9. **No sound at all.** Biggest perceived-quality gap.
-10. Grove's Heartroot, Stonebark and Thornhall still wear tribe art (the
+10. **No sound at all.** Biggest perceived-quality gap.
+11. Grove's Heartroot, Stonebark and Thornhall still wear tribe art (the
     player's versions do too, so at least they match).
 
 ---

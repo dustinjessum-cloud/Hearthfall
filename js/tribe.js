@@ -328,6 +328,20 @@ function updateSeedGhost(gx, gy){
 // trees. This lets them count as working while on any forest tile near the
 // camp, and walks them between tiles so the camp reads as a hunting ground
 // rather than someone standing still on a hut.
+// WHICH SIDE is playing the Tribe — you, the enemy town, or nobody. Same
+// shape as groveOwner(): at most one side is ever Tribe, because the enemy's
+// faction is drawn from the three you are not playing.
+//
+// state.saplings is shared world terrain rather than one side's property — a
+// planted tree becomes real forest that EITHER side can then hunt or fell —
+// so what this gates is only whether the sapling system needs to run at all.
+function tribeOwner(){
+  if(state.faction === 'tribe') return OWNER_PLAYER;
+  if(typeof aiTownFaction === 'function' && aiTownFaction() === 'tribe') return OWNER_AI;
+  return null;
+}
+function tribeActive(){ return tribeOwner() !== null; }
+
 const HUNT = {
   radius: 4,        // how far from the camp a hunter will range
   moveEveryMs: 5200, // how long they work one spot before moving on

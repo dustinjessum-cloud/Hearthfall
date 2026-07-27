@@ -561,7 +561,13 @@ class MainScene extends Phaser.Scene {
     updateCombat(delta, time);
 
     aiThink(delta);         // their economy: train, gather, build, expand
-    if(state.faction==='tribe'){ updateForesters(delta); updateSaplings(delta); updateHunters(delta); }
+    // updateForesters and updateHunters walk state.units, so they are yours
+    // alone. updateSaplings is shared TERRAIN — a planted tree matures into
+    // real forest either side can then hunt or fell — so it has to run
+    // whenever anyone is Tribe. Gated on state.faction, an enemy tribe's
+    // saplings would sit at their planted size forever and never become woods.
+    if(state.faction==='tribe'){ updateForesters(delta); updateHunters(delta); }
+    if(typeof tribeActive === 'function' && tribeActive()) updateSaplings(delta);
     // Runs for whichever side is playing Grove, not just you. Gated on
     // state.faction here, an ENEMY grove's roots never advanced: 26 of them
     // sat at progress 0 forever, so 30 of its 31 structures stayed severed

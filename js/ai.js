@@ -353,8 +353,21 @@ const AI_FACTION_RULES = {
     // stop harvesting while they still could not afford a Grave Mound.
     foodComfort: 600,
   },
-  tribe: { costMap:null, gather:[ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
-           buildsOnBlight:false, buildConsumesWorker:false, foodComfort:null },
+  tribe: {
+    costMap: null,                       // timber and stone, as the tribe pays
+    gather: [ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
+    buildsOnBlight: false,
+    buildConsumesWorker: false,
+    foodComfort: null,
+    // Food is HUNTED, not farmed: a camp feeds nobody by itself, its hunter
+    // has to be out standing on live forest within HUNT.radius of it. Which
+    // makes their timber and their dinner the same finite resource — felling
+    // the woods for wood eats the ground their food stands on.
+    hunts: true,
+    // ...and the answer to that, which is the one supply in the game that does
+    // not run out. The player has the Forester; the enemy replants on a timer.
+    replants: true,
+  },
   grove: {
     // The Grove pays for everything in timber, as the player's does.
     costMap: { stone:'wood' },
@@ -465,7 +478,19 @@ function assignAiJob(w){
   const tended = new Set(aiWorkers().map(x=>x.job && x.job.kind==='farm' ? x.job.buildingId : null));
   if(state.ai.resources.food < aiFoodComfort()){
     for(const f of farms){
-      if(!tended.has(f.id)){ w.job = {kind:'farm', buildingId:f.id, gx:f.gx, gy:f.gy, phase:'out'}; return; }
+      if(tended.has(f.id)) continue;
+      // A hunter walks to the TREELINE near the camp, not to the camp itself.
+      // Sending them to the camp tile would have them stand on bare ground
+      // beside it producing nothing, which is what "tend" means for everyone
+      // else and would have quietly starved a tribe town.
+      if(aiRules().hunts){
+        const spot = aiHuntSpot(f, w);
+        if(!spot) continue;                     // camp's treeline is stripped — try the next
+        w.job = {kind:'farm', buildingId:f.id, gx:spot.gx, gy:spot.gy, phase:'out'};
+        return;
+      }
+      w.job = {kind:'farm', buildingId:f.id, gx:f.gx, gy:f.gy, phase:'out'};
+      return;
     }
   }
   // WHAT this faction harvests, and what it banks it as, comes off its rules.
@@ -503,7 +528,20 @@ function updateAiWorkers(delta){
         const f = buildingById(job.buildingId);
         if(!f || f.hp<=0){ w.job = null; }
         else if(job.phase === 'out'){
-          if(aiStepToward(w, f.gx, f.gy, delta)) job.phase = 'tend';
+          // job.gx/gy is the camp for a tender, a forest tile for a hunter
+          if(aiStepToward(w, job.gx, job.gy, delta)) job.phase = 'tend';
+        } else if(job.phase === 'tend' && aiRules().hunts){
+          // Hunters work a spot, then move along the treeline — the same roam
+          // the player's hunters do, so a tribe camp reads as a hunting ground
+          // rather than a worker glued to one tree.
+          w.huntMs = (w.huntMs || 0) + delta;
+          if(state.ai.resources.food > aiFoodComfort() * 1.6){ w.job = null; }
+          else if(w.huntMs >= HUNT.moveEveryMs){
+            w.huntMs = 0;
+            const spot = aiHuntSpot(f, w);
+            if(spot){ job.gx = spot.gx; job.gy = spot.gy; job.phase = 'out'; }
+            else w.job = null;              // treeline stripped — go do something else
+          }
         } else if(job.phase === 'tend' && state.ai.resources.food > aiFoodComfort() * 1.6){
           // Release a tender once the larder is genuinely full. The assign-side
           // check alone was not enough: 'tend' never ended, so whoever started
@@ -558,13 +596,49 @@ function aiEconomyTick(){
   // would double-count every tended Bough.
   if(aiRules().rootNetwork) return;
   let tended = 0;
-  for(const w of aiWorkers()) if(w.job && w.job.kind==='farm' && w.job.phase==='tend') tended++;
+  for(const w of aiWorkers()){
+    if(!w.job || w.job.kind !== 'farm' || w.job.phase !== 'tend') continue;
+    // A tribe hunter only feeds anyone while actually out on live forest near
+    // the camp — standing on the camp tile is not hunting. Same test the
+    // player's huntingInPlace() applies.
+    if(!aiHuntingInPlace(w)) continue;
+    tended++;
+  }
   state.ai.resources.food += tended * AI_TUNING.farmFoodPerTick;
+}
+
+// For a hunting faction: is this worker out on live forest, in range of the
+// camp it is assigned to? Always true for factions that simply tend a tile.
+function aiHuntingInPlace(w){
+  if(!aiRules().hunts) return true;
+  const camp = buildingById(w.job.buildingId);
+  if(!camp || camp.hp <= 0) return false;
+  const gx = Math.round(w.gx), gy = Math.round(w.gy);
+  if(Math.max(Math.abs(gx-camp.gx), Math.abs(gy-camp.gy)) > HUNT.radius) return false;
+  if(tileAt(gx, gy) !== 'forest') return false;
+  return (state.resourceQty[gy] && state.resourceQty[gy][gx] || 0) > 0;
+}
+
+// A live forest tile within hunting range of the camp, or null if the treeline
+// around it has been stripped. Excludes the tile another hunter is already on
+// so they spread along the treeline instead of stacking.
+function aiHuntSpot(camp, self){
+  const spots = [];
+  for(let dy=-HUNT.radius; dy<=HUNT.radius; dy++){
+    for(let dx=-HUNT.radius; dx<=HUNT.radius; dx++){
+      const x = camp.gx+dx, y = camp.gy+dy;
+      if(!inBounds(x,y) || tileAt(x,y) !== 'forest') continue;
+      if((state.resourceQty[y] && state.resourceQty[y][x] || 0) <= 0) continue;
+      if(aiWorkers().some(o => o !== self && Math.round(o.gx)===x && Math.round(o.gy)===y)) continue;
+      spots.push({gx:x, gy:y});
+    }
+  }
+  return spots.length ? spots[Math.floor(Math.random()*spots.length)] : null;
 }
 
 // Somewhere to put a new building: rings out from the core, and once the
 // enemy is expanding, sometimes into the neutral middle instead.
-function aiFindBuildSpot(size, intoNeutral){
+function aiFindBuildSpot(size, intoNeutral, type){
   const c = state.aiTownCenter || aiTownCenter();
   const origin = intoNeutral
     ? { gx: ZONES.neutral.x1 - 3, gy: Math.floor(MAP_H/2) }   // their side of the middle
@@ -621,6 +695,13 @@ function aiFindBuildSpot(size, intoNeutral){
   // cost thousands of those per build attempt. `fits` filters first and this
   // only ever sees tiles that already passed, with a hard cap on how many get
   // tested before we accept that nothing nearby is rootable.
+  // A hunting camp on bare plain feeds nobody — its hunters need live forest
+  // within HUNT.radius to stand on. Sited blindly, a tribe town would raise
+  // camps its own workers could never work.
+  const needsTreeline = (aiRules().hunts && type === 'ai_farm');
+  const hasTreeline = (gx, gy)=>
+    !!findNearestResourceTile(gx, gy, 'forest', HUNT.radius);
+
   const needsRoot = aiRules().rootNetwork;
   let rootChecks = 0;
   const rootReachable = (gx, gy)=>{
@@ -641,6 +722,7 @@ function aiFindBuildSpot(size, intoNeutral){
           const gx = origin.gx+dx, gy = origin.gy+dy;
           if(!fits(gx, gy)) continue;
           if(wantFrontier && !onFrontier(gx, gy)) continue;
+          if(needsTreeline && !hasTreeline(gx, gy)) continue;
           if(!rootReachable(gx, gy)) continue;
           return {gx, gy};
         }
@@ -738,8 +820,8 @@ function aiTryBuild(){
   // ~45% of their build attempts would otherwise find nothing, return false,
   // and burn the think cycle without advancing anything. They reach the middle
   // by creeping the field there, not by starting a colony in clean grass.
-  const spot = aiFindBuildSpot(def.size||1, intoNeutral)
-            || (intoNeutral ? aiFindBuildSpot(def.size||1, false) : null);
+  const spot = aiFindBuildSpot(def.size||1, intoNeutral, type)
+            || (intoNeutral ? aiFindBuildSpot(def.size||1, false, type) : null);
   if(!spot) return false;
   // Placed straight up rather than as a foundation a drone must walk to:
   // "a worker must physically arrive" is a PLAYER rule, and what the economy
@@ -968,6 +1050,55 @@ function updateAiWar(delta){
   flashWaveBanner(`A war party marches out of the enemy town — ${muster.length} strong!`);
 }
 
+// The tribe's answer to felling the woods it also eats from. The player casts
+// Seed Grove; the enemy replants on a timer, near a camp whose treeline is
+// thinning, because that is where the loss actually hurts.
+//
+// Deliberately modest and slow: this is meant to keep a tribe town alive on
+// finite ground over a long run, not to turn the map into forest. Saplings go
+// through the SAME state.saplings system the player's do, so they take
+// FORESTER.saplingMs to become real forest and either side can then use it.
+const AI_REPLANT = {
+  everyMs: 45000,   // one small planting every 45s
+  trees: 4,         // saplings per planting
+  radius: 5,        // scattered this far around the chosen camp
+  // Only reseed a camp whose treeline has actually thinned. Planting
+  // unconditionally is not restoration, it is afforestation: measured over a
+  // 30-minute run the enemy band went from 74 live forest tiles to 206 and
+  // was still climbing, which is the tribe slowly turning its own territory
+  // into woodland rather than living off it. Below this many live tiles in
+  // hunting range, a camp is genuinely short and worth reseeding; above it,
+  // the woods are feeding themselves.
+  healthyTreeline: 14,
+};
+function updateAiReplant(delta){
+  if(!state.ai || !aiRules().replants) return;
+  if(typeof plantSapling !== 'function') return;
+  state.ai.replantMs = (state.ai.replantMs || 0) + delta;
+  if(state.ai.replantMs < AI_REPLANT.everyMs) return;
+  state.ai.replantMs = 0;
+  // the camp with the thinnest treeline is the one worth reseeding
+  const camps = aiBuildings().filter(b => b.aiType === 'ai_farm' && b.hp > 0 && !underConstruction(b));
+  if(!camps.length) return;
+  let worst = null, worstCount = Infinity;
+  for(const c of camps){
+    let n = 0;
+    for(let dy=-HUNT.radius; dy<=HUNT.radius; dy++)
+      for(let dx=-HUNT.radius; dx<=HUNT.radius; dx++){
+        const x=c.gx+dx, y=c.gy+dy;
+        if(inBounds(x,y) && tileAt(x,y)==='forest' && (state.resourceQty[y] && state.resourceQty[y][x] || 0) > 0) n++;
+      }
+    if(n < worstCount){ worstCount = n; worst = c; }
+  }
+  if(!worst || worstCount >= AI_REPLANT.healthyTreeline) return;   // nothing is short
+  let planted = 0;
+  for(let tries=0; tries<40 && planted<AI_REPLANT.trees; tries++){
+    const gx = worst.gx + Phaser.Math.Between(-AI_REPLANT.radius, AI_REPLANT.radius);
+    const gy = worst.gy + Phaser.Math.Between(-AI_REPLANT.radius, AI_REPLANT.radius);
+    if(plantSapling(gx, gy)) planted++;
+  }
+}
+
 function aiThink(delta){
   if(!state.ai || state.gameOver) return;
   if(!aiTownHall()) return;   // headless: no core, no orders
@@ -989,6 +1120,7 @@ function aiThink(delta){
   // stayed at 0 while their home town grew to 80 (against a player's 79) and
   // ended resource-bound, which is the loop costMult was built for.
   aiTryTrain(delta);
+  updateAiReplant(delta);
   if(state.ai.buildCdMs > 0) state.ai.buildCdMs -= delta;
   state.ai.thinkMs += delta;
   if(state.ai.thinkMs < AI_TUNING.thinkMs) return;

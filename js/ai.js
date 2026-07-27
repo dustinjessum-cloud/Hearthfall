@@ -158,12 +158,20 @@ function spawnAiGarrison(){
 // dress rather than a necropolis.
 //
 // This reuses state.creep and the whole existing spread system rather than
-// running a parallel one, which is safe because the two can never collide:
-// the enemy is undead exactly when the PLAYER is human, and a human player
-// never seeds, spreads or reads creep. (The one gameplay check that consults
-// it, build placement, is gated on state.faction === 'swarm'.) Creep has no
-// effect on movement — only roads and forest do — so the player's units are
-// unaffected walking over it.
+// running a parallel one. That is safe because AT MOST ONE SIDE IS EVER
+// UNDEAD: the enemy's faction is drawn from the three you are not playing, so
+// a swarm-vs-swarm mirror cannot happen, and nobody else seeds, spreads or
+// reads creep.
+//
+// (That invariant used to be stated as "the enemy is undead exactly when the
+// player is human", which stopped being true the moment the enemy could draw
+// any of four factions. The conclusion survived only because mirrors are
+// excluded — worth knowing if a mirror mode is ever added, because then the
+// two blights WOULD share one grid and each side would be able to build on
+// the other's territory.)
+//
+// Creep has no effect on movement — only roads and forest do — so the
+// player's units are unaffected walking over it.
 function aiBlightSources(){
   if(aiTownRace() !== 'undead') return [];
   const out = [];
@@ -241,6 +249,10 @@ const AI_TUNING = {
   start: { food:120, wood:90, stone:40 },   // enough to open, not to coast
 
   workerTarget: 9,             // gatherers it wants before it stops training more
+  // Undead only: never dissolve the crew below this into buildings. Workers
+  // cost carrion and carrion is gathered by workers, so a town that spent its
+  // last drone on a Grave Mound could never recover.
+  workerFloor: 3,
   workerCost: { food:45 },
   workerTrainMs: 12000,
   workerHp: 22,
@@ -304,6 +316,51 @@ const AI_TUNING = {
   expandChance: 0.45,          // of each build attempt, once expanding
 };
 
+// ---------------------------------------------------------------------
+// How the enemy town PLAYS, per faction.
+//
+// Phase 1 gave the enemy a faction's roster and art; this is where it starts
+// obeying that faction's actual rules. Everything the shared brain does that
+// a faction would do differently reads from here rather than from a
+// `aiTownFaction()==='swarm'` branch scattered through ai.js.
+//
+// Only the undead entry is filled in so far. Tribe and grove still use the
+// human profile — their signature systems (hunting, the root network) are
+// steps 3 and 4, and stating that explicitly beats letting them fall through
+// a default and look finished.
+// ---------------------------------------------------------------------
+const AI_FACTION_RULES = {
+  human: {
+    costMap: null,                       // pays in the resource each def names
+    gather: [ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
+    buildsOnBlight: false,
+    buildConsumesWorker: false,
+    foodComfort: null,                   // null = use AI_TUNING.foodComfort
+  },
+  swarm: {
+    // Carrion is the only undead resource: every cost collapses into food,
+    // which is also what their farms and their forest-harvesting both yield.
+    // Remapping here rather than editing AI_BUILD_DEFS keeps one roster and
+    // one set of relative prices across all four factions.
+    costMap: { wood:'food', stone:'food' },
+    // No timber, no masonry — ghouls render the forest itself into carrion,
+    // which is exactly what the player's Charnel Pit does.
+    gather: [ {tile:'forest', res:'food'} ],
+    buildsOnBlight: true,
+    buildConsumesWorker: true,
+    // There is no "comfortable" amount of carrion when carrion also buys
+    // every building and every unit. The human ceiling (180) would have them
+    // stop harvesting while they still could not afford a Grave Mound.
+    foodComfort: 600,
+  },
+  tribe: { costMap:null, gather:[ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
+           buildsOnBlight:false, buildConsumesWorker:false, foodComfort:null },
+  grove: { costMap:null, gather:[ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
+           buildsOnBlight:false, buildConsumesWorker:false, foodComfort:null },
+};
+function aiRules(){ return AI_FACTION_RULES[aiTownFaction()] || AI_FACTION_RULES.human; }
+function aiFoodComfort(){ const r = aiRules(); return r.foodComfort || AI_TUNING.foodComfort; }
+
 function initAiEconomy(){
   state.ai = {
     resources: Object.assign({ food:0, wood:0, stone:0 }, AI_TUNING.start),
@@ -318,11 +375,21 @@ function initAiEconomy(){
 
 // Building costs scale by costMult; unit costs (already tuned directly in
 // AI_TUNING) do not, hence the flag.
+// Building costs scale by costMult; unit costs (already tuned directly in
+// AI_TUNING) do not. The faction's costMap applies to BOTH — an undead
+// soldier's 20 wood is as meaningless as an undead barracks' 35.
+//
+// Keys are summed after remapping, so a quarry costing 20 wood + 10 stone
+// becomes 30 carrion rather than silently keeping only the last one.
 function aiScaled(cost, scaled){
   if(!cost) return null;
-  if(!scaled) return cost;
+  const map = aiRules().costMap;
+  const mult = scaled ? AI_TUNING.costMult : 1;
   const out = {};
-  for(const k in cost) out[k] = cost[k] * AI_TUNING.costMult;
+  for(const k in cost){
+    const key = (map && map[k]) || k;
+    out[key] = (out[key] || 0) + cost[k] * mult;
+  }
   return out;
 }
 function aiCan(cost, scaled){
@@ -383,25 +450,23 @@ function aiDropPoint(){
 function assignAiJob(w){
   const farms = aiBuildings().filter(b=>(b.aiType==='ai_farm') && b.hp>0 && !underConstruction(b));
   const tended = new Set(aiWorkers().map(x=>x.job && x.job.kind==='farm' ? x.job.buildingId : null));
-  if(state.ai.resources.food < AI_TUNING.foodComfort){
+  if(state.ai.resources.food < aiFoodComfort()){
     for(const f of farms){
       if(!tended.has(f.id)){ w.job = {kind:'farm', buildingId:f.id, gx:f.gx, gy:f.gy, phase:'out'}; return; }
     }
   }
+  // WHAT this faction harvests, and what it banks it as, comes off its rules.
+  // The undead have one entry (forest -> carrion) because they have one
+  // resource; a human town has two and picks whichever pile is shorter.
   const r = state.ai.resources;
-  const want = (r.wood <= r.stone) ? 'wood' : 'stone';
-  const tileType = want === 'wood' ? 'forest' : 'stone_deposit';
+  const opts = aiRules().gather;
+  const ranked = opts.slice().sort((a,b)=> (r[a.res]||0) - (r[b.res]||0));
   const from = aiDropPoint();
-  const tile = findNearestResourceTile(from.gx, from.gy, tileType, AI_TUNING.searchRadius);
-  if(!tile){
-    // that resource is stripped out to the search radius — try the other one
-    const alt = want === 'wood' ? 'stone_deposit' : 'forest';
-    const t2 = findNearestResourceTile(from.gx, from.gy, alt, AI_TUNING.searchRadius);
-    if(!t2){ w.job = null; return; }   // nothing left within reach; idles
-    w.job = { kind:'gather', res: alt==='forest'?'wood':'stone', gx:t2.gx, gy:t2.gy, phase:'out' };
-    return;
+  for(const opt of ranked){
+    const tile = findNearestResourceTile(from.gx, from.gy, opt.tile, AI_TUNING.searchRadius);
+    if(tile){ w.job = { kind:'gather', res:opt.res, gx:tile.gx, gy:tile.gy, phase:'out' }; return; }
   }
-  w.job = { kind:'gather', res:want, gx:tile.gx, gy:tile.gy, phase:'out' };
+  w.job = null;   // nothing this faction can use within reach; idles
 }
 
 function aiStepToward(w, tx, ty, delta){
@@ -426,7 +491,7 @@ function updateAiWorkers(delta){
         if(!f || f.hp<=0){ w.job = null; }
         else if(job.phase === 'out'){
           if(aiStepToward(w, f.gx, f.gy, delta)) job.phase = 'tend';
-        } else if(job.phase === 'tend' && state.ai.resources.food > AI_TUNING.foodComfort * 1.6){
+        } else if(job.phase === 'tend' && state.ai.resources.food > aiFoodComfort() * 1.6){
           // Release a tender once the larder is genuinely full. The assign-side
           // check alone was not enough: 'tend' never ended, so whoever started
           // farming while food was low stayed on that farm for the rest of the
@@ -487,21 +552,122 @@ function aiFindBuildSpot(size, intoNeutral){
     ? { gx: ZONES.neutral.x1 - 3, gy: Math.floor(MAP_H/2) }   // their side of the middle
     : c;
   const zone = intoNeutral ? 'neutral' : 'enemy';
-  for(let r=2; r<=14; r++){
-    for(let dy=-r; dy<=r; dy++){
-      for(let dx=-r; dx<=r; dx++){
-        if(Math.max(Math.abs(dx),Math.abs(dy)) !== r) continue;
-        const gx = origin.gx+dx, gy = origin.gy+dy;
-        let ok = true;
-        for(let sy=0; sy<size && ok; sy++) for(let sx=0; sx<size && ok; sx++){
-          const x=gx+sx, y=gy+sy;
-          if(!inBounds(x,y) || !inZone(x, zone) || isImpassableTile(tileAt(x,y)) || occAt(x,y)) ok = false;
+  // The undead can only raise a structure on blighted ground, exactly as the
+  // player's undead can. Their blight radiates from their own buildings
+  // (aiBlightSources), so each thing they raise at the edge pushes the field
+  // out a little further and opens the next ring — the town grows as a
+  // spreading stain rather than appearing wherever there is space. It also
+  // means their expansion into the neutral middle has to CREEP there, which
+  // is the same toll the player pays.
+  const needsBlight = aiRules().buildsOnBlight;
+  // Reach is wider for the blight-bound than the human 14: their usable ground
+  // is wherever the stain has got to, not a fixed ring around the core.
+  const maxRadiusForBlight = needsBlight ? 26 : 14;
+  // Which columns this town may build on. Normally its own band (or the
+  // neutral middle when pushing out) — but a blight-bound faction also needs
+  // the OPEN PASS, because its territory has to be physically continuous.
+  //
+  // Without that the undead stop dead in the gap: blight reaches about two
+  // tiles past its westernmost source, sources are buildings, and buildings
+  // were confined to the enemy band — so the ten-tile pass was ground no
+  // source could ever stand on. Measured: they crept to the mouth, put six
+  // tiles of stain inside it, and sat there for the rest of the run, unable
+  // to contest the middle at all. The player has never had this restriction
+  // (isPlacementValid does not look at zones), so this only levels it up.
+  const zoneOk = (x)=>{
+    if(inZone(x, zone)) return true;
+    if(needsBlight && state.corridorOpen && (inZone(x,'passEast') || inZone(x,'passWest'))) return true;
+    return false;
+  };
+  const fits = (gx, gy)=>{
+    for(let sy=0; sy<size; sy++) for(let sx=0; sx<size; sx++){
+      const x=gx+sx, y=gy+sy;
+      if(!inBounds(x,y) || !zoneOk(x) || isImpassableTile(tileAt(x,y)) || occAt(x,y)) return false;
+      if(needsBlight && !isCreeped(x, y)) return false;
+    }
+    return true;
+  };
+  // A blighted tile with unblighted ground beside it. Building HERE is what
+  // pushes the field outward, because every structure is a blight source.
+  const onFrontier = (gx, gy)=>
+    !isCreeped(gx-1,gy) || !isCreeped(gx+1,gy) || !isCreeped(gx,gy-1) || !isCreeped(gx,gy+1);
+
+  const ringSearch = (maxR, wantFrontier)=>{
+    for(let r=2; r<=maxR; r++){
+      for(let dy=-r; dy<=r; dy++){
+        for(let dx=-r; dx<=r; dx++){
+          if(Math.max(Math.abs(dx),Math.abs(dy)) !== r) continue;
+          const gx = origin.gx+dx, gy = origin.gy+dy;
+          if(!fits(gx, gy)) continue;
+          if(wantFrontier && !onFrontier(gx, gy)) continue;
+          return {gx, gy};
         }
-        if(ok) return {gx, gy};
       }
     }
+    return null;
+  };
+
+  // The frontier tile that carries the blight TOWARD the middle. Taking
+  // whichever edge tile the ring scan happened to reach first grew the field
+  // as an even disc, and since most of its perimeter faces away from you,
+  // almost all of that growth went nowhere: measured at 4 tiles of westward
+  // progress in 30 minutes, against a pass 7 tiles further and the neutral
+  // band 17 beyond that. They would never have arrived.
+  //
+  // A necropolis grows toward what it intends to eat. Once expanding, pick the
+  // frontier tile closest to the neutral band, so each structure lays the
+  // stain a little further along and the reach becomes a visible tendril
+  // rather than a slowly fattening blob.
+  const towardMiddle = ()=>{
+    const targetX = ZONES.neutral.x1;   // the near edge of the prize, from their side
+    let best = null, bestD = Infinity;
+    for(let r=2; r<=maxRadiusForBlight; r++){
+      for(let dy=-r; dy<=r; dy++){
+        for(let dx=-r; dx<=r; dx++){
+          if(Math.max(Math.abs(dx),Math.abs(dy)) !== r) continue;
+          const gx = origin.gx+dx, gy = origin.gy+dy;
+          if(!fits(gx, gy) || !onFrontier(gx, gy)) continue;
+          // distance to the target band, not to a point — anywhere along its
+          // edge will do, so this does not funnel every structure into one row
+          const d = Math.abs(gx - targetX);
+          if(d < bestD){ bestD = d; best = {gx, gy}; }
+        }
+      }
+    }
+    return best;
+  };
+
+  // Undead: take the EDGE of the blight first. The plain outward spiral always
+  // returned the innermost free tile, so the town packed itself into the
+  // seeded disc and the field stopped growing the moment that disc was full —
+  // measured flat at ~271 tiles from minute 6 while the building count went on
+  // climbing. Nothing ever reached the frontier, so nothing ever extended it,
+  // and expansion into the neutral middle was impossible because there is no
+  // blight out there to start from. Preferring the frontier makes each new
+  // structure carry the stain a couple of tiles further, which is how the
+  // player's undead push outward too.
+  const maxR = maxRadiusForBlight;
+  if(needsBlight){
+    // While expanding, reach for the middle; before that, consolidate on
+    // whatever edge is nearest so the town has a body before it grows a limb.
+    const edge = (state.ai && state.ai.expanding) ? (towardMiddle() || ringSearch(maxR, true))
+                                                  : ringSearch(maxR, true);
+    if(edge) return edge;
   }
-  return null;
+  return ringSearch(maxR, false);
+}
+
+// A drone dissolves into every undead structure. Destroyed outright rather
+// than routed through the hp<=0 death path — nothing killed it, so it should
+// not grant hero XP, leave a corpse, or count as a kill.
+function consumeAiWorker(w){
+  if(!w) return false;
+  if(scene && scene.add) floatResourceText(Math.round(w.gx), Math.round(w.gy), 'rising...', '#b6c98a');
+  if(w.sprite) w.sprite.destroy();
+  if(w.hpBarBg) w.hpBarBg.destroy();
+  if(w.hpBarFg) w.hpBarFg.destroy();
+  state.enemies = state.enemies.filter(e => e !== w);
+  return true;
 }
 
 function aiTryBuild(){
@@ -515,14 +681,31 @@ function aiTryBuild(){
   const def = aiDef(type);
   if(!def) { ai.buildIdx++; return false; }
   if(!aiCan(def.cost, true)) return false;
+  const rules = aiRules();
+  // Every undead structure eats a drone. Checked BEFORE placing, and never
+  // down to the last few — a town that consumed its final worker could never
+  // train another (workers cost carrion, carrion needs workers) and would sit
+  // there dead. The player hits the same wall; they just get to see it coming.
+  const morph = rules.buildConsumesWorker
+    ? aiWorkers().sort((a,b)=> (b.job?0:1) - (a.job?0:1))[0]   // an idle one first
+    : null;
+  if(rules.buildConsumesWorker && aiWorkers().length <= AI_TUNING.workerFloor) return false;
   const intoNeutral = ai.expanding && Math.random() < AI_TUNING.expandChance && state.corridorOpen;
-  const spot = aiFindBuildSpot(def.size||1, intoNeutral);
+  // Fall back to home ground if the push into the middle finds nowhere. The
+  // undead especially: the neutral origin starts with no blight at all, so
+  // ~45% of their build attempts would otherwise find nothing, return false,
+  // and burn the think cycle without advancing anything. They reach the middle
+  // by creeping the field there, not by starting a colony in clean grass.
+  const spot = aiFindBuildSpot(def.size||1, intoNeutral)
+            || (intoNeutral ? aiFindBuildSpot(def.size||1, false) : null);
   if(!spot) return false;
-  // placed straight up rather than as a foundation a builder must reach:
-  // "a worker must walk over first" is a PLAYER rule, and the cost is what
-  // the economy actually gates on
+  // Placed straight up rather than as a foundation a drone must walk to:
+  // "a worker must physically arrive" is a PLAYER rule, and what the economy
+  // actually gates on is the cost — which for the undead now includes the
+  // drone itself.
   const b = placeAiBuildingAt(type, spot.gx, spot.gy);
   if(!b) return false;
+  if(morph) consumeAiWorker(morph);
   aiPay(def.cost, true);
   ai.buildIdx++;
   ai.built++;

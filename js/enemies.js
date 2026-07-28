@@ -677,7 +677,10 @@ function updateCombat(delta, time){
       }
       let dmg = a.atk.damage;
       if(a.soldier && captain && Phaser.Math.Distance.Between(captain.gx, captain.gy, a.gx, a.gy) <= CAPTAIN.auraRange){
-        dmg = Math.round(dmg * CAPTAIN.auraMult);
+        // heroFuryMult is War Cry / Frenzy — a temporary boost layered on the
+        // standing aura rather than a second damage path of its own.
+        dmg = Math.round(dmg * CAPTAIN.auraMult
+              * (typeof heroFuryMult === 'function' ? heroFuryMult() : 1));
       }
       // undead strike softly off their own blight (buildings are unaffected —
       // a Bone Spire sits on blight by definition)

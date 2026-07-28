@@ -30,7 +30,220 @@ const HERO_MANA = {
 // Rank-indexed helpers keep spell definitions readable: rank is 1-based.
 const R = (arr) => (rank) => arr[Math.min(rank, arr.length) - 1];
 
+// Heal a building and keep its bar honest — a heal outside the damage path
+// never touches the bar, so a repaired wall kept showing the old red sliver.
+function healBuilding(b, amt){
+  if(!b || b.hp <= 0 || b.hp >= b.maxHp) return 0;
+  const before = b.hp;
+  b.hp = Math.min(b.maxHp, b.hp + amt);
+  if(b.hpBarFg && b.hpBarBg){
+    const pct = Math.max(0, b.hp/b.maxHp);
+    b.hpBarFg.width = ((b.size||1)*TILE-6)*pct;
+    b.hpBarFg.fillColor = pct>0.5 ? 0x6bbf59 : (pct>0.25?0xd8b23a:0xd85a3a);
+    if(b.hp >= b.maxHp){ b.hpBarBg.setVisible(false); b.hpBarFg.setVisible(false); }
+  }
+  return b.hp - before;
+}
+
+// A ring that expands and fades — every spell's "something happened here".
+function spellBurst(gx, gy, radius, fill, stroke, ms){
+  if(!scene || !scene.add) return;
+  const ring = scene.add.circle(gx*TILE+TILE/2, gy*TILE+TILE/2, 6, fill, 0.30)
+    .setStrokeStyle(3, stroke, 0.95).setDepth(9);
+  scene.tweens.add({ targets: ring, scaleX: radius*2.4, scaleY: radius*2.4, alpha: 0,
+                     duration: ms || 450, onComplete: ()=> ring.destroy() });
+}
+
 const HERO_SPELLS = {
+  // The Minotaur — the human hero.
+  //
+  // His J (javelin) and K (slash) are both damage, ranged and melee, so the
+  // book is everything he cannot already do: make the soldiers around him
+  // hit harder, stop a charge, and put a battered line back together.
+  human: [
+    {
+      id: 'war_cry',
+      name: 'War Cry',
+      desc: 'A bellow that carries. Every soldier under his banner strikes harder.',
+      maxRank: 3,
+      minLevel: 1,
+      targeting: 'self',
+      mana:     R([25, 30, 35]),
+      cooldown: R([20000, 18000, 16000]),
+      mult:     R([1.4, 1.6, 1.9]),
+      holdMs:   R([8000, 10000, 12000]),
+      rankText: (r, s) => `banner damage x${s.mult(r).toFixed(1)} for ${(s.holdMs(r)/1000).toFixed(0)}s`,
+      cast(hero, gx, gy, rank){
+        // Layers on the standing captain aura rather than replacing it, so
+        // this is a reason to keep the Minotaur WITH the line, not behind it.
+        state.hero.furyMult = this.mult(rank);
+        state.hero.furyMs = this.holdMs(rank);
+        spellBurst(hero.gx, hero.gy, CAPTAIN.auraRange, 0xffd76b, 0xe0b040, 500);
+        if(scene && scene.add) floatResourceText(hero.gx, hero.gy, 'WAR CRY!', '#ffd76b');
+        return true;
+      },
+    },
+    {
+      id: 'ground_slam',
+      name: 'Ground Slam',
+      desc: 'He brings the earth up. What it catches is hurt, and stays put.',
+      maxRank: 3,
+      minLevel: 2,
+      targeting: 'point',
+      range: 6,
+      mana:     R([30, 34, 38]),
+      cooldown: R([15000, 13000, 11000]),
+      radius:   R([2.2, 2.8, 3.4]),
+      damage:   R([12, 18, 26]),
+      holdMs:   R([1500, 2200, 3000]),
+      rankText: (r, s) => `${s.radius(r).toFixed(1)} tile radius, ${s.damage(r)} damage, holds ${(s.holdMs(r)/1000).toFixed(1)}s`,
+      cast(hero, gx, gy, rank){
+        const rad = this.radius(rank), dmg = this.damage(rank), ms = this.holdMs(rank);
+        let hit = 0;
+        for(const e of state.enemies){
+          if(e.hp <= 0 || e.kind === 'camp') continue;
+          if(Phaser.Math.Distance.Between(e.gx, e.gy, gx, gy) > rad) continue;
+          e.hp -= dmg; e.lastHitBy = 'hero';
+          e.rootedMs = Math.max(e.rootedMs || 0, ms);
+          hit++;
+        }
+        spellBurst(gx, gy, rad, 0xd8a06b, 0xa8703a);
+        if(scene && scene.add) floatResourceText(gx, gy, hit ? `${hit} staggered` : 'the ground shakes', '#d8a06b');
+        return true;
+      },
+    },
+    {
+      id: 'hold_the_line',
+      name: 'Hold the Line',
+      desc: 'Wounds bound, walls shored. The only thing that puts stonework back up mid-fight.',
+      maxRank: 3,
+      minLevel: 3,
+      targeting: 'self',
+      mana:     R([35, 40, 45]),
+      cooldown: R([26000, 23000, 20000]),
+      radius:   R([4.0, 5.0, 6.0]),
+      heal:     R([20, 32, 46]),
+      repair:   R([25, 45, 70]),
+      rankText: (r, s) => `heals ${s.heal(r)} to units and repairs ${s.repair(r)} on walls and towers within ${s.radius(r).toFixed(1)} tiles`,
+      cast(hero, gx, gy, rank){
+        const rad = this.radius(rank), amt = this.heal(rank), fix = this.repair(rank);
+        let mended = 0, shored = 0;
+        for(const u of state.units){
+          if(u.hp <= 0 || u.hp >= u.maxHp) continue;
+          if(Phaser.Math.Distance.Between(u.gx, u.gy, hero.gx, hero.gy) > rad) continue;
+          u.hp = Math.min(u.maxHp, u.hp + amt); mended++;
+        }
+        // Walls and towers only: a general building heal would quietly make
+        // the Repairman redundant, and this is meant to hold a line, not
+        // rebuild a town.
+        for(const b of myBuildings()){
+          if(b.type !== 'wall' && b.type !== 'tower') continue;
+          if(Phaser.Math.Distance.Between(b.gx, b.gy, hero.gx, hero.gy) > rad) continue;
+          if(healBuilding(b, fix) > 0) shored++;
+        }
+        spellBurst(hero.gx, hero.gy, rad, 0x9fc4ff, 0x6f94d0, 520);
+        if(scene && scene.add) floatResourceText(hero.gx, hero.gy, `${mended} mended, ${shored} shored`, '#9fc4ff');
+        return true;
+      },
+    },
+  ],
+
+  // The War Chief — the tribe's hero.
+  //
+  // The tribe lives off the treeline: it hunts in forest and its timber and
+  // its dinner are the same finite thing. So the book is a brawler's opener,
+  // a crowd-breaker, and — the one that is really theirs — the power to put
+  // the forest back.
+  tribe: [
+    {
+      id: 'frenzy',
+      name: 'Frenzy',
+      desc: 'The war band works itself into a fury. Harder and shorter than a human war cry.',
+      maxRank: 3,
+      minLevel: 1,
+      targeting: 'self',
+      mana:     R([25, 30, 35]),
+      cooldown: R([18000, 16000, 14000]),
+      mult:     R([1.6, 1.9, 2.3]),
+      holdMs:   R([5000, 6500, 8000]),
+      rankText: (r, s) => `banner damage x${s.mult(r).toFixed(1)} for ${(s.holdMs(r)/1000).toFixed(1)}s`,
+      cast(hero, gx, gy, rank){
+        state.hero.furyMult = this.mult(rank);
+        state.hero.furyMs = this.holdMs(rank);
+        spellBurst(hero.gx, hero.gy, CAPTAIN.auraRange, 0xd85a3a, 0xa8402a, 450);
+        if(scene && scene.add) floatResourceText(hero.gx, hero.gy, 'FRENZY!', '#ff8a6b');
+        return true;
+      },
+    },
+    {
+      id: 'stampede',
+      name: 'Stampede',
+      desc: 'The band crashes through. Wide, heavy, and it leaves them limping.',
+      maxRank: 3,
+      minLevel: 2,
+      targeting: 'point',
+      range: 6,
+      mana:     R([30, 35, 40]),
+      cooldown: R([16000, 14000, 12000]),
+      radius:   R([3.0, 3.8, 4.6]),
+      damage:   R([10, 15, 22]),
+      slowMs:   R([3000, 4500, 6000]),
+      rankText: (r, s) => `${s.radius(r).toFixed(1)} tile radius, ${s.damage(r)} damage, slows ${(s.slowMs(r)/1000).toFixed(0)}s`,
+      cast(hero, gx, gy, rank){
+        const rad = this.radius(rank), dmg = this.damage(rank), ms = this.slowMs(rank);
+        let hit = 0;
+        for(const e of state.enemies){
+          if(e.hp <= 0 || e.kind === 'camp') continue;
+          if(Phaser.Math.Distance.Between(e.gx, e.gy, gx, gy) > rad) continue;
+          e.hp -= dmg; e.lastHitBy = 'hero';
+          e.webSlowMs = Math.max(e.webSlowMs || 0, ms);
+          hit++;
+        }
+        spellBurst(gx, gy, rad, 0xc08a5a, 0x8a5a30);
+        if(scene && scene.add) floatResourceText(gx, gy, hit ? `${hit} trampled` : 'dust', '#c08a5a');
+        return true;
+      },
+    },
+    {
+      id: 'wildgrowth',
+      name: 'Wildgrowth',
+      desc: 'He calls the woodland back. Saplings burst up where he points.',
+      maxRank: 3,
+      minLevel: 3,
+      targeting: 'point',
+      range: 7,
+      mana:     R([30, 35, 40]),
+      cooldown: R([40000, 34000, 28000]),
+      radius:   R([2.5, 3.2, 4.0]),
+      trees:    R([5, 8, 12]),
+      rankText: (r, s) => `plants up to ${s.trees(r)} saplings within ${s.radius(r).toFixed(1)} tiles`,
+      cast(hero, gx, gy, rank){
+        const rad = Math.ceil(this.radius(rank)), want = this.trees(rank);
+        // The tribe's timber and its food are the SAME finite resource, so
+        // regrowing the treeline is an economy action, not a nature effect —
+        // which is why it is on a long cooldown and belongs to their hero.
+        const spots = [];
+        for(let dy=-rad; dy<=rad; dy++){
+          for(let dx=-rad; dx<=rad; dx++){
+            const x = gx+dx, y = gy+dy;
+            if(Math.hypot(dx, dy) > this.radius(rank)) continue;
+            if(typeof canPlantAt === 'function' && canPlantAt(x, y)) spots.push([x, y]);
+          }
+        }
+        if(!spots.length){ flashWaveBanner('Nothing here will take root.'); return false; }
+        // deterministic spread rather than a clump around the centre
+        let planted = 0;
+        const step = Math.max(1, Math.floor(spots.length / want));
+        for(let i=0; i<spots.length && planted<want; i+=step){
+          if(plantSapling(spots[i][0], spots[i][1])) planted++;
+        }
+        spellBurst(gx, gy, this.radius(rank), 0x6bbf59, 0x4a8a3a, 520);
+        if(scene && scene.add) floatResourceText(gx, gy, `${planted} saplings`, '#9fe08a');
+        return true;
+      },
+    },
+  ],
+
   // The Necromancer — the swarm's hero.
   //
   // Her J (web shot) and K (raise broodlings) already cover ranged poke and
@@ -190,6 +403,72 @@ const HERO_SPELLS = {
         return true;
       },
     },
+    {
+      id: 'deep_root',
+      name: 'Deep Root',
+      desc: 'He reaches under the ground and finds a severed limb. The root is back at once.',
+      maxRank: 3,
+      minLevel: 2,
+      targeting: 'point',
+      range: 8,
+      mana:     R([30, 26, 22]),      // cheaper with rank: this is a rescue tool
+      cooldown: R([20000, 16000, 12000]),
+      heal:     R([0, 15, 35]),
+      rankText: (r, s) => `reconnects a severed structure instantly and free`
+        + (s.heal(r) ? `, and heals it ${s.heal(r)}` : ''),
+      cast(hero, gx, gy, rank){
+        const b = (typeof occAt === 'function') ? occAt(gx, gy) : null;
+        if(!b){ flashWaveBanner('Nothing there to reach.'); return false; }
+        if(typeof canRegrowRoot !== 'function' || !canRegrowRoot(b)){
+          flashWaveBanner('That is not a severed structure he can reach.');
+          return false;
+        }
+        if(!startRootTo(b)) return false;
+        // The paid Regrow Root grows a root at the normal creep speed and the
+        // structure keeps withering until it lands. THIS arrives instantly —
+        // that immediacy is what a hero cast is worth, and it is why the
+        // ability is a rescue rather than a cheaper version of the button.
+        const r = (state.groveRoots || []).find(x => x.toId === b.id);
+        if(r){ r.progress = 1; r.done = true; }
+        b.groveRootFailed = false;
+        if(typeof setWitherLook === 'function') setWitherLook(b, false);
+        const amt = this.heal(rank);
+        if(amt) healBuilding(b, amt);
+        if(typeof drawGroveRoots === 'function') drawGroveRoots();
+        spellBurst(b.gx, b.gy, 2.5, 0x9fe08a, 0x4a6b32, 480);
+        if(scene && scene.add) floatResourceText(b.gx, b.gy, 'rooted!', '#9fe08a');
+        return true;
+      },
+    },
+    {
+      id: 'bloom',
+      name: 'Bloom',
+      desc: 'The grove flowers around him, and the wood knits closed.',
+      maxRank: 3,
+      minLevel: 3,
+      targeting: 'self',
+      mana:     R([35, 40, 45]),
+      cooldown: R([28000, 24000, 20000]),
+      radius:   R([4.0, 5.0, 6.5]),
+      heal:     R([18, 30, 45]),
+      rankText: (r, s) => `heals ${s.heal(r)} to every Grove structure within ${s.radius(r).toFixed(1)} tiles`,
+      cast(hero, gx, gy, rank){
+        const rad = this.radius(rank), amt = this.heal(rank);
+        // Redirect Nutrients mends ONE structure on a 45s cooldown while the
+        // rest of the network pays for it. This is the opposite trade: less
+        // per structure, but everything at once and nothing forfeited — so
+        // after a raid sweeps a limb they answer different problems.
+        let mended = 0;
+        for(const b of myBuildings()){
+          if(b.hp <= 0) continue;
+          if(Phaser.Math.Distance.Between(b.gx, b.gy, hero.gx, hero.gy) > rad) continue;
+          if(healBuilding(b, amt) > 0) mended++;
+        }
+        spellBurst(hero.gx, hero.gy, rad, 0xe8c0d8, 0xc090b0, 560);
+        if(scene && scene.add) floatResourceText(hero.gx, hero.gy, mended ? `${mended} bloomed` : 'all is whole', '#e8c0d8');
+        return true;
+      },
+    },
   ],
 };
 
@@ -265,7 +544,18 @@ function updateHeroSpells(delta){
   for(const id in h.cooldowns){
     if(h.cooldowns[id] > 0) h.cooldowns[id] = Math.max(0, h.cooldowns[id] - delta);
   }
+  if(h.furyMs > 0) h.furyMs = Math.max(0, h.furyMs - delta);
 }
+
+// A temporary multiplier ON TOP of the captain's standing damage aura. It
+// rides the aura rather than introducing a second combat path, so exactly one
+// line in enemies.js changes and the UI's damage preview stays honest by
+// reading the same helper.
+function heroFuryMult(){
+  const h = state.hero;
+  return (h && h.furyMs > 0) ? (h.furyMult || 1) : 1;
+}
+function heroFuryActive(){ return heroFuryMult() > 1; }
 function heroManaTick(){
   const h = state.hero;
   if(!h) return;

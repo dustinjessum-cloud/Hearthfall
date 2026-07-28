@@ -360,7 +360,9 @@ function unitAttack(u){
   const cap = livingCaptain();
   const inAura = !!(isSoldier && cap && cap !== u &&
     Phaser.Math.Distance.Between(cap.gx, cap.gy, u.gx, u.gy) <= CAPTAIN.auraRange);
-  const dmg = inAura ? Math.round(atk.damage * CAPTAIN.auraMult) : atk.damage;
+  // same helper the combat path uses, so a War Cry actually shows up here
+  const fury = (typeof heroFuryMult === 'function') ? heroFuryMult() : 1;
+  const dmg = inAura ? Math.round(atk.damage * CAPTAIN.auraMult * fury) : atk.damage;
   const secs = atk.cooldownMs / 1000;
   return {
     dmg, base: atk.damage, inAura, range: atk.range,

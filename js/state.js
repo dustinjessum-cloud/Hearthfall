@@ -82,6 +82,9 @@ const state = {
   _creepCount: 0,        // cached count for the passive biomass trickle
   saplings: [],          // tribe: planted trees still maturing into forest
   groveRoots: [],        // grove: root links, grown or growing, between structures
+  // grove: the Redirect Nutrients channel. Declared here rather than left to
+  // groveRedirect()'s lazy init so a cooldown cannot survive into a new game.
+  groveRedirect: { targetId:null, msLeft:0, cooldownMs:0 },
   corpses: [],           // fallen humans awaiting raise (undead) / burial (humans) — see CORPSE
   burialBoost: 0,        // decaying happiness honor from recent burials (human faction)
   enemyProjectiles: [],  // spears/bolts/etc. loosed by ranged raiders (transient — not saved)

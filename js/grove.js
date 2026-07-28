@@ -82,6 +82,24 @@ const GROVE = {
   // Structures pay out on the economy tick. Everything is per-tick and
   // multiplied by stage, so growth compounds naturally without a chain.
   tickYield: { food: 1.2, wood: 1.0 },
+
+  // --- Redirect Nutrients ---
+  // The Heartwood pulls the whole grove's sap toward ONE structure, which
+  // then heals fast and ages fast — and everything else connected pays for it
+  // for as long as the channel runs. That trade is the whole feature: it is a
+  // REDIRECT, not a free buff, so using it well means picking the moment.
+  //
+  // It reaches only what the network reaches, so a severed limb cannot be
+  // rescued this way — you have to reconnect it first. That is deliberate:
+  // severing is meant to be a real setback, and an ability that undid it
+  // would quietly delete the faction's main weakness.
+  redirect: {
+    durationMs:    12000,  // how long the channel runs
+    cooldownMs:    45000,  // ...measured from when it ENDS
+    growthMult:    4,      // 12s of channel ~= 48s of growth: one whole stage
+    healPctPerSec: 0.05,   // ...and ~60% of max hp over the same 12s
+    drainMult:     0.5,    // every OTHER connected structure yields half
+  },
 };
 
 // ---- the network -----------------------------------------------------
@@ -135,11 +153,18 @@ function groveMaxStage(b){
 function updateGroveGrowth(delta){
   if(!groveActive()) return;
   const connected = groveConnectedIds();
+  // While the Heartwood is redirecting, the target races and EVERYTHING else
+  // holds still, the core included. Pausing the rest is what makes this a
+  // redirect rather than a free burst of growth.
+  const fedId = redirectActive() ? groveRedirect().targetId : null;
   for(const b of groveStructures()){
     if(underConstruction(b)) continue;
     if(!b.isCore && !connected.has(b.id)) continue;
     if(groveStage(b) >= groveMaxStage(b)) continue;
-    b.groveAgeMs = (b.groveAgeMs || 0) + delta;
+    let step = delta;
+    if(fedId != null) step = (b.id === fedId) ? delta * GROVE.redirect.growthMult : 0;
+    if(step <= 0) continue;
+    b.groveAgeMs = (b.groveAgeMs || 0) + step;
     if(b.groveAgeMs >= GROVE.stageMs){
       b.groveAgeMs = 0;
       b.groveStage = groveStage(b) + 1;
@@ -159,6 +184,157 @@ function applyGroveStage(b){
     const size = b.size || 1;
     b.sprite.setScale(st.scale * size);
   }
+}
+
+// ---- Redirect Nutrients ----------------------------------------------
+// A Heartwood ability, cast like Spread Blight and Seed Grove: select the
+// Heartwood, press the button, click a connected structure. For the duration
+// the target heals and ages at speed while the rest of the network runs at
+// half yield and stops growing entirely.
+//
+// State lives on `state` (not on the Heartwood) because there is only ever
+// one channel, and hanging it off the building would lose it the moment the
+// Heartwood was rebuilt.
+function groveRedirect(){
+  if(!state.groveRedirect) state.groveRedirect = { targetId:null, msLeft:0, cooldownMs:0 };
+  return state.groveRedirect;
+}
+function redirectActive(){ return groveRedirect().msLeft > 0; }
+function redirectTargetBuilding(){
+  const r = groveRedirect();
+  return r.msLeft > 0 ? buildingById(r.targetId) : null;
+}
+function redirectReady(){
+  const r = groveRedirect();
+  return groveActive() && !!groveHeartwood() && r.msLeft <= 0 && r.cooldownMs <= 0;
+}
+
+// A legal target: yours, alive, finished, not the Heartwood itself, and
+// CONNECTED. The connection check is the point of the whole ability — sap
+// cannot reach a limb the roots do not.
+function canRedirectTo(b, connected){
+  if(!b || b.hp <= 0 || b.isCore) return false;
+  if((b.owner || OWNER_PLAYER) !== groveOwner()) return false;
+  if(underConstruction(b)) return false;
+  return (connected || groveConnectedIds()).has(b.id);
+}
+
+function startRedirect(b){
+  if(!redirectReady() || !canRedirectTo(b)) return false;
+  const r = groveRedirect();
+  r.targetId = b.id;
+  r.msLeft = GROVE.redirect.durationMs;
+  setRedirectVisual(b);
+  if(scene && scene.add) floatResourceText(b.gx, b.gy, 'nutrients redirected', '#ffd76b');
+  return true;
+}
+
+// One exit point, so the cooldown can never be skipped by a path that ends
+// the channel early (target razed, or cut off mid-cast).
+function endRedirect(reason){
+  const r = groveRedirect();
+  const b = buildingById(r.targetId);
+  clearRedirectVisual(b);
+  r.targetId = null;
+  r.msLeft = 0;
+  r.cooldownMs = GROVE.redirect.cooldownMs;
+  if(reason === 'severed' && b && scene && scene.add){
+    floatResourceText(b.gx, b.gy, 'flow cut!', '#ff8a6b');
+  }
+  if(typeof refreshInfoPanel === 'function') refreshInfoPanel();
+}
+
+function updateGroveRedirect(delta){
+  const r = groveRedirect();
+  if(r.cooldownMs > 0) r.cooldownMs = Math.max(0, r.cooldownMs - delta);
+  if(r.msLeft <= 0) return;
+  const b = buildingById(r.targetId);
+  // Cutting the root mid-channel ends it. Anything else would make this a way
+  // to keep feeding a limb you had already lost.
+  if(!b || b.hp <= 0 || !groveConnectedIds().has(b.id)){ endRedirect('severed'); return; }
+  r.msLeft = Math.max(0, r.msLeft - delta);
+  if(b.hp < b.maxHp){
+    b.hp = Math.min(b.maxHp, b.hp + b.maxHp * GROVE.redirect.healPctPerSec * (delta/1000));
+    if(b.hpBarFg && b.hpBarBg){
+      const pct = Math.max(0, b.hp/b.maxHp);
+      b.hpBarBg.setVisible(true); b.hpBarFg.setVisible(true);
+      b.hpBarFg.width = ((b.size||1)*TILE-6)*pct;
+      b.hpBarFg.fillColor = pct>0.5 ? 0x6bbf59 : (pct>0.25?0xd8b23a:0xd85a3a);
+      if(b.hp >= b.maxHp){ b.hpBarBg.setVisible(false); b.hpBarFg.setVisible(false); }
+    }
+  }
+  if(r.msLeft <= 0) endRedirect('done');
+}
+
+// While a channel runs, every OTHER connected structure yields at drainMult.
+// The one being fed keeps its full share — it is being repaired, not milked.
+function redirectYieldMult(b){
+  if(!redirectActive()) return 1;
+  return (b.id === groveRedirect().targetId) ? 1 : GROVE.redirect.drainMult;
+}
+
+function setRedirectVisual(b){
+  if(!scene || !scene.add || !b) return;
+  clearRedirectVisual();
+  const sz = (b.size||1)*TILE;
+  // Depth 3: over the structure so it is never hidden by it, under the units
+  // so it does not sit on top of a fight happening at the same tile.
+  const ring = scene.add.circle(b.gx*TILE + sz/2, b.gy*TILE + sz/2, sz*0.6, 0xffd76b, 0.10)
+    .setStrokeStyle(2, 0xffd76b, 0.9).setDepth(3);
+  scene._redirectRing = ring;
+  scene._redirectTween = scene.tweens.add({
+    targets: ring, alpha: { from: 1, to: 0.4 }, scaleX: 1.14, scaleY: 1.14,
+    duration: 650, yoyo: true, repeat: -1,
+  });
+  if(b.sprite && b.sprite.setTint) b.sprite.setTint(0xffe6a8);
+}
+function clearRedirectVisual(b){
+  if(!scene) return;
+  if(scene._redirectTween){ scene._redirectTween.remove(); scene._redirectTween = null; }
+  if(scene._redirectRing){ scene._redirectRing.destroy(); scene._redirectRing = null; }
+  // Restore whatever the building's own def asked for rather than blindly
+  // clearing — a reused frame carrying a signature tint would lose it.
+  if(b && b.sprite && b.sprite.setTint){
+    const def = BUILD_DEFS[b.type];
+    if(def && def.tint) b.sprite.setTint(def.tint); else b.sprite.clearTint();
+  }
+}
+
+// ---- targeting: the same castMode pattern as Spread Blight and Seed Grove
+function beginRedirectTargeting(){
+  if(!redirectReady()) return;
+  state.castMode = { kind:'redirect' };
+  flashWaveBanner('Redirect Nutrients — choose a connected structure. Esc or right-click to cancel.');
+}
+function cancelRedirectTargeting(){
+  state.castMode = null;
+  if(scene && scene._redirectSpot){ scene._redirectSpot.destroy(); scene._redirectSpot = null; }
+}
+// Marker under the cursor that turns red on anything the sap cannot reach, so
+// a refusal is visible BEFORE the click rather than as a silent no-op.
+function updateRedirectGhost(gx, gy){
+  if(!state.castMode || state.castMode.kind !== 'redirect') return;
+  const b = (typeof occAt === 'function') ? occAt(gx, gy) : null;
+  const ok = canRedirectTo(b);
+  const col = ok ? 0xffd76b : 0xd85a3a;
+  const sz = (ok && b ? (b.size||1) : 1) * TILE;
+  const x = (ok && b ? b.gx : gx) * TILE + sz/2;
+  const y = (ok && b ? b.gy : gy) * TILE + sz/2;
+  if(!scene._redirectSpot){
+    scene._redirectSpot = scene.add.rectangle(0,0,TILE,TILE,0xffd76b,0.22)
+      .setStrokeStyle(2, 0xffd76b, 0.9).setDepth(10);
+  }
+  scene._redirectSpot.setPosition(x, y);
+  scene._redirectSpot.setSize(sz, sz);
+  scene._redirectSpot.setFillStyle(col, 0.22);
+  scene._redirectSpot.setStrokeStyle(2, col, 0.9);
+}
+function castRedirectAt(gx, gy){
+  const b = (typeof occAt === 'function') ? occAt(gx, gy) : null;
+  if(!b){ flashWaveBanner('Nothing there to feed.'); return false; }
+  if(b.isCore){ flashWaveBanner('The Heartwood is the source, not the target.'); return false; }
+  if(!canRedirectTo(b)){ flashWaveBanner('That structure is not connected to the Heartwood.'); return false; }
+  return startRedirect(b);
 }
 
 // ---- roots -----------------------------------------------------------
@@ -451,7 +627,9 @@ function groveEconomyTick(){
     if(st.yieldMult <= 0) continue;                // a seed pays nothing
     const tended = tenders.some(s =>
       Phaser.Math.Distance.Between(s.gx, s.gy, b.gx, b.gy) <= GROVE.tendRadius);
-    const mult = st.yieldMult * (tended ? 1 + GROVE.tendBonus : 1);
+    // redirectYieldMult is what the rest of the grove pays while the
+    // Heartwood is feeding one structure — see GROVE.redirect.
+    const mult = st.yieldMult * (tended ? 1 + GROVE.tendBonus : 1) * redirectYieldMult(b);
     for(const k in def.groveYield){
       const amt = def.groveYield[k] * mult;
       if(forAi){

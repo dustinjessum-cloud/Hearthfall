@@ -893,6 +893,8 @@ function buildPanelMarkup(panel, type, ref){
              ? `<div style="margin-top:4px;color:#8a7a5c;">The blight spreads no further from here.</div>` : '')}
         ${(state.faction==='grove') ? `<div id="growNote" style="margin-top:4px;color:#9fe08a;"></div>
         <div class="hpbar"><div class="hpfill" id="growFill" style="background:#6bbf59;"></div></div>` : ''}
+        ${(state.faction==='grove' && ref.isCore)
+          ? `<div id="redirectNote" style="margin-top:4px;color:#ffd76b;"></div><button id="redirectBtn">Redirect Nutrients</button>` : ''}
         ${ref.type==='ritual_pit' ? `<div id="pitCount" style="margin-top:4px;color:#c98a8a;"></div>
         <div class="hpbar"><div class="hpfill" id="pitFill" style="background:#a8443f;"></div></div>` : ''}
         ${ref.type==='tower' ? `<div id="infoGarrison" style="margin-top:4px;color:#d8c79a;"></div><button id="towerReleaseBtn">Release defenders</button>` : ''}
@@ -949,6 +951,8 @@ function buildPanelMarkup(panel, type, ref){
       }
       const blb = document.getElementById('blightBtn');
       if(blb) blb.addEventListener('click', ()=> beginBlightTargeting(ref));
+      const rdb = document.getElementById('redirectBtn');
+      if(rdb) rdb.addEventListener('click', ()=> beginRedirectTargeting());
       if(!ref.isCore){
         const sb = document.getElementById('salvageBtn');
         // checked at CLICK time, not bind time — the panel can stay open
@@ -1407,6 +1411,34 @@ function updatePanelLive(type, ref){
       bBtn.disabled = !ready;
       bBtn.textContent = !canEver ? 'Spent'
         : (ready ? 'Spread Blight' : `Spread Blight (${Math.ceil(blightSpreadRemainingMs(ref)/1000)}s)`);
+    }
+  }
+  if(type==='building' && state.faction==='grove' && ref.isCore){
+    const nEl = document.getElementById('redirectNote');
+    const rBtn = document.getElementById('redirectBtn');
+    const r = groveRedirect();
+    const active = redirectActive();
+    const R = GROVE.redirect;
+    if(nEl){
+      if(active){
+        const tgt = redirectTargetBuilding();
+        const name = (tgt && BUILD_DEFS[tgt.type] && BUILD_DEFS[tgt.type].name) || 'a structure';
+        nEl.textContent = `Feeding ${name} — ${Math.ceil(r.msLeft/1000)}s left. `
+          + `The rest of the grove is yielding half and has stopped growing.`;
+      } else if(r.cooldownMs > 0){
+        nEl.textContent = `The Heartwood is drawing breath... ${Math.ceil(r.cooldownMs/1000)}s`;
+      } else {
+        nEl.textContent = `Ready — feed one CONNECTED structure: heals it and ages it `
+          + `${R.growthMult}x for ${Math.round(R.durationMs/1000)}s, while everything else `
+          + `yields half and stops growing.`;
+      }
+    }
+    if(rBtn){
+      rBtn.disabled = !redirectReady();
+      rBtn.textContent = active
+        ? `Redirecting (${Math.ceil(r.msLeft/1000)}s)`
+        : (r.cooldownMs > 0 ? `Redirect Nutrients (${Math.ceil(r.cooldownMs/1000)}s)`
+                            : 'Redirect Nutrients');
     }
   }
   if(type==='unit' && ref.type==='forester'){

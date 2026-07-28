@@ -288,6 +288,7 @@ class MainScene extends Phaser.Scene {
       const g = this.screenToGrid(wpc.x, wpc.y);
       if(state.castMode.kind === 'blight') updateBlightGhost(g.gx, g.gy);
       else if(state.castMode.kind === 'spell') updateSpellGhost(g.gx, g.gy);
+      else if(state.castMode.kind === 'redirect') updateRedirectGhost(g.gx, g.gy);
       else updateSeedGhost(g.gx, g.gy);
       return;   // no drag-select while aiming an ability
     }
@@ -405,6 +406,7 @@ class MainScene extends Phaser.Scene {
       if(state.castMode){
         if(state.castMode.kind === 'blight') cancelBlightTargeting();
         else if(state.castMode.kind === 'spell') cancelSpellTargeting();
+        else if(state.castMode.kind === 'redirect') cancelRedirectTargeting();
         else cancelSeedTargeting();
         return;
       }
@@ -449,6 +451,9 @@ class MainScene extends Phaser.Scene {
       } else if(state.castMode.kind === 'spell'){
         castHeroSpell(state.castMode.spellId, gx, gy);
         cancelSpellTargeting();
+      } else if(state.castMode.kind === 'redirect'){
+        castRedirectAt(gx, gy);
+        cancelRedirectTargeting();
       } else {
         const cu = castModeUnit();
         if(cu) castSeedGrove(cu, gx, gy);
@@ -580,7 +585,8 @@ class MainScene extends Phaser.Scene {
     // sat at progress 0 forever, so 30 of its 31 structures stayed severed
     // Seeds and its economy never started.
     if(typeof groveActive === 'function' && groveActive()){
-      updateGroveRoots(delta); updateGroveGrowth(delta);
+      // redirect BEFORE growth: it decides who ages this frame and who holds
+      updateGroveRoots(delta); updateGroveRedirect(delta); updateGroveGrowth(delta);
     }
     updateHeroSpells(delta);
     updateRootedEnemies(delta);

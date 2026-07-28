@@ -109,6 +109,9 @@ function serializeGame(){
     // start resolving to the wrong branch.
     groveRoots: state.groveRoots,
     groveRootIdSeq: (typeof groveRootIdSeq !== 'undefined') ? groveRootIdSeq : 1,
+    // A Redirect Nutrients channel mid-flight, and the cooldown after one.
+    // Dropping this would hand back a free cast on every reload.
+    groveRedirect: state.groveRedirect || null,
     saplings: state.saplings,   // tribe: Seed Grove's whole payoff, mid-growth
     corridorGraceMs: state.corridorGraceMs || 0,
     townHallPos: scene && scene.townHallPos,
@@ -283,12 +286,22 @@ function restoreGameInner(snapshot){
   if(typeof groveRootIdSeq !== 'undefined' && snapshot.groveRootIdSeq){
     groveRootIdSeq = snapshot.groveRootIdSeq;
   }
+  state.groveRedirect = snapshot.groveRedirect || { targetId:null, msLeft:0, cooldownMs:0 };
   if(state.faction === 'grove'){
     // groveStage survives on the building itself, but the stats and sprite
     // scale it implies do not — without this a restored Ancient renders at
     // seed size and carries a Grown structure's HP.
     for(const b of myBuildings()) if(b.hp>0 && typeof applyGroveStage === 'function') applyGroveStage(b);
     if(typeof drawGroveRoots === 'function') drawGroveRoots();
+    // The channel's STATE restores from the snapshot, but the ring and the
+    // warm tint that show it are scene objects and do not — rebuild them, or
+    // a reload leaves the grove paying the drain with nothing on screen
+    // saying why. Ids are already stamped back onto the buildings by here.
+    if(state.groveRedirect.msLeft > 0 && typeof setRedirectVisual === 'function'){
+      const tgt = buildingById(state.groveRedirect.targetId);
+      if(tgt && tgt.hp > 0) setRedirectVisual(tgt);
+      else state.groveRedirect = { targetId:null, msLeft:0, cooldownMs:GROVE.redirect.cooldownMs };
+    }
   }
 
   // ---- the tribe's saplings ----

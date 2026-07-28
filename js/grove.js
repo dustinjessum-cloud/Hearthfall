@@ -100,6 +100,27 @@ const GROVE = {
     healPctPerSec: 0.05,   // ...and ~60% of max hp over the same 12s
     drainMult:     0.5,    // every OTHER connected structure yields half
   },
+
+  // --- severance: what a cut limb does about it ---
+  // A severed structure used to sit inert forever: no yield, no growth, and
+  // no way back. That made a raid that orphaned a limb a permanent tax with
+  // no counterplay — a recorded run lost 25-35% of its economy for twenty
+  // minutes to one cut and never recovered a single structure.
+  //
+  // Now severance is a CLOCK rather than a state. A cut limb bleeds, and you
+  // either pay to grow the root back or you watch it die. That keeps severing
+  // a real setback (it still costs you, and it can still cost you everything)
+  // while giving you something to actually do about it.
+  wither: {
+    pctPerSec: 0.004,      // ~4 minutes from full health to dead
+  },
+  regrow: {
+    // Priced by the GAP, not per building: because repairing the nearest
+    // orphan extends the network toward the next one, rebuilding a limb
+    // inward-out costs far less than jumping straight to its far end.
+    baseWood:    6,
+    woodPerTile: 4,        // at rootMaxLen 9 that caps a single repair at 42
+  },
 };
 
 // ---- the network -----------------------------------------------------
@@ -335,6 +356,103 @@ function castRedirectAt(gx, gy){
   if(b.isCore){ flashWaveBanner('The Heartwood is the source, not the target.'); return false; }
   if(!canRedirectTo(b)){ flashWaveBanner('That structure is not connected to the Heartwood.'); return false; }
   return startRedirect(b);
+}
+
+// ---- withering, and growing a root back --------------------------------
+// A root that is still CREEPING toward a structure is not a severance — the
+// sap is on its way. Without this every newly-placed structure would start
+// bleeding the instant it was raised, since it spends its first seconds
+// waiting for a root to arrive.
+function rootArrivingTo(b){
+  const roots = state.groveRoots || [];
+  const r = roots.find(x => x.toId === b.id);
+  if(!r || r.done) return false;            // a finished root is the connected case
+  if(r.parentRootId == null) return true;   // hangs straight off the Heartwood
+  return rootChainLive(roots.find(x => x.id === r.parentRootId));
+}
+
+// Cut off, and nothing on the way: this is what bleeds.
+function isWitheringCandidate(b, connected){
+  if(!b || b.isCore || b.hp <= 0) return false;
+  if(underConstruction(b)) return false;
+  if((connected || groveConnectedIds()).has(b.id)) return false;
+  return !rootArrivingTo(b);
+}
+
+function setWitherLook(b, on){
+  b.withering = on;
+  if(!b.sprite || !b.sprite.setTint) return;
+  if(on){ b.sprite.setTint(0x8a7f6f); return; }   // drained of colour
+  const def = BUILD_DEFS[b.type];
+  if(def && def.tint) b.sprite.setTint(def.tint); else b.sprite.clearTint();
+}
+
+function updateGroveWither(delta){
+  if(!groveActive()) return;
+  const connected = groveConnectedIds();
+  const rate = GROVE.wither.pctPerSec * (delta/1000);
+  // Snapshot: dying a structure mutates state.buildings mid-walk.
+  for(const b of groveStructures().slice()){
+    if(b.isCore || b.hp <= 0) continue;
+    const cut = isWitheringCandidate(b, connected);
+    if(cut !== !!b.withering) setWitherLook(b, cut);
+    if(!cut) continue;
+    b.hp -= b.maxHp * rate;
+    if(b.hp <= 0){
+      if(scene && scene.add) floatResourceText(b.gx, b.gy, 'withered away', '#c08a5a');
+      removeBuilding(b);
+      continue;
+    }
+    if(b.hpBarFg && b.hpBarBg){
+      const pct = Math.max(0, b.hp/b.maxHp);
+      b.hpBarBg.setVisible(true); b.hpBarFg.setVisible(true);
+      b.hpBarFg.width = ((b.size||1)*TILE-6)*pct;
+      b.hpBarFg.fillColor = pct>0.5 ? 0x6bbf59 : (pct>0.25?0xd8b23a:0xd85a3a);
+    }
+  }
+}
+
+// Priced off the GAP the new root has to cross, so the shape of the network
+// decides what a rescue costs. Returns null when there is nothing to reach
+// from, or when the gap is wider than a root can span at all.
+function regrowRootCost(b){
+  if(!b || b.isCore) return null;
+  const dst = buildingCollar(b);
+  const src = nearestNetworkPoint(dst.x, dst.y);
+  if(!src) return null;
+  const tiles = src.d / TILE;
+  if(tiles > GROVE.rootMaxLen) return null;
+  return {
+    wood: Math.ceil(GROVE.regrow.baseWood + tiles * GROVE.regrow.woodPerTile),
+    tiles: +tiles.toFixed(1),
+  };
+}
+
+function canRegrowRoot(b){
+  if(!groveActive() || !b || b.isCore || b.hp <= 0) return false;
+  if(typeof isMine === 'function' && !isMine(b)) return false;
+  if(groveConnectedIds().has(b.id) || rootArrivingTo(b)) return false;
+  return !!regrowRootCost(b);
+}
+
+function regrowRoot(b){
+  if(!canRegrowRoot(b)) return false;
+  const cost = regrowRootCost(b);
+  if(state.resources.wood < cost.wood){
+    flashWaveBanner(`Not enough wood — regrowing this root costs ${cost.wood}.`);
+    return false;
+  }
+  // startRootTo re-measures reach itself; cost already proved it, so a false
+  // here would mean the network moved between the check and the click.
+  if(!startRootTo(b)) return false;
+  state.resources.wood -= cost.wood;
+  b.groveRootFailed = false;
+  // Paying stops the bleeding immediately — the root is now on its way, and
+  // rootArrivingTo() sees it — so the colour comes back on the same click.
+  setWitherLook(b, false);
+  if(scene && scene.add) floatResourceText(b.gx, b.gy, `regrowing (-${cost.wood} wood)`, '#9fe08a');
+  if(typeof refreshInfoPanel === 'function') refreshInfoPanel();
+  return true;
 }
 
 // ---- roots -----------------------------------------------------------

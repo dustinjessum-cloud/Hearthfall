@@ -587,6 +587,8 @@ class MainScene extends Phaser.Scene {
     if(typeof groveActive === 'function' && groveActive()){
       // redirect BEFORE growth: it decides who ages this frame and who holds
       updateGroveRoots(delta); updateGroveRedirect(delta); updateGroveGrowth(delta);
+      // after roots, so a repair paid for this frame stops the bleeding now
+      updateGroveWither(delta);
     }
     updateHeroSpells(delta);
     updateRootedEnemies(delta);

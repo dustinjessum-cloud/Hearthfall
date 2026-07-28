@@ -895,6 +895,8 @@ function buildPanelMarkup(panel, type, ref){
         <div class="hpbar"><div class="hpfill" id="growFill" style="background:#6bbf59;"></div></div>` : ''}
         ${(state.faction==='grove' && ref.isCore)
           ? `<div id="redirectNote" style="margin-top:4px;color:#ffd76b;"></div><button id="redirectBtn">Redirect Nutrients</button>` : ''}
+        ${(state.faction==='grove' && !ref.isCore)
+          ? `<div id="rootNote" style="margin-top:4px;color:#c08a5a;"></div><button id="regrowBtn">Regrow Root</button>` : ''}
         ${ref.type==='ritual_pit' ? `<div id="pitCount" style="margin-top:4px;color:#c98a8a;"></div>
         <div class="hpbar"><div class="hpfill" id="pitFill" style="background:#a8443f;"></div></div>` : ''}
         ${ref.type==='tower' ? `<div id="infoGarrison" style="margin-top:4px;color:#d8c79a;"></div><button id="towerReleaseBtn">Release defenders</button>` : ''}
@@ -953,6 +955,8 @@ function buildPanelMarkup(panel, type, ref){
       if(blb) blb.addEventListener('click', ()=> beginBlightTargeting(ref));
       const rdb = document.getElementById('redirectBtn');
       if(rdb) rdb.addEventListener('click', ()=> beginRedirectTargeting());
+      const rgb = document.getElementById('regrowBtn');
+      if(rgb) rgb.addEventListener('click', ()=> regrowRoot(ref));
       if(!ref.isCore){
         const sb = document.getElementById('salvageBtn');
         // checked at CLICK time, not bind time — the panel can stay open
@@ -1439,6 +1443,35 @@ function updatePanelLive(type, ref){
         ? `Redirecting (${Math.ceil(r.msLeft/1000)}s)`
         : (r.cooldownMs > 0 ? `Redirect Nutrients (${Math.ceil(r.cooldownMs/1000)}s)`
                             : 'Redirect Nutrients');
+    }
+  }
+  if(type==='building' && state.faction==='grove' && !ref.isCore){
+    const nEl = document.getElementById('rootNote');
+    const gBtn = document.getElementById('regrowBtn');
+    const connected = groveConnectedIds().has(ref.id);
+    const arriving = !connected && rootArrivingTo(ref);
+    const cost = (!connected && !arriving) ? regrowRootCost(ref) : null;
+    if(nEl){
+      if(connected){
+        nEl.textContent = 'Rooted to the Heartwood.';
+        nEl.style.color = '#9fe08a';
+      } else if(arriving){
+        nEl.textContent = 'A root is creeping toward it — it will wake when the sap arrives.';
+        nEl.style.color = '#d8c79a';
+      } else {
+        const secs = Math.ceil(ref.hp / (ref.maxHp * GROVE.wither.pctPerSec));
+        nEl.textContent = cost
+          ? `SEVERED — withering, ~${secs}s left. Regrow the root across ${cost.tiles} tiles for ${cost.wood} wood.`
+          : `SEVERED — withering, ~${secs}s left. Nothing in reach to grow a root from.`;
+        nEl.style.color = '#e8956b';
+      }
+    }
+    if(gBtn){
+      const affordable = !!cost && state.resources.wood >= cost.wood;
+      gBtn.style.display = (connected || arriving) ? 'none' : '';
+      gBtn.disabled = !affordable;
+      gBtn.textContent = !cost ? 'Out of reach'
+        : (affordable ? `Regrow Root (${cost.wood} wood)` : `Regrow Root (need ${cost.wood} wood)`);
     }
   }
   if(type==='unit' && ref.type==='forester'){

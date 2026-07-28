@@ -1342,18 +1342,33 @@ function updatePanelLive(type, ref){
       // Rebuilt only when the SHAPE changes — which spells are known, at what
       // rank, and whether a point is available. Cooldown numbers update in
       // place, so a button never vanishes under the cursor mid-click.
-      const shape = book.map(sp=>sp.id+':'+heroSpellRank(sp.id)).join('|') + '#' + state.hero.picks;
+      // hero LEVEL is part of the shape: the "requires level N" line below
+      // changes on level-up, and keying only on ranks and points left a
+      // freshly-unlocked spell still showing its lock until something else
+      // happened to redraw the panel.
+      const shape = book.map(sp=>sp.id+':'+heroSpellRank(sp.id)).join('|')
+        + '#' + state.hero.picks + '@' + state.hero.level;
       if(wrap._shape !== shape){
         wrap._shape = shape;
         wrap.innerHTML = book.map(sp=>{
           const rank = heroSpellRank(sp.id);
-          const canLearn = state.hero.picks > 0 && rank < sp.maxRank && state.hero.level >= sp.minLevel;
+          const locked = state.hero.level < sp.minLevel;
+          const maxed = rank >= sp.maxRank;
+          const canLearn = state.hero.picks > 0 && !maxed && !locked;
+          // Say WHY there is no button. Without this a level-gated spell drew
+          // its name and description and nothing else — no button, no reason —
+          // so it read as broken rather than as not yet earned.
+          let why = '';
+          if(locked) why = `<span style="color:#8a7a5c;">needs hero level ${sp.minLevel}</span>`;
+          else if(maxed) why = `<span style="color:#9fe08a;">fully ranked</span>`;
+          else if(state.hero.picks <= 0) why = `<span style="color:#8a7a5c;">no skill points — level up to earn one</span>`;
           return `<div style="margin-bottom:6px;">
             <div style="color:#e8dcc0;">${sp.name}${rank ? ` <span style="color:#9fe08a;">rank ${rank}/${sp.maxRank}</span>`
               : ` <span style="color:#8a7a5c;">not learned</span>`}</div>
             <div style="font-size:11px;color:#b8a888;">${rank ? sp.rankText(rank, sp) : sp.desc}</div>
             ${rank ? `<button class="spellCast" data-id="${sp.id}">Cast</button>` : ''}
             ${canLearn ? `<button class="spellLearn" data-id="${sp.id}">${rank ? 'Improve' : 'Learn'} (1 point)</button>` : ''}
+            ${why ? `<div style="font-size:11px;margin-top:2px;">${why}</div>` : ''}
           </div>`;
         }).join('');
         for(const btn of wrap.querySelectorAll('.spellCast'))

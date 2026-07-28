@@ -715,6 +715,19 @@ function createBuilding(type, gx, gy, override, owner){
   b.sprite = scene.add.image(px, py, 'tiles', FRAME[def.frame]).setDepth(DEPTH.building);
   if(def.tint && b.sprite.setTint) b.sprite.setTint(def.tint); // reused frames get a signature tint
   if(size>1 && b.sprite.setDisplaySize) b.sprite.setDisplaySize(size*TILE, size*TILE);
+  // Remembered so a Grove structure can swap to the shared seed sprite and
+  // back to its own. Stored for every faction — it costs nothing and means
+  // "what does this building normally look like" has one answer.
+  b.baseFrame = def.frame;
+  // A freshly-placed Grove structure is a SEED, and has to LOOK like one.
+  // applyGroveStage was never called at creation, so the sprite kept its
+  // default scale of 1.0 while b.groveStage said 0 — a seed rendered at FULL
+  // size and then visibly SHRANK to 0.7 the moment it became a sapling.
+  if(!state._restoring && typeof applyGroveStage === 'function'
+     && typeof groveOwner === 'function' && groveOwner() === (b.owner || OWNER_PLAYER)
+     && !b.isCore){
+    applyGroveStage(b);
+  }
   b.hpBarBg = scene.add.rectangle(px, gy*TILE+2, size*TILE-6, 4, 0x2a1c10).setDepth(5);
   b.hpBarFg = scene.add.rectangle(gx*TILE+4, gy*TILE+2, size*TILE-6, 4, 0x6bbf59).setOrigin(0,0.5).setDepth(6);
   b.hpBarBg.setVisible(false); b.hpBarFg.setVisible(false);
@@ -1001,9 +1014,18 @@ function updateGatherer(u, delta){
     } else if(!u.path || !u.path.length){
       u.path = findPathToTowerPost(u, b);
       if(!u.path || !u.path.length){
-        flashWaveBanner('The villager can\'t reach that tower — is it walled off?');
-        unassignVillager(u); // unreachable — stand down rather than twitch forever
-      }
+        // Same retry the archer path uses, and for the same reason: order two
+        // or three villagers into a tower together and they arrive clustered,
+        // all routing to the same post tile. The first takes it and the rest
+        // fail against their own groupmate. Unassigning on the FIRST failure
+        // is why group garrisoning only ever got one of them in.
+        u.towerPostFailMs = (u.towerPostFailMs || 0) + delta;
+        if(u.towerPostFailMs > TOWER_POST_RETRY_MS){
+          u.towerPostFailMs = 0;
+          flashWaveBanner('The villager can\'t reach that tower — is it walled off?');
+          unassignVillager(u); // genuinely blocked — stand down rather than twitch forever
+        }
+      } else u.towerPostFailMs = 0;
     }
     return;
   }
@@ -1680,6 +1702,13 @@ function economyTick(){
   } else {
     state.starving = false;
   }
+  // The Grove earns HERE, inside the bracket, not from main.js afterwards.
+  // snapshotResourceRates() runs at the top of this function and the diff
+  // below closes it, so income banked outside those two lines is invisible to
+  // the rate readout — the Grove's entire production was landing after the
+  // diff, and its net flow tooltip showed upkeep only. It read as a faction
+  // that consumes and never produces.
+  if(typeof groveEconomyTick === 'function') groveEconomyTick();
   updateResourceRates();
   updateHUD();
 }

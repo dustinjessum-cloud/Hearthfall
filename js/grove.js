@@ -36,7 +36,11 @@ const GROVE = {
   // Every structure walks these in order. A seed is fragile and does nothing;
   // it is the window in which a raider can cheaply kill an expansion.
   stages: [
-    { name:'Seed',    hpMult:0.25, yieldMult:0,    scale:0.45 },
+    // 0.45 dated from when a Seed wore the finished building's own sprite and
+    // only had to look small. It now has a sprite OF a seed, and at 0.45 that
+    // is a 14px speck you cannot read or comfortably click — 0.6 keeps it
+    // clearly smaller than a Sapling while staying legible.
+    { name:'Seed',    hpMult:0.25, yieldMult:0,    scale:0.6  },
     { name:'Sapling', hpMult:0.55, yieldMult:0.5,  scale:0.7  },
     { name:'Grown',   hpMult:1.0,  yieldMult:1.0,  scale:1.0  },
     { name:'Ancient', hpMult:1.4,  yieldMult:1.35, scale:1.15 },
@@ -205,6 +209,14 @@ function applyGroveStage(b){
     const size = b.size || 1;
     b.sprite.setScale(st.scale * size);
   }
+  // A Seed wears ONE shared seed sprite whatever it is going to become, and
+  // puts on its own frame from Sapling onward. The core is exempt: the
+  // Heartwood starts already grown and its frame comes from the upgrade
+  // ladder in evolutionFrameFor.
+  if(!b.isCore && b.sprite && b.sprite.setFrame && b.baseFrame){
+    const want = (groveStage(b) === 0) ? FRAME.grove_seed : FRAME[b.baseFrame];
+    if(want !== undefined) b.sprite.setFrame(want);
+  }
 }
 
 // ---- Redirect Nutrients ----------------------------------------------
@@ -230,11 +242,13 @@ function redirectReady(){
   return groveActive() && !!groveHeartwood() && r.msLeft <= 0 && r.cooldownMs <= 0;
 }
 
-// A legal target: yours, alive, finished, not the Heartwood itself, and
-// CONNECTED. The connection check is the point of the whole ability — sap
-// cannot reach a limb the roots do not.
+// A legal target: yours, alive, finished, and CONNECTED. The connection check
+// is the point of the whole ability — sap cannot reach a limb the roots do
+// not. The Heartwood IS a legal target: it takes the worst of every raid
+// (losing it loses the run) and had no way to be healed at all, so excluding
+// it on flavour grounds was costing more than it was worth.
 function canRedirectTo(b, connected){
-  if(!b || b.hp <= 0 || b.isCore) return false;
+  if(!b || b.hp <= 0) return false;
   if((b.owner || OWNER_PLAYER) !== groveOwner()) return false;
   if(underConstruction(b)) return false;
   return (connected || groveConnectedIds()).has(b.id);
@@ -353,7 +367,6 @@ function updateRedirectGhost(gx, gy){
 function castRedirectAt(gx, gy){
   const b = (typeof occAt === 'function') ? occAt(gx, gy) : null;
   if(!b){ flashWaveBanner('Nothing there to feed.'); return false; }
-  if(b.isCore){ flashWaveBanner('The Heartwood is the source, not the target.'); return false; }
   if(!canRedirectTo(b)){ flashWaveBanner('That structure is not connected to the Heartwood.'); return false; }
   return startRedirect(b);
 }
@@ -782,7 +795,7 @@ function applyGroveFaction(){
   // rock nearby. needsWorker + bonusNear is all it takes — the gatherer,
   // hauling, depletion, dry-camp and crew-migration code is shared with every
   // other faction and needs no Grove special case.
-  BUILD_DEFS.lumber_camp = { name:'Heartroot', cost:{wood:16}, hp:55, frame:'tribe_timber',
+  BUILD_DEFS.lumber_camp = { name:'Heartroot', cost:{wood:16}, hp:55, frame:'grove_heartroot',
                              groveYield:{ wood: GROVE.tickYield.wood },
                              needsWorker:true, bonusNear:'forest' };
   BUILD_DEFS.quarry      = { name:'Stonebark', cost:{wood:24}, hp:65, frame:'tribe_pit',

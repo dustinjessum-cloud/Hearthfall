@@ -2759,6 +2759,63 @@ def draw_grove_deep_hollow(d):
     _gv_strand(d, 19, 16, 20, 8143)
 
 
+def draw_grove_seed(d):
+    # ONE seed for every Grove structure. Whatever you place lies dormant as
+    # this until a root reaches it, then becomes the building it was always
+    # going to be — so a field of pending expansions reads at a glance, and
+    # there is one sprite to draw instead of one per structure type.
+    #
+    # Rendered at stage scale 0.45, i.e. about 14px on screen, so it is drawn
+    # big and simple: a pod, a shoot, and nothing else. Fine detail here is
+    # invisible at the size this is actually seen.
+    ground_shadow(d, 8, 24, 26, 4)
+    # the pod: heavy, seam down the middle, sitting half-buried
+    d.ellipse([9, 12, 23, 28], fill=GV_BARK_D)
+    d.ellipse([10, 13, 22, 27], fill=GV_BARK)
+    d.ellipse([11, 14, 17, 21], fill=GV_BARK_L)      # lit shoulder
+    rect(d, 16, 15, 16, 26, GV_BARK_D)               # seam
+    for sy in (18, 22):                              # husk banding
+        d.line([11, sy, 21, sy+1], fill=GV_BARK_D)
+    # The shoot, in the PALEST greens available. Drawn in the ordinary leaf
+    # tones it was green-on-green against grass and vanished at the ~19px this
+    # is actually seen at — the one thing that has to read here is "something
+    # is starting", so the sprout is deliberately brighter than any foliage
+    # elsewhere in the faction.
+    rect(d, 15, 3, 16, 14, GV_LEAF_D)
+    rect(d, 15, 3, 15, 14, GV_LEAF_XL)
+    d.ellipse([7, 2, 16, 9], fill=GV_LEAF_D)         # first two leaves
+    d.ellipse([8, 3, 15, 8], fill=GV_LEAF_L)
+    d.ellipse([9, 3, 13, 6], fill=GV_LEAF_XL)
+    d.ellipse([16, 5, 25, 12], fill=GV_LEAF_D)
+    d.ellipse([17, 6, 24, 11], fill=GV_LEAF_L)
+    d.ellipse([18, 6, 22, 9], fill=GV_LEAF_XL)
+
+def draw_grove_heartroot(d):
+    # The Grove's timber structure. It wore the tribe's Timber Fell, which
+    # paints an opaque grass square — so it sat on the terrain as a visible
+    # tile of the wrong green, and the root network vanished under it. No
+    # ground fill here: everything the Grove builds is drawn OVER the map.
+    #
+    # A living thing rather than a work site: the tribe fells trunks and
+    # stacks them, the Grove opens a root and lets the timber come to it.
+    ground_shadow(d, 5, 27, 28, 4)
+    # arched root, drawn as a band so the ground shows through beneath it
+    for x0, y0, x1, y1 in [(6,28, 11,18), (11,18, 16,14), (16,14, 21,18), (21,18, 26,28)]:
+        d.line([x0, y0, x1, y1], fill=GV_BARK_D, width=4)
+        d.line([x0, y0-1, x1, y1-1], fill=GV_BARK, width=2)
+        d.line([x0, y0-2, x1, y1-2], fill=GV_BARK_L, width=1)
+    # cut lengths gathered under the arch — the yield, not a felling site
+    for lx, ly in ((9, 23), (15, 24), (20, 23)):
+        d.ellipse([lx, ly, lx+6, ly+6], fill=GV_BARK_D)
+        d.ellipse([lx+1, ly+1, lx+5, ly+5], fill=(150, 118, 78))
+        rect(d, lx+3, ly+3, lx+4, ly+4, (186, 156, 112))
+    # a few live leaves on the arch, so it reads as growing, not harvested
+    for cx, cy in ((11, 16), (16, 11), (22, 17)):
+        d.ellipse([cx-3, cy-2, cx+3, cy+3], fill=GV_LEAF_D)
+        d.ellipse([cx-2, cy-2, cx+2, cy+2], fill=GV_LEAF)
+        rect(d, cx-1, cy-1, cx, cy, GV_LEAF_XL)
+
+
 DRAWERS = [
     ("grass", draw_grass),
     ("forest", draw_forest),
@@ -2867,6 +2924,8 @@ DRAWERS = [
     ("grove_heart_3", draw_grove_heart_3),
     ("grove_hollow", draw_grove_hollow),
     ("grove_deep_hollow", draw_grove_deep_hollow),
+    ("grove_seed", draw_grove_seed),
+    ("grove_heartroot", draw_grove_heartroot),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

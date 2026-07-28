@@ -852,6 +852,11 @@ function findFriendlyPath(u, tx, ty, goalBuildingId){
   return null;
 }
 
+// How long a unit keeps trying to reach a tower's base before giving up. It
+// exists because the common failure is a groupmate standing on the post for a
+// moment, not a wall — see the retry note at the archer garrison loop.
+const TOWER_POST_RETRY_MS = 3000;
+
 // Path to a tower's BASE (any tile within Chebyshev 1 of it). Usually the
 // path ends on the tower tile via the goal exception and we drop that last
 // step; if all four sides are walled, a diagonally-adjacent tile still
@@ -1082,9 +1087,20 @@ function updateUnits(delta){
         } else if(!u.path || !u.path.length){
           u.path = findPathToTowerPost(u, t);
           if(!u.path || !u.path.length){
-            u.garrisonId = null; u.path = null; // unreachable — stand down
-            flashWaveBanner('The archer can\'t reach that tower — is it walled off?');
-          }
+            // A failed path is usually TEMPORARY: send two or three units at
+            // once and they arrive clustered, all routing to the same post
+            // tile. The first one takes it and the rest fail against their own
+            // groupmate. Standing down on the first failure is what made group
+            // garrisoning only ever admit one unit — you had to order them one
+            // at a time, because each climbed INSIDE (freeing the post) before
+            // the next was told to go. Keep trying for a few seconds; a walled
+            // off tower still fails every attempt and stands down as before.
+            u.towerPostFailMs = (u.towerPostFailMs || 0) + delta;
+            if(u.towerPostFailMs > TOWER_POST_RETRY_MS){
+              u.garrisonId = null; u.path = null; u.towerPostFailMs = 0;
+              flashWaveBanner('The archer can\'t reach that tower — is it walled off?');
+            }
+          } else u.towerPostFailMs = 0;
         }
       }
     }

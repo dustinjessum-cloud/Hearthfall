@@ -486,9 +486,9 @@ class MainScene extends Phaser.Scene {
     this.lastTickAt += delta;
     if(this.lastTickAt >= 3000){
       this.lastTickAt = 0;
-      economyTick();
+      economyTick();        // the Grove's own yield ticks INSIDE this, so it
+                            // lands inside the resource-rate bracket
       aiEconomyTick();
-      groveEconomyTick();   // the Grove yields by living, not by gathering
       heroManaTick();
     }
 

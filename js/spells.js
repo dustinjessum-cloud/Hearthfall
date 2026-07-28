@@ -31,6 +31,128 @@ const HERO_MANA = {
 const R = (arr) => (rank) => arr[Math.min(rank, arr.length) - 1];
 
 const HERO_SPELLS = {
+  // The Necromancer — the swarm's hero.
+  //
+  // Her J (web shot) and K (raise broodlings) already cover ranged poke and
+  // summoning, so the spellbook deliberately covers what she otherwise CANNOT
+  // do: turn the battlefield's dead into damage, hold a crowd at range, and
+  // mend her own. Three different answers, not three damage buttons.
+  swarm: [
+    {
+      id: 'corpse_bloom',
+      name: 'Corpse Bloom',
+      desc: 'Every corpse in the area bursts — shredding the living around it and sending the biomass home.',
+      maxRank: 3,
+      minLevel: 1,
+      targeting: 'point',
+      range: 7,
+      mana:     R([30, 34, 38]),
+      cooldown: R([16000, 14000, 12000]),
+      radius:   R([2.5, 3.2, 4.0]),
+      damage:   R([9, 14, 20]),
+      carrion:  R([8, 12, 18]),
+      rankText: (r, s) => `${s.radius(r).toFixed(1)} tile radius — ${s.damage(r)} damage around each corpse, +${s.carrion(r)} carrion each`,
+      cast(hero, gx, gy, rank){
+        const rad = this.radius(rank), dmg = this.damage(rank), food = this.carrion(rank);
+        const dead = (state.corpses || []).filter(c =>
+          Phaser.Math.Distance.Between(c.gx, c.gy, gx, gy) <= rad);
+        // Refusing here rather than fizzling matters: castHeroSpell only
+        // charges mana and starts the cooldown when cast() returns non-false,
+        // so an empty patch of ground costs the player nothing.
+        if(!dead.length){ flashWaveBanner('No dead here to bloom.'); return false; }
+        let hit = 0, banked = 0;
+        for(const c of dead){
+          for(const e of state.enemies){
+            if(e.hp <= 0 || e.kind === 'camp') continue;
+            if(Phaser.Math.Distance.Between(e.gx, e.gy, c.gx, c.gy) > 1.6) continue;
+            e.hp -= dmg; e.lastHitBy = 'hero'; hit++;
+          }
+          banked += addResource('food', food);
+          removeCorpse(c);
+        }
+        if(scene && scene.add){
+          const ring = scene.add.circle(gx*TILE+TILE/2, gy*TILE+TILE/2, 6, 0x9aae78, 0.35)
+            .setStrokeStyle(3, 0x6f8a4a, 0.95).setDepth(9);
+          scene.tweens.add({ targets: ring, scaleX: rad*2.4, scaleY: rad*2.4, alpha: 0,
+                             duration: 420, onComplete: ()=> ring.destroy() });
+          floatResourceText(gx, gy, `${dead.length} burst, +${Math.round(banked)} carrion`, '#9aae78');
+        }
+        return true;
+      },
+    },
+    {
+      id: 'grave_chill',
+      name: 'Grave Chill',
+      desc: 'A cold that settles in the living — a wide, lasting drag on everything caught in it.',
+      maxRank: 3,
+      minLevel: 2,
+      targeting: 'point',
+      range: 7,
+      mana:     R([28, 32, 36]),
+      cooldown: R([15000, 13000, 11000]),
+      radius:   R([3.0, 3.8, 4.6]),
+      slowMs:   R([4000, 6000, 8000]),
+      damage:   R([3, 5, 8]),
+      rankText: (r, s) => `${s.radius(r).toFixed(1)} tile radius, slows for ${(s.slowMs(r)/1000).toFixed(0)}s, ${s.damage(r)} damage`,
+      cast(hero, gx, gy, rank){
+        const rad = this.radius(rank), ms = this.slowMs(rank), dmg = this.damage(rank);
+        let caught = 0;
+        for(const e of state.enemies){
+          if(e.hp <= 0 || e.kind === 'camp') continue;
+          if(Phaser.Math.Distance.Between(e.gx, e.gy, gx, gy) > rad) continue;
+          // Reuses the web shot's slow field, so the drag on both movement AND
+          // rate of fire is already handled in enemies.js — one slow, one
+          // implementation, no second set of rules to keep in step.
+          e.webSlowMs = Math.max(e.webSlowMs || 0, ms);
+          e.hp -= dmg; e.lastHitBy = 'hero';
+          caught++;
+        }
+        if(scene && scene.add){
+          const ring = scene.add.circle(gx*TILE+TILE/2, gy*TILE+TILE/2, 6, 0x8fb4e8, 0.30)
+            .setStrokeStyle(3, 0x6f8ec8, 0.95).setDepth(9);
+          scene.tweens.add({ targets: ring, scaleX: rad*2.4, scaleY: rad*2.4, alpha: 0,
+                             duration: 500, onComplete: ()=> ring.destroy() });
+          floatResourceText(gx, gy, caught ? `${caught} chilled` : 'the cold finds nothing', '#8fb4e8');
+        }
+        return true;
+      },
+    },
+    {
+      id: 'knit_bone',
+      name: 'Knit Bone',
+      desc: 'Bone finds bone. Mends the Necromancer and every risen thing around her.',
+      maxRank: 3,
+      minLevel: 3,
+      targeting: 'self',
+      mana:     R([35, 40, 45]),
+      cooldown: R([24000, 21000, 18000]),
+      radius:   R([3.5, 4.5, 5.5]),
+      heal:     R([18, 30, 45]),
+      rankText: (r, s) => `heals ${s.heal(r)} to everything within ${s.radius(r).toFixed(1)} tiles`,
+      cast(hero, gx, gy, rank){
+        const rad = this.radius(rank), amt = this.heal(rank);
+        // The undead have NO other healing of any kind — every other faction
+        // out-sustains them by default. This is the whole reason the spell
+        // exists, so it deliberately reaches the hero herself too.
+        let mended = 0;
+        for(const u of state.units){
+          if(u.hp <= 0 || u.hp >= u.maxHp) continue;
+          if(Phaser.Math.Distance.Between(u.gx, u.gy, hero.gx, hero.gy) > rad) continue;
+          u.hp = Math.min(u.maxHp, u.hp + amt);
+          mended++;
+        }
+        if(scene && scene.add){
+          const ring = scene.add.circle(hero.gx*TILE+TILE/2, hero.gy*TILE+TILE/2, 6, 0xc9b0e8, 0.28)
+            .setStrokeStyle(3, 0xa88fd0, 0.95).setDepth(9);
+          scene.tweens.add({ targets: ring, scaleX: rad*2.4, scaleY: rad*2.4, alpha: 0,
+                             duration: 480, onComplete: ()=> ring.destroy() });
+          floatResourceText(hero.gx, hero.gy, mended ? `${mended} knitted` : 'nothing broken', '#c9b0e8');
+        }
+        return true;
+      },
+    },
+  ],
+
   // The Elder Bough — the Grove's hero.
   grove: [
     {
@@ -173,8 +295,16 @@ function isEnemyRooted(e){ return !!(e && e.rootedMs > 0); }
 // so a third targeted thing needs no third set of input rules.
 function beginSpellTargeting(id){
   if(!heroSpellReady(id)) return;
-  state.castMode = { kind:'spell', spellId:id };
   const s = heroSpellById(id);
+  // A SELF cast has nothing to aim at. Without this it entered targeting mode
+  // anyway and made you click your own hero to buff your own hero, which reads
+  // as a bug rather than a spell.
+  if(s && s.targeting === 'self'){
+    const hero = livingCaptain();
+    if(hero) castHeroSpell(id, hero.gx, hero.gy);
+    return;
+  }
+  state.castMode = { kind:'spell', spellId:id };
   flashWaveBanner(`${s.name} — choose a target. Esc or right-click to cancel.`);
 }
 function cancelSpellTargeting(){

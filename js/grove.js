@@ -43,8 +43,9 @@ const GROVE = {
     // The shape is the one growth actually has — quick out of the ground,
     // then slower and slower. A seed becomes something in fifteen seconds, so
     // planting reads as immediate and a Seed's zero yield is a brief cost
-    // rather than a punishment. Ancient is a real investment at two minutes,
-    // which is what makes an old grove worth defending rather than replacing.
+    // rather than a punishment. Ancient is a real investment at three minutes
+    // — roughly four to reach from planting — which is what makes an old
+    // grove worth defending rather than replacing.
     //
     // 0.45 dated from when a Seed wore the finished building's own sprite and
     // only had to look small. It now has a sprite OF a seed, and at 0.45 that
@@ -52,7 +53,7 @@ const GROVE = {
     // clearly smaller than a Sapling while staying legible.
     { name:'Seed',    hpMult:0.25, yieldMult:0,    scale:0.6,  growMs: 15000  },
     { name:'Sapling', hpMult:0.55, yieldMult:0.5,  scale:0.7,  growMs: 50000  },
-    { name:'Grown',   hpMult:1.0,  yieldMult:1.0,  scale:1.0,  growMs: 120000 },
+    { name:'Grown',   hpMult:1.0,  yieldMult:1.0,  scale:1.0,  growMs: 180000 },
     { name:'Ancient', hpMult:1.4,  yieldMult:1.35, scale:1.15, growMs: null   },
   ],
   stageMs: 45000,          // fallback only, if a stage omits growMs
@@ -220,8 +221,21 @@ function updateGroveGrowth(delta){
 function applyGroveStage(b){
   const st = groveStageDef(b);
   const base = b.baseMaxHp || (b.baseMaxHp = b.maxHp);
+  // Carry the health FRACTION across a stage change, not the absolute value.
+  //
+  // This used to clamp hp downward only — fine while the first call happened
+  // at Sapling with hp still full, but the moment a Seed was staged at
+  // creation the structure was pinned to seed health for life: 15/15 as a
+  // Seed, then 15/33, 15/60, 15/84 as its ceiling rose and its actual health
+  // never moved. Every mature structure sat at a sliver of health it could
+  // only recover by being healed.
+  //
+  // A healthy seed should become a healthy sapling; a half-dead one should
+  // stay half-dead.
+  const prevMax = b.maxHp || base;
+  const frac = (b.hp > 0 && prevMax > 0) ? Math.min(1, b.hp / prevMax) : 0;
   b.maxHp = Math.round(base * st.hpMult);
-  b.hp = Math.min(b.hp <= 0 ? 0 : Math.max(b.hp, 1), b.maxHp);
+  b.hp = (frac <= 0) ? 0 : Math.max(1, Math.round(b.maxHp * frac));
   if(b.sprite && b.sprite.setScale){
     const size = b.size || 1;
     b.sprite.setScale(st.scale * size);

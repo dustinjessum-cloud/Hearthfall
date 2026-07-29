@@ -691,13 +691,21 @@ function computeGroupTargets(units, gx, gy){
   return targets;
 }
 
-// build/garrisonTC are single-assignee jobs — only one unit in a group
-// should actually claim one (executeOrder's own "bump the previous
-// builder" logic would otherwise have groupmates fight over it, with only
-// the last one processed actually winning). work/garrisonTower/repair have
-// real worker caps (or just don't conflict), so every eligible groupmate
-// is let through for those.
-const SINGLE_ASSIGNEE_KINDS = new Set(['build', 'garrisonTC', 'bury', 'raise']);
+// build is a single-assignee job — only one unit in a group should actually
+// claim one (executeOrder's own "bump the previous builder" logic would
+// otherwise have groupmates fight over it, with only the last one processed
+// actually winning). Same for bury/raise: one corpse, one worker.
+// work/garrisonTower/repair have real worker caps (or just don't conflict),
+// so every eligible groupmate is let through for those.
+//
+// garrisonTC is NOT single-assignee, despite once being listed here. The keep
+// holds EVERYONE — only the damage contribution caps (TC_GARRISON.attackCap),
+// and garrisonVillagerInTC refuses only a worker already inside. Because the
+// claim key for it is the same string ('garrisonTC:core') for every unit, one
+// villager took the order and the rest fell through to a spread MOVE and
+// milled about outside the Town Hall. That is the "clunky" half of group
+// garrisoning.
+const SINGLE_ASSIGNEE_KINDS = new Set(['build', 'bury', 'raise']);
 function resolveGroupOrders(units, gx, gy){
   const claimed = new Set();
   return units.map(u=>{
@@ -863,13 +871,31 @@ const TOWER_POST_RETRY_MS = 3000;
 // counts as the post, so fall back to trying the corners as explicit goals.
 function findPathToTowerPost(u, t){
   let p = findFriendlyPath(u, t.gx, t.gy, t.id);
-  if(p){ if(p.length) p.pop(); return p; }
+  if(p){
+    if(p.length) p.pop();   // never stand ON the tower — post up at its base
+    // ...but only hand it back if popping left something to walk.
+    //
+    // findFriendlyPath SMOOTHS its route (see smoothPath): a clear run across
+    // open ground collapses into a single long leg whose one waypoint IS the
+    // destination. Popping that leaves an EMPTY array, and every caller reads
+    // empty as "unreachable" — so a villager or archer ordered into a tower
+    // they can see plainly would stand still for TOWER_POST_RETRY_MS and then
+    // give up with "can't reach that tower", without taking a step. The
+    // clearer the ground, the more certain the failure; only an obstacle
+    // forcing a dogleg (two legs or more) made it work at all. Falling
+    // through to the neighbour search below is what fixes it.
+    if(p.length) return p;
+  }
   let best = null;
-  for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1]]){
+  // Diagonals first, matching the old preference, then the orthogonals —
+  // a tower's orthogonal neighbours are usually where its wall line sits,
+  // but friendlyBlocked already rejects those, and refusing to consider
+  // them at all left free tiles unused.
+  for(const [dx,dy] of [[1,1],[1,-1],[-1,1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]]){
     const gx=t.gx+dx, gy=t.gy+dy;
     if(friendlyBlocked(u, gx, gy, t.id)) continue;
     const q = findFriendlyPath(u, gx, gy, t.id);
-    if(q && (!best || q.length < best.length)) best = q;
+    if(q && q.length && (!best || q.length < best.length)) best = q;
   }
   return best;
 }

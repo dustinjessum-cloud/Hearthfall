@@ -537,7 +537,9 @@ class MainScene extends Phaser.Scene {
     // skirmishes: random harassment between the big waves (only once the
     // war has started — the pre-first-raid peace stays untouched). These
     // stop with the raids; the enemy town takes over the pressure.
-    if(state.wave >= 1 && state.wave < RAIDS_BEFORE_CORRIDOR && !isRaidActive()){
+    // hasHostilesAfield, not isRaidActive: this gate exists to stop skirmishes
+    // piling on top of each other, so it has to count skirmishers too.
+    if(state.wave >= 1 && state.wave < RAIDS_BEFORE_CORRIDOR && !hasHostilesAfield()){
       state.nextSkirmishInMs -= delta;
       if(state.nextSkirmishInMs <= 0){
         spawnSkirmish();

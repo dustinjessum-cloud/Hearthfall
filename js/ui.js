@@ -1395,7 +1395,7 @@ function updatePanelLive(type, ref){
     const st = groveStageDef(ref);
     const maxed = groveStage(ref) >= groveMaxStage(ref);
     const linked = isGroveConnected(ref);
-    const pct = maxed ? 1 : Math.min(1, (ref.groveAgeMs||0) / GROVE.stageMs);
+    const pct = maxed ? 1 : Math.min(1, (ref.groveAgeMs||0) / groveStageMs(ref));
     if(nEl){
       nEl.textContent = maxed
         ? `${st.name} — fully grown${ref.isCore ? '' : ' (only the Heartwood grows further)'}`

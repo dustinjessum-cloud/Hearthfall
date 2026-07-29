@@ -371,6 +371,9 @@ function restoreGameInner(snapshot){
     // war roles must survive a reload, or a party mid-march reloads as an
     // ordinary raider and a mustering soldier is forgotten entirely
     if(se.mustering) e.mustering = true;
+    // without this a reload turns every wave enemy into ambient harassment,
+    // and Ready for Raid unlocks mid-raid
+    if(se.fromWave) e.fromWave = true;
     if(se.aiAttacker){
       e.aiAttacker = true;
       e.partyId = se.partyId; e.partyGx = se.partyGx; e.partyGy = se.partyGy;

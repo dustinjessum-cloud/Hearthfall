@@ -24,7 +24,7 @@ function spawnWave(){
     if(i < ranged){ isRanged = true; kind = 'raider'; }
     else if(i < ranged + pillagers){ kind = 'pillager'; }
     else { kind = null; } // regular melee (tough swordsman on the wave%3 cadence)
-    setTimeout(()=> spawnEnemy(hp, dmg, wave, kind, null, {race, ranged:isRanged}), i*500);
+    setTimeout(()=> spawnEnemy(hp, dmg, wave, kind, null, {race, ranged:isRanged, fromWave:true}), i*500);
   }
   // from wave 3 on, battering rams roll in: slow, very tough, immune to the
   // temptation of chasing your soldiers — they exist to flatten buildings.
@@ -32,7 +32,7 @@ function spawnWave(){
   if(wave >= 3){
     const rams = 1 + Math.floor((wave-3)/3);
     for(let i=0;i<rams;i++){
-      setTimeout(()=> spawnEnemy(80 + wave*10, 20, wave, 'ram'), 1500 + i*900);
+      setTimeout(()=> spawnEnemy(80 + wave*10, 20, wave, 'ram', null, {fromWave:true}), 1500 + i*900);
     }
   }
   logEvent('wave', { n: wave, race, count });
@@ -138,6 +138,11 @@ function spawnEnemy(hp, dmg, wave, kind, at, opts){
   const e = {
     id: enemyIdCounter++, gx, gy, hp:eHp, maxHp:eHp, dmg:eDmg, kind:k,
     race, ranged, speedMult: spd,
+    // Was this spawned by a WAVE, or is it ambient harassment (a skirmish, a
+    // bandit camp's patrol)? Both produce identical kinds, so without this
+    // flag isRaidActive() cannot tell them apart — and one stray skirmisher
+    // wandering the map counted as "a raid is in progress" forever.
+    fromWave: !!(opts && opts.fromWave),
     path: null, pathIdx: 0, lastMoveAt:0, lastAttackAt:0, target:null,
   };
   e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME[frame])

@@ -36,16 +36,26 @@ const GROVE = {
   // Every structure walks these in order. A seed is fragile and does nothing;
   // it is the window in which a raider can cheaply kill an expansion.
   stages: [
+    // growMs is the time to LEAVE this stage, and it lengthens sharply as the
+    // structure ages. A flat 45s everywhere made the whole life cycle feel
+    // like one slow metronome: the first payoff was as far away as the last.
+    //
+    // The shape is the one growth actually has — quick out of the ground,
+    // then slower and slower. A seed becomes something in fifteen seconds, so
+    // planting reads as immediate and a Seed's zero yield is a brief cost
+    // rather than a punishment. Ancient is a real investment at two minutes,
+    // which is what makes an old grove worth defending rather than replacing.
+    //
     // 0.45 dated from when a Seed wore the finished building's own sprite and
     // only had to look small. It now has a sprite OF a seed, and at 0.45 that
     // is a 14px speck you cannot read or comfortably click — 0.6 keeps it
     // clearly smaller than a Sapling while staying legible.
-    { name:'Seed',    hpMult:0.25, yieldMult:0,    scale:0.6  },
-    { name:'Sapling', hpMult:0.55, yieldMult:0.5,  scale:0.7  },
-    { name:'Grown',   hpMult:1.0,  yieldMult:1.0,  scale:1.0  },
-    { name:'Ancient', hpMult:1.4,  yieldMult:1.35, scale:1.15 },
+    { name:'Seed',    hpMult:0.25, yieldMult:0,    scale:0.6,  growMs: 15000  },
+    { name:'Sapling', hpMult:0.55, yieldMult:0.5,  scale:0.7,  growMs: 50000  },
+    { name:'Grown',   hpMult:1.0,  yieldMult:1.0,  scale:1.0,  growMs: 120000 },
+    { name:'Ancient', hpMult:1.4,  yieldMult:1.35, scale:1.15, growMs: null   },
   ],
-  stageMs: 45000,          // time per stage
+  stageMs: 45000,          // fallback only, if a stage omits growMs
   maxStage: 3,             // ordinary structures stop at Ancient...
   heartwoodMaxStage: 5,    // ...the Heartwood keeps going, and stays the heart
 
@@ -168,6 +178,13 @@ function groveStructures(){
 // ---- growth ----------------------------------------------------------
 function groveStage(b){ return Math.min(b.groveStage || 0, GROVE.stages.length - 1); }
 function groveStageDef(b){ return GROVE.stages[groveStage(b)]; }
+// How long THIS structure must hold its current stage before the next one.
+// Read through a helper so the progress bar and the growth tick can never
+// disagree about which number they are measuring against.
+function groveStageMs(b){
+  const st = groveStageDef(b);
+  return (st && st.growMs) || GROVE.stageMs;
+}
 function groveMaxStage(b){
   return b.isCore ? Math.min(GROVE.heartwoodMaxStage, GROVE.stages.length-1) : GROVE.maxStage;
 }
@@ -190,7 +207,7 @@ function updateGroveGrowth(delta){
     if(fedId != null) step = (b.id === fedId) ? delta * GROVE.redirect.growthMult : 0;
     if(step <= 0) continue;
     b.groveAgeMs = (b.groveAgeMs || 0) + step;
-    if(b.groveAgeMs >= GROVE.stageMs){
+    if(b.groveAgeMs >= groveStageMs(b)){
       b.groveAgeMs = 0;
       b.groveStage = groveStage(b) + 1;
       applyGroveStage(b);

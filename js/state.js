@@ -106,7 +106,20 @@ const state = {
 //
 // A Phase 4 attack party is neither a homeGuard nor a worker, so it will
 // still count here — which is exactly what we want.
+// "A WAVE is in progress." Wave-spawned only, because a skirmish and a bandit
+// camp's patrol produce exactly the same kinds a wave does — so testing kind
+// alone meant one stray skirmisher wandering the map read as an active raid
+// for as long as it lived. That greyed out Ready for Raid (and made
+// callRaidNow early-return), which is what "the button is broken" was.
 function isRaidActive(){
+  return state.enemies.some(e =>
+    e.hp > 0 && e.fromWave && e.kind !== 'camp' && e.kind !== 'ai_worker' && !e.homeGuard);
+}
+
+// The broader question — "is ANYTHING hostile loose out there" — kept for the
+// gates that genuinely mean that, like not stacking a fresh skirmish on top
+// of one already running.
+function hasHostilesAfield(){
   return state.enemies.some(e =>
     e.hp > 0 && e.kind !== 'camp' && e.kind !== 'ai_worker' && !e.homeGuard);
 }

@@ -217,6 +217,11 @@ function updateTumorSpread(delta){
     if(!blightCanEverSpread(b)) continue;
     b.spreadAgeMs = (b.spreadAgeMs||0) + delta;
   }
+  // Readiness is a TIMER, so the gloom cannot be refreshed from updateHUD the
+  // way the tower badge is — a mound would sit charged and unmarked until the
+  // next economy tick. This runs every frame; it is a loop over a handful of
+  // structures that exits immediately for anything already lit.
+  updateGloomMarkers();
 }
 
 // Everything that anchors blight: the Necropolis and every Grave Mound.
@@ -248,6 +253,78 @@ function blightSpreadReady(b){
 }
 function blightSpreadRemainingMs(b){
   return Math.max(0, SWARM.creep.tumorSpreadDelayMs - (b.spreadAgeMs||0));
+}
+
+// ---- the gloom -------------------------------------------------------
+// An on-map sign that a Grave Mound is charged and waiting to be pointed
+// somewhere. Readiness used to live ONLY in the info panel — a button label
+// and a countdown — so the player had to select each mound in turn to find
+// out which ones could seed again.
+//
+// GRAVE MOUNDS ONLY. The Necropolis shares the readiness predicate and was
+// marked too at first, but it seeds exactly once in a run and the player is
+// already looking straight at it; wreathing the town centre spent the effect
+// on the one structure that never needed finding.
+//
+// Drawn from primitives rather than a sprite on purpose: the sheet has two
+// free slots left, and spending one on a glow that a tinted circle renders
+// perfectly would be a poor trade.
+// Spirit-purple mist gathered at the FOOT of the structure — subtle, and
+// deliberately not a ring: an outlined circle read as a UI overlay rather than
+// as something in the world.
+//
+// Three stacked ellipses, flattened and increasingly bright toward the middle,
+// stand in for a gradient (Phaser primitives have none). Purple because the
+// blight itself is already green — a green glow on green ground says nothing,
+// and 0xc9a0ff is the spirit-light this faction already uses when a broodling
+// dissolves. Drawn ABOVE the structure so nothing hides it, which is safe at
+// these alphas: it reads as mist in front of the base, not as paint.
+const GLOOM = {
+  haze:       0x6b3fa0,   // the outer wash
+  core:       0xc9a0ff,   // pale spirit-light at its heart
+  hazeAlpha:  0.20,
+  midAlpha:   0.26,
+  coreAlpha:  0.30,
+  widthMult:  0.95,       // of the footprint
+  heightMult: 0.34,       // flattened: mist lying at the foot, not a bubble
+  pulseMs:    1900,
+};
+
+function updateGloomMarkers(){
+  if(!scene || !scene.add) return;
+  for(const b of state.buildings){
+    // isMine: the enemy town seeds blight by its own rules, and how charged
+    // ITS mounds are is not something to hand the player for free.
+    const lit = isMine(b) && b.hp > 0 && !underConstruction(b)
+             && b.type === 'creep_tumor'   // mounds only — never the Necropolis
+             && blightSpreadReady(b);
+    if(!lit){
+      if(b.gloom){
+        scene.tweens.killTweensOf(b.gloom);   // a tween outliving its target throws
+        b.gloom.destroy();
+        b.gloom = null;
+      }
+      continue;
+    }
+    if(b.gloom) continue;   // already lit — the tween keeps it breathing
+    const size = b.size || 1;
+    const w = size*TILE*GLOOM.widthMult, h = size*TILE*GLOOM.heightMult;
+    const haze = scene.add.ellipse(0, 0, w*1.35, h*1.55, GLOOM.haze, GLOOM.hazeAlpha);
+    const mid  = scene.add.ellipse(0, 0, w,      h,      GLOOM.haze, GLOOM.midAlpha);
+    const core = scene.add.ellipse(0, 0, w*0.55, h*0.60, GLOOM.core, GLOOM.coreAlpha);
+    // anchored to the BASE of the footprint, not its centre
+    const baseY = b.gy*TILE + size*TILE - 5;
+    b.gloom = scene.add
+      .container(b.gx*TILE + size*TILE/2, baseY, [haze, mid, core])
+      .setDepth(7);
+    scene.tweens.add({
+      targets: b.gloom,
+      alpha: { from: 0.62, to: 1 },
+      scale: { from: 0.94, to: 1.06 },
+      y:     { from: baseY, to: baseY - 1.5 },   // a slow hover, barely there
+      duration: GLOOM.pulseMs, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+  }
 }
 
 // How far from the parent a new mound may be planted: its own blight reach.

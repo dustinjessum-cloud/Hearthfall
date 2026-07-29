@@ -923,6 +923,8 @@ function removeBuilding(b){
   }
   state.buildings = state.buildings.filter(x=>x!==b);
   if(b.garrisonMarker){ b.garrisonMarker.destroy(); b.garrisonMarker = null; }
+  // the gloom (a charged blight source) goes with it — see updateGloomMarkers
+  if(b.gloom){ scene.tweens.killTweensOf(b.gloom); b.gloom.destroy(); b.gloom = null; }
   b.sprite.destroy(); b.hpBarBg.destroy(); b.hpBarFg.destroy();
   const def = BUILD_DEFS[b.type];
   // and symmetrically: razing one of THEIR houses must not shrink your cap

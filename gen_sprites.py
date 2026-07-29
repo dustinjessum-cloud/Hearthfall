@@ -2256,33 +2256,62 @@ def draw_grove_elder(d):
     for tx, ty in ((28, 23), (30, 23)):
         rect(d, tx, ty, tx, ty+1, BARK_D)
 
-    # canopy crown, larger and layered
-    d.ellipse([5, 1, 27, 14], fill=MOSS_D)
-    d.ellipse([6, 2, 25, 12], fill=MOSS)
-    d.ellipse([8, 3, 18, 9], fill=MOSS_L)
-    for lx, ly in ((4, 6), (26, 7), (10, 0), (19, 0), (22, 3)):
-        d.ellipse([lx, ly, lx+4, ly+4], fill=MOSS)
-    # blossom crown — the mark of the elder
-    for bx, by in ((8, 2), (13, 0), (18, 0), (23, 3), (5, 8), (26, 10)):
-        d.ellipse([bx, by, bx+2, by+2], fill=BLOOM)
-        rect(d, bx, by, bx, by, BLOOM_L)
+    # BARE ANTLER BRANCHES, drawn BEFORE the canopy so they rise out of it.
+    #
+    # This is the fix for the read at true size. Everything else about him was
+    # already grander than an Ent — staff, blossom, lichen, burning eyes — but
+    # all of it sat INSIDE a round green blob, and at 32px a round green blob
+    # is exactly what an ordinary Ent is. He was invisible in his own army.
+    #
+    # Pale dead wood breaking upward out of the canopy changes the SILHOUETTE,
+    # which is the only thing that survives at this size. It is the same trick
+    # the Minotaur's horns and axe pull: a hard, light shape crossing the
+    # outline where nothing else has one.
+    ANTLER, ANTLER_L = (188, 168, 132), (232, 216, 184)
+    for bx, by, tx, ty in ((11, 7, 6, 0), (16, 6, 16, 0), (21, 7, 26, 0)):
+        d.line([bx, by, tx, ty], fill=ANTLER, width=3)
+        d.line([bx, by, tx, ty], fill=ANTLER_L, width=1)
+    # forks, so they read as antlers rather than three sticks
+    for fx, fy, dx in ((8, 2, -3), (16, 2, 3), (24, 2, 3)):
+        d.line([fx, fy, fx+dx, fy-2], fill=ANTLER)
+        rect(d, fx+dx, fy-2, fx+dx, fy-2, ANTLER_L)
 
-    # burning eyes set deep under the canopy
-    rect(d, 12, 10, 14, 12, (28, 22, 16))
-    rect(d, 18, 10, 20, 12, (28, 22, 16))
-    rect(d, 12, 10, 13, 11, EYE)
-    rect(d, 19, 10, 20, 11, EYE)
-    rect(d, 13, 10, 13, 10, EYE_HOT)
-    rect(d, 19, 10, 19, 10, EYE_HOT)
+    # canopy crown — pulled DOWN and IN so the antlers clear it, and kept a
+    # shade darker than an Ent's so the pale wood has something to sit against
+    d.ellipse([5, 4, 27, 16], fill=MOSS_D)
+    d.ellipse([6, 5, 25, 14], fill=MOSS)
+    d.ellipse([8, 6, 17, 11], fill=MOSS_L)
+    for lx, ly in ((4, 8), (26, 9), (11, 3), (20, 3)):
+        d.ellipse([lx, ly, lx+4, ly+4], fill=MOSS)
+    # blossom crown — the mark of the elder. Consolidated into three bigger
+    # clusters instead of six single pixels; at 32px scattered dots read as
+    # dirt on the screen, not flowers.
+    # ...and sat DOWN onto the body of the canopy. At the top edge they
+    # collided with the antlers emerging from the same pixels and the whole
+    # crown turned to noise — two pale features fighting for one outline.
+    for bx, by in ((7, 9), (15, 11), (22, 9)):
+        d.ellipse([bx, by, bx+3, by+3], fill=BLOOM)
+        d.ellipse([bx, by, bx+2, by+2], fill=BLOOM_L)
+        rect(d, bx+1, by+1, bx+1, by+1, (255, 244, 210))
+
+    # Burning eyes set deep under the canopy. Dropped 5px along with the
+    # canopy — left where they were, the foliage now covered them and the one
+    # warm accent on his face was lost.
+    rect(d, 12, 15, 14, 17, (28, 22, 16))
+    rect(d, 18, 15, 20, 17, (28, 22, 16))
+    rect(d, 12, 15, 13, 16, EYE)
+    rect(d, 19, 15, 20, 16, EYE)
+    rect(d, 13, 15, 13, 15, EYE_HOT)
+    rect(d, 19, 15, 19, 15, EYE_HOT)
 
     # A dark hollow for a mouth, like the Ent's knot. Teeth were tried and
     # cut: at 32px the gaps between them close up and the whole thing reads as
     # a pale slab, so the shape has to carry it rather than the detail.
-    d.ellipse([13, 14, 19, 20], fill=(26, 19, 14))
-    d.ellipse([14, 15, 18, 18], fill=(46, 34, 24))
-    rect(d, 13, 13, 19, 13, BARK_XD)                 # heavy brow above it
+    d.ellipse([13, 19, 19, 24], fill=(26, 19, 14))
+    d.ellipse([14, 20, 18, 22], fill=(46, 34, 24))
+    rect(d, 13, 18, 19, 18, BARK_XD)                 # heavy brow above it
     for bx in (9, 10, 22, 23):
-        d.line([bx, 13, bx-1, 13 + 3 + (bx % 3)], fill=LICHEN)
+        d.line([bx, 16, bx-1, 16 + 3 + (bx % 3)], fill=LICHEN)
     scatter(d, 7781, 12, MOSS_L)
     scatter(d, 7787, 5, BLOOM)
 

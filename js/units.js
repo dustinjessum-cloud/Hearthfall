@@ -394,7 +394,7 @@ function removeUnit(u){
   // does not quietly stop dropping corpses. The hero has his own revival,
   // and the undead are already dead.
   if(state.faction!=='swarm' && u.type!=='captain' && u.type!=='flesh_golem'){
-    spawnCorpse(u.gx, u.gy);
+    spawnCorpse(u.gx, u.gy, u.type);
   }
   destroyUnitVisuals(u);
   state.units = state.units.filter(x=>x!==u);

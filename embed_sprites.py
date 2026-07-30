@@ -24,6 +24,24 @@ assert len(names) <= int(rows) * int(cols), (
     f"{len(names)} sprites will not fit in {rows}x{cols}={int(rows)*int(cols)} slots"
 )
 
+# --- and the OTHER half of that number, over in main.js ---
+#
+# ROWS here and `rows` in setupFrames() are one value stored in two files.
+# Nothing used to compare them, and a mismatch does not throw: Phaser happily
+# slices frames past the end of the texture and the game renders the WRONG
+# SPRITE for everything after the old boundary. That is a bug you chase in the
+# art before you think to look at a constant. Fail the build instead.
+main_js = open(os.path.join(GAME, "js", "main.js"), encoding="utf-8").read()
+m = re.search(r"const\s+cols\s*=\s*(\d+)\s*,\s*rows\s*=\s*(\d+)\s*,\s*size\s*=\s*(\d+)", main_js)
+assert m, "could not find `const cols=..., rows=..., size=...` in setupFrames() in js/main.js"
+js_cols, js_rows, js_size = m.group(1), m.group(2), m.group(3)
+assert (js_rows, js_cols) == (rows, cols), (
+    f"SHEET MISMATCH: gen_sprites.py has ROWS={rows} COLS={cols}, but "
+    f"setupFrames() in js/main.js has rows={js_rows} cols={js_cols}. "
+    f"They are two halves of one number - fix both, then re-run."
+)
+assert js_size == "32", f"setupFrames() expects {js_size}px frames; gen_sprites.py draws 32px"
+
 # --- rebuild the FRAME literal, 5 per line to match the existing shape ---
 entries = [f"{n}:{i}" for i, n in enumerate(names)]
 lines = []

@@ -249,7 +249,10 @@ function restoreGameInner(snapshot){
   // ---- corpses (fallen humans awaiting raise/burial) ----
   state.corpses = [];
   for(const sc of (snapshot.corpses || [])){
-    const c = spawnCorpse(sc.gx, sc.gy);
+    // kind is passed in rather than assigned after: it sets the sprite SCALE
+    // at creation, and a corpse restored without it came back villager-sized
+    // whatever had died there.
+    const c = spawnCorpse(sc.gx, sc.gy, sc.kind);
     c.id = sc.id; c.rotMs = sc.rotMs; // keep identity + remaining rot time
   }
 

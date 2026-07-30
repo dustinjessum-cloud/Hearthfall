@@ -17,6 +17,9 @@ const SWARM = {
     spreadsFromMound: 2,         // mounds carry the chain outward from there
                                   // more generations beyond itself
     tumorSpreadDelayMs: 35000,   // how long a mature tumor waits before
+    spreadGrowMs: 10000,         // a seeded mound is INERT for this long: it
+                                 // is placed at once, but anchors no blight and
+                                 // charges no spread of its own until it rises
                                   // attempting its one spread
     seedRadius: 4,              // instant creep at game start
     spreadMs: 900,              // one growth pulse this often
@@ -152,7 +155,9 @@ function creepSources(){
   const th = townHall();
   if(th && th.hp > 0) out.push({ gx: th.gx, gy: th.gy, r: SWARM.creep.hiveRadius[(th.level||1)-1] });
   for(const b of myBuildings()){
-    if(b.type === 'creep_tumor' && b.hp > 0 && !underConstruction(b)) out.push({ gx: b.gx, gy: b.gy, r: SWARM.creep.tumorGenRadius[b.creepGen||0] });
+    // growMs: a freshly seeded mound anchors NOTHING until it has risen, which
+    // is what makes Spread Blight a commitment rather than an instant claim
+    if(b.type === 'creep_tumor' && b.hp > 0 && !underConstruction(b) && !(b.growMs > 0)) out.push({ gx: b.gx, gy: b.gy, r: SWARM.creep.tumorGenRadius[b.creepGen||0] });
   }
   return out;
 }
@@ -212,11 +217,15 @@ function trySpreadTumor(parent){
 // comes from tumorGenRadius (3 -> 2 -> 1), and the chain stops after
 // tumorSpreadGenerations. All that moved is who picks the direction.
 function updateTumorSpread(delta){
+  updateBlightGrowth(delta);
   for(const b of blightSources()){
     if(b.hp<=0 || underConstruction(b)) continue;
+    if(b.growMs > 0) continue;          // still rising: it charges nothing yet
     if(!blightCanEverSpread(b)) continue;
     b.spreadAgeMs = (b.spreadAgeMs||0) + delta;
   }
+  // blight abandoned by a dead mound recedes — see fadeOrphanedCreep
+  fadeOrphanedCreep(delta, creepSources());
   // Readiness is a TIMER, so the gloom cannot be refreshed from updateHUD the
   // way the tower badge is — a mound would sit charged and unmarked until the
   // next economy tick. This runs every frame; it is a loop over a handful of
@@ -361,6 +370,11 @@ function spreadBlightTo(parent, gx, gy){
   if(!b) return false;
   b.creepGen = gen;
   b.construction = null; b.underConstruction = false; b.awaitingBuilder = false; b.buildMs = 0;
+  // It RISES rather than appearing. buildMs is not the mechanism: construction
+  // only ticks down while a builder physically stands there, and nobody builds
+  // a grave mound — so this is its own timer, cleared by updateBlightGrowth.
+  b.growMs = SWARM.creep.spreadGrowMs;
+  if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(0.45);
   // Each generation is visibly smaller, matching its smaller reach — so the
   // map shows at a glance how much further a chain can still go.
   // Every spread mound is smaller than the structure that made it, and each
@@ -376,10 +390,12 @@ function spreadBlightTo(parent, gx, gy){
   // rebuild, or a spent structure keeps showing a button it can no longer use.
   const panel = document.getElementById('infoPanel');
   if(panel) panel._boundRef = null;
-  updateCreep();                        // immediate bloom, so the click has an effect
+  // No immediate bloom any more — the ground does not turn until the mound has
+  // risen. The spread is SPENT at the moment of casting either way, so a mound
+  // killed while it is still rising wastes the seeding.
   flashWaveBanner(gen >= SWARM.creep.tumorSpreadGenerations
-    ? 'The blight reaches its limit here.'
-    : 'A Grave Mound rises — the blight creeps onward.');
+    ? 'A Grave Mound stirs — the blight reaches its limit here.'
+    : `A Grave Mound stirs — it will rise in ${Math.round(SWARM.creep.spreadGrowMs/1000)}s.`);
   refreshInfoPanel();
   markMinimapDirty();
   return true;
@@ -644,4 +660,84 @@ function updateNecropolisPall(){
       duration: PALL.pulseMs, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
     });
   }
+}
+
+// ---- a seeded mound rises ---------------------------------------------
+// Spread Blight used to claim ground the instant you clicked. Now the mound is
+// placed at once but lies inert for SWARM.creep.spreadGrowMs: no blight of its
+// own, no charge toward its own spread, and drawn faint so the map shows it is
+// not finished. This is what gives an opponent a window to answer a seeding.
+function updateBlightGrowth(delta){
+  for(const b of myBuildings()){
+    if(!(b.growMs > 0)) continue;
+    b.growMs -= delta;
+    if(b.growMs > 0){
+      // fade up as it comes: 0.45 -> 1.0 across the wait
+      if(b.sprite && b.sprite.setAlpha){
+        const t = 1 - Math.max(0, b.growMs) / SWARM.creep.spreadGrowMs;
+        b.sprite.setAlpha(0.45 + 0.55 * t);
+      }
+      continue;
+    }
+    b.growMs = 0;
+    if(b.sprite && b.sprite.setAlpha) b.sprite.setAlpha(1);
+    if(scene && scene.add) floatResourceText(b.gx, b.gy, 'risen!', '#b6c98a');
+    updateCreep();                  // NOW the ground turns
+    markMinimapDirty();
+  }
+}
+
+// ---- blight recedes from the dead --------------------------------------
+// Kill a Grave Mound and the ground it anchored lets go. A tile survives if it
+// is still within reach of ANY living source, so overlapping territory simply
+// stays — which is the rule without needing to remember who claimed what.
+//
+// Recomputed rather than attributed per tile: the creep grid is a plain
+// boolean and giving every tile an owner would mean a second grid to keep,
+// serialize and restore, plus a tie-break for tiles two mounds both reached.
+//
+// Deliberately SLOW. It recedes a few tiles per pulse from the outside in, so
+// losing a mound reads as territory bleeding away rather than a hole appearing.
+const CREEP_FADE = {
+  pulseMs:       700,
+  tilesPerPulse: 4,
+};
+
+function unclaimCreepTile(gx, gy){
+  if(!isCreeped(gx, gy)) return false;
+  state.creep[gy][gx] = false;
+  state._creepCount = Math.max(0, state._creepCount - 1);
+  const spr = state.tileSprites[gy] && state.tileSprites[gy][gx];
+  if(spr && spr.setFrame) spr.setFrame(frameForGroundTile(gx, gy));
+  return true;
+}
+
+function fadeOrphanedCreep(delta, sources){
+  if(!state.creep || !state._creepCount) return;
+  state._creepFadeMs = (state._creepFadeMs || 0) + delta;
+  if(state._creepFadeMs < CREEP_FADE.pulseMs) return;
+  state._creepFadeMs = 0;
+  // No living source at all means the faction is gone; leave the ground be
+  // rather than erasing the map out from under a lost game.
+  if(!sources || !sources.length) return;
+  const orphans = [];
+  for(let y = 0; y < MAP_H; y++){
+    for(let x = 0; x < MAP_W; x++){
+      if(!state.creep[y][x]) continue;
+      let held = false, near = Infinity;
+      for(const s of sources){
+        const d = Math.hypot(x - s.gx, y - s.gy);
+        if(d <= s.r){ held = true; break; }
+        if(d < near) near = d;
+      }
+      if(!held) orphans.push({ x, y, d: near });
+    }
+  }
+  if(!orphans.length) return;
+  // furthest from any surviving source goes first, so the edge recedes inward
+  orphans.sort((a, b) => b.d - a.d);
+  for(let i = 0; i < Math.min(CREEP_FADE.tilesPerPulse, orphans.length); i++){
+    unclaimCreepTile(orphans[i].x, orphans[i].y);
+  }
+  markMinimapDirty();
 }

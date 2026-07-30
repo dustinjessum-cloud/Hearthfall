@@ -1009,12 +1009,50 @@ function buildPanelMarkup(panel, type, ref){
         <div id="infoEnemyAtk" style="margin-top:4px;color:#e8dcc0;"></div>
         <div id="infoEnemyAtkNote" style="color:#d8c79a;"></div>
         <div style="margin-top:6px;color:#d8c79a;">${enemyDesc(ref)}</div>`;
+    } else if(type==='corpse'){
+      // What to do with a body used to be decided FOR you by whoever you had
+      // selected: the Necromancer always raised, everyone else always hauled,
+      // and there was no way to ask for the other one. The choice is the
+      // interesting part of the undead's corpse economy, so it goes on the
+      // corpse itself, as buttons rather than a modifier nobody would find.
+      const swarm = state.faction === 'swarm';
+      const pit = (typeof ritualPit === 'function') ? ritualPit() : null;
+      const necro = livingCaptain();
+      const cost = (typeof CORPSE !== 'undefined') ? CORPSE.raiseCost : 0;
+      const secs = Math.max(0, Math.round((ref.rotMs||0)/1000));
+      panel.innerHTML = `<h3 style="color:#b8a888;">The Fallen</h3>
+        <div style="color:#d8c79a;">Rots away in <span id="corpseRot">${secs}</span>s.</div>
+        ${swarm ? `
+          <div style="margin-top:6px;color:#b8a888;font-size:11px;">
+            Raising costs carrion and returns a skeleton at once. The Ritual Pit
+            banks the body instead — ${RITUAL.corpsesPerGolem} of them build a Flesh Golem.
+          </div>
+          <button id="corpseRaiseBtn">Raise (${cost} carrion)</button>
+          <button id="corpseDragBtn">Send to the Ritual Pit</button>
+          ${!necro ? `<div style="color:#8a7a5c;font-size:11px;">No Necromancer — only she can raise.</div>` : ''}
+          ${!pit ? `<div style="color:#8a7a5c;font-size:11px;">No Ritual Pit built.</div>` : ''}
+        ` : `
+          <button id="corpseBuryBtn">Bury the fallen</button>
+          <div style="margin-top:4px;color:#b8a888;font-size:11px;">
+            Honouring the dead lifts the town's spirits for a while.</div>
+        `}`;
+      const rb = document.getElementById('corpseRaiseBtn');
+      if(rb) rb.addEventListener('click', ()=> corpseActionRaise(ref));
+      const db = document.getElementById('corpseDragBtn');
+      if(db) db.addEventListener('click', ()=> corpseActionDrag(ref));
+      const bb = document.getElementById('corpseBuryBtn');
+      if(bb) bb.addEventListener('click', ()=> corpseActionBury(ref));
     }
 }
 
 // Runs every frame while something is selected. Updates values in place
 // only — replacing a node can drop a button between mousedown and mouseup.
 function updatePanelLive(type, ref){
+  if(type==='corpse'){
+    const r = document.getElementById('corpseRot');
+    if(r) r.textContent = Math.max(0, Math.round((ref.rotMs||0)/1000));
+    return;
+  }
 
   // dynamic updates only, every frame — no DOM node ever gets replaced here
   if(type==='building'){

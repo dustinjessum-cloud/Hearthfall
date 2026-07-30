@@ -557,7 +557,7 @@ function updateEnemies(delta){
       // races still drop scavenged scraps / a little carrion, as before.
       const leavesCorpse = !!(e.race && ENEMY_RACES[e.race] && ENEMY_RACES[e.race].leavesCorpse);
       if(leavesCorpse){
-        spawnCorpse(e.gx, e.gy);
+        spawnCorpse(e.gx, e.gy, e.kind);   // a ram leaves a bigger body than a raider
         if(state.faction!=='swarm'){ addResource('food', 1); addResource('wood', 1); } // scavenged gear
       } else if(state.faction==='swarm'){
         addResource('food', SWARM.corpseBiomass); // dissolve the remains straight to carrion

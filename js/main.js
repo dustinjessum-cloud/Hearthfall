@@ -56,6 +56,32 @@ class MainScene extends Phaser.Scene {
         idx++;
       }
     }
+    // Belt to embed_sprites.py's braces. That assertion catches a mismatch at
+    // BUILD time; this catches a sheet that shipped without the pipeline being
+    // re-run, which otherwise surfaces as the wrong ART rather than as an
+    // error — Phaser will happily slice frames past the end of a texture.
+    //
+    // The overflow case is genuinely FATAL: every frame past the boundary is
+    // the wrong sprite, so playing on only wastes your time. The height check
+    // is a WARNING only, because a false positive there must never brick a
+    // working game over something cosmetic.
+    const highest = Math.max.apply(null, Object.values(FRAME));
+    if(highest >= idx){
+      showFatalError('Sprite sheet too small: FRAME references index ' + highest
+        + ' but the sheet only defines ' + idx + ' frames (' + cols + 'x' + rows + '). '
+        + 'ROWS in gen_sprites.py and rows in setupFrames() must match - fix both, '
+        + 'then re-run gen_sprites.py, embed_sprites.py and stamp_assets.py.');
+      return;
+    }
+    const src = texture.source && texture.source[0];
+    if(src && src.height && src.height !== rows*size){
+      const msg = 'Sprite sheet is ' + src.height + 'px tall but setupFrames() expects '
+        + (rows*size) + 'px (' + rows + ' rows of ' + size + 'px). The sheet and the frame '
+        + 'indices may have drifted - re-run the asset pipeline.';
+      console.error(msg);
+      const banner = document.getElementById('errorBanner');
+      if(banner){ banner.style.display = 'block'; banner.textContent = 'Warning: ' + msg; }
+    }
   }
 
   startWorld(){
@@ -386,6 +412,11 @@ class MainScene extends Phaser.Scene {
         if(d < ed){ ed = d; enemy = e; }
       }
       if(enemy){ selectEntity('enemy', enemy); return; }
+      // A corpse is the last thing checked, so it can never steal a click from
+      // a unit, a building or an enemy standing on the same tile. Selecting it
+      // is what surfaces the Raise / Ritual Pit choice — see the corpse panel.
+      const corpse = (typeof corpseAt === 'function') ? corpseAt(gx, gy) : null;
+      if(corpse){ selectEntity('corpse', corpse); return; }
       selectEntity(null, null);
     }
   }

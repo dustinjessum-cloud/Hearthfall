@@ -392,13 +392,27 @@ function depositCorpseInPit(pit){
 
 // ---- corpses: the shared raise/bury resource (see CORPSE in content.js) ----
 let corpseIdCounter = 1;
-function spawnCorpse(gx, gy){
+// How large a body lies there. One sprite, scaled — a ram and a villager
+// leaving the identical smear made a battlefield unreadable, and twelve
+// dedicated corpse sprites would eat half the remaining sheet for something
+// the eye only reads as "big" or "small" anyway.
+const CORPSE_SCALE = {
+  villager: 0.8, drone: 0.8, repairman: 0.8, archer: 0.85, spitter: 0.85,
+  swordsman: 1.0, skeleton: 1.0, raider: 1.0, pillager: 1.0, zergling: 0.8,
+  captain: 1.3, troll: 1.35, ram: 1.4, flesh_golem: 1.4, broodmother: 1.3,
+  enemy_swordsman: 1.0, enemy_raider: 1.0,
+};
+function corpseScaleFor(kind){ return CORPSE_SCALE[kind] || 1.0; }
+
+function spawnCorpse(gx, gy, kind){
   const c = {
     id: corpseIdCounter++, gx: Math.round(gx), gy: Math.round(gy),
     rotMs: factionDef().corpseRotMs,
+    kind: kind || null,          // what died — drives the size, and is SAVED
   };
   if(scene && scene.add){
     c.sprite = scene.add.image(c.gx*TILE+TILE/2, c.gy*TILE+TILE/2, 'tiles', FRAME.corpse).setDepth(2); // above ground, below units
+    c.sprite.setScale(corpseScaleFor(c.kind));
   }
   state.corpses.push(c);
   return c;
@@ -407,8 +421,61 @@ function corpseAt(gx, gy){ return state.corpses.find(c=> c.gx===gx && c.gy===gy)
 function corpseById(id){ return state.corpses.find(c=> c.id===id) || null; }
 function removeCorpse(c){
   if(c.sprite) c.sprite.destroy();
+  // Corpses are selectable now, so a raised/buried/rotted body must drop the
+  // selection with it or the panel keeps showing (and offering buttons for) a
+  // corpse that no longer exists.
+  if(state.selected && state.selected.type === 'corpse' && state.selected.ref === c) selectEntity(null, null);
   state.corpses = state.corpses.filter(x=>x!==c);
 }
+// ---- corpse orders, issued from the corpse's own panel -----------------
+// What happened to a body used to be decided by WHO you had selected: the
+// Necromancer always raised, every other undead always hauled, and there was
+// no way to ask for the other one. The choice is the interesting part of the
+// undead's corpse economy, so it lives on the corpse, and these dispatch the
+// nearest unit that can actually do the job rather than making the player
+// select the right one first.
+//
+// Each routes through executeOrder with the SAME order kinds the right-click
+// path uses, so a button and a right-click can never drift apart.
+function nearestUnitForCorpse(c, pred){
+  let best = null, bd = Infinity;
+  for(const u of state.units){
+    if(u.hp <= 0 || u.inTC || u.inTowerId) continue;
+    if(!pred(u)) continue;
+    const d = Phaser.Math.Distance.Between(u.gx, u.gy, c.gx, c.gy);
+    if(d < bd){ bd = d; best = u; }
+  }
+  return best;
+}
+
+function corpseActionRaise(c){
+  if(!c || !corpseById(c.id)) return;
+  const necro = livingCaptain();
+  if(!necro){ flashWaveBanner('Only the Necromancer can raise the fallen.'); return; }
+  // Warn but still send her: carrion may well be back by the time she arrives,
+  // and the arrival code checks again anyway.
+  if(state.resources.food < CORPSE.raiseCost){
+    flashWaveBanner(`Only ${Math.floor(state.resources.food)} carrion — raising costs ${CORPSE.raiseCost}.`);
+  }
+  executeOrder(necro, { kind:'raise', corpseId: c.id });
+}
+
+function corpseActionDrag(c){
+  if(!c || !corpseById(c.id)) return;
+  if(!ritualPit()){ flashWaveBanner('Build a Ritual Pit before hauling bodies to it.'); return; }
+  // anyone but the Necromancer: she raises where they lie, she does not haul
+  const u = nearestUnitForCorpse(c, x => x.type !== 'captain');
+  if(!u){ flashWaveBanner('Nobody free to haul the body.'); return; }
+  executeOrder(u, { kind:'drag', corpseId: c.id });
+}
+
+function corpseActionBury(c){
+  if(!c || !corpseById(c.id)) return;
+  const u = nearestUnitForCorpse(c, () => true);
+  if(!u){ flashWaveBanner('Nobody free to bury the dead.'); return; }
+  executeOrder(u, { kind:'bury', corpseId: c.id });
+}
+
 function updateCorpses(delta){
   for(const c of [...state.corpses]){
     c.rotMs -= delta;

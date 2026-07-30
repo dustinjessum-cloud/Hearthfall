@@ -203,10 +203,18 @@ function seedAiBlight(){
 
 function updateAiBlight(delta){
   if(aiTownRace() !== 'undead') return;
+  const aiSrc = aiBlightSources();
+  // The enemy town's blight recedes from ITS dead by the same rule. Called
+  // BEFORE the spread-pulse gate below, and every frame: fadeOrphanedCreep
+  // keeps its own clock, so behind that early return it would have advanced
+  // one frame's delta per 900ms and taken minutes to shed a tile. The sources
+  // have to be passed explicitly too — the creep grid is shared, and the
+  // player-side list would judge undead ground by a human town's buildings.
+  if(typeof fadeOrphanedCreep === 'function') fadeOrphanedCreep(delta, aiSrc);
   state._aiBlightMs = (state._aiBlightMs || 0) + delta;
   if(state._aiBlightMs < SWARM.creep.spreadMs) return;
   state._aiBlightMs = 0;
-  updateCreep(aiBlightSources());
+  updateCreep(aiSrc);
 }
 
 // Razing the core ends the run. Checked once per frame rather than hooked

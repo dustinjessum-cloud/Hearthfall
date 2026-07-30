@@ -929,26 +929,60 @@ def draw_graveyard(d):
     rect(d, 25, 26, 25, 27, DARK); rect(d, 27, 26, 27, 27, DARK)
 
 def draw_corpse(d):
-    # a fallen human lying where they died — the shared raise/bury resource.
-    # Neutral grey-brown garb so it reads for any dead human (raider,
-    # skirmisher, villager or soldier alike).
+    # A fallen human lying where they died — the shared raise/bury/haul object.
+    # Neutral grey-brown garb so it reads for any dead human alike: raider,
+    # skirmisher, villager or soldier.
+    #
+    # Redrawn because the old one was a plain brown bar with a peach circle
+    # stuck on the end. At true 32px that read as a dropped log, not a body,
+    # which matters more than usual here: a corpse is an object you have to
+    # FIND and click. So: separated limbs, a smaller head, a dark outline to
+    # lift it off grass and dirt, and a pool beneath it.
     GARB, GARB_D = (104, 92, 76), (78, 68, 56)
-    # ground shadow / disturbed earth beneath the body
-    d.ellipse([4, 19, 28, 29], fill=(40, 36, 30, 150))
-    # legs, crumpled sideways
-    rect(d, 6, 23, 13, 25, GARB_D)
-    rect(d, 7, 25, 12, 26, (58, 50, 42))
-    # torso lying prone
-    rect(d, 12, 20, 22, 25, GARB)
-    rect(d, 12, 24, 22, 25, GARB_D)
-    # an arm flopped out above the head
-    rect(d, 22, 18, 27, 19, SKIN)
-    # head, tilted
-    d.ellipse([22, 20, 27, 25], fill=SKIN)
-    rect(d, 24, 22, 24, 22, (60, 46, 38))   # closed eye
-    # a dropped weapon beside them
-    d.line([8, 18, 14, 15], fill=(120, 120, 128), width=1)
-    rect(d, 8, 18, 9, 19, WOOD_D)
+    RAG = (122, 110, 92)
+    PALE, PALE_D = (198, 176, 156), (162, 140, 122)
+    BLOOD, BLOOD_D = (104, 30, 30), (74, 20, 22)
+    OUT = (34, 28, 24)
+
+    # the pool it lies in, and the disturbed earth around that
+    d.ellipse([4, 19, 28, 29], fill=(40, 36, 30, 140))
+    d.ellipse([8, 22, 24, 28], fill=BLOOD_D)
+    d.ellipse([10, 23, 20, 27], fill=BLOOD)
+
+    # legs, apart rather than fused into one block
+    rect(d, 5, 21, 13, 22, OUT)
+    rect(d, 5, 21, 13, 21, GARB_D)
+    rect(d, 6, 25, 13, 26, OUT)
+    rect(d, 6, 25, 13, 25, GARB_D)
+    rect(d, 4, 21, 5, 22, PALE_D)          # a bare foot
+    rect(d, 5, 25, 6, 26, PALE_D)
+
+    # torso, prone, with torn hem
+    rect(d, 12, 19, 21, 27, OUT)
+    rect(d, 13, 20, 21, 26, GARB)
+    rect(d, 13, 20, 21, 21, RAG)           # lit upper edge
+    rect(d, 13, 25, 21, 26, GARB_D)
+    for tx in (14, 17, 20):                # ragged tears
+        rect(d, tx, 23, tx, 24, GARB_D)
+
+    # arms: one flung above the head, one folded across
+    rect(d, 20, 16, 26, 17, OUT)
+    rect(d, 20, 16, 25, 16, GARB)
+    rect(d, 25, 15, 26, 16, PALE_D)        # the hand
+    rect(d, 15, 27, 20, 28, OUT)
+    rect(d, 15, 27, 19, 27, GARB_D)
+
+    # head, smaller than before and turned aside
+    d.ellipse([20, 19, 26, 25], fill=OUT)
+    d.ellipse([21, 20, 25, 24], fill=PALE)
+    rect(d, 22, 21, 23, 21, PALE_D)        # brow shadow
+    rect(d, 22, 22, 23, 22, (60, 46, 38))  # closed eye
+    rect(d, 21, 23, 22, 23, PALE_D)
+
+    # the weapon they dropped, fallen clear of the body
+    d.line([6, 17, 12, 14], fill=(120, 120, 128), width=1)
+    d.line([6, 18, 11, 15], fill=(92, 92, 100), width=1)
+    rect(d, 5, 17, 6, 19, WOOD_D)
 
 def draw_troll(d):
     # A hulking ogre-troll. The old one was a flat green cutout: solid slabs

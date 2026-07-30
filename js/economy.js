@@ -1602,6 +1602,10 @@ function floatResourceText(gx, gy, text, color){
 // bone and wildstone were missing, so the two resources the UNDEAD HUD shows
 // beside carrion had no net flow at all, and wildstone — which funds the
 // permanent Barracks evolutions for everyone — never had one either.
+// How many economy ticks the displayed net flow averages over. Ten ticks is
+// 30 seconds — longer than a gatherer's round trip, so a haul shows up as a
+// steady contribution instead of a spike followed by silence.
+const RATE_WINDOW = 10;
 const RATE_KEYS = ['food','wheat','flour','wood','stone','gold','bone','wildstone'];
 
 // SUSTAINED flow only — production, hauls, taxes, upkeep and rations. The
@@ -1638,13 +1642,29 @@ function snapshotResourceRates(){
 }
 function updateResourceRates(){
   if(!state._resSnap) return;
+  if(!state._rateHist) state._rateHist = {};
   state.resourceRates = {};
   for(const k of RATE_KEYS){
     // in-tick change, PLUS whatever was hauled home or rotted down since the
     // last tick ended. The two windows abut exactly — the accumulator is reset
     // right here — so nothing is counted twice and nothing falls between them.
     const between = (state._resFlow && state._resFlow[k]) || 0;
-    state.resourceRates[k] = ((state.resources[k] - state._resSnap[k]) + between) * 20; // 3s -> per min
+    const delta = (state.resources[k] - state._resSnap[k]) + between;
+    // SMOOTHED over RATE_WINDOW ticks, because a single tick is a terrible
+    // sample of a lumpy economy. A gatherer banks its whole load in one
+    // instant: on a 3s window that one arrival reads +120/min and the next
+    // three ticks read zero, so the number strobed between wild and dead
+    // while the stockpile climbed steadily. Worst on the undead, whose every
+    // resource arrives in carried lumps.
+    //
+    // The measurement is unchanged and still exact — only what is DISPLAYED
+    // is averaged, over a window comfortably longer than one haul round trip.
+    const hist = state._rateHist[k] || (state._rateHist[k] = []);
+    hist.push(delta);
+    if(hist.length > RATE_WINDOW) hist.shift();
+    let sum = 0;
+    for(const d of hist) sum += d;
+    state.resourceRates[k] = (sum / hist.length) * 20;   // 3s ticks -> per min
   }
   state._resFlow = {};
 }

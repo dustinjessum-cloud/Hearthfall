@@ -26,7 +26,10 @@ function applyRateTooltip(elId, key){
   if(r === undefined || r === null){ el.title = el.dataset.baseTitle; return; }
   const rounded = Math.round(r*10)/10;
   const sign = rounded > 0 ? '+' : '';
-  el.title = el.dataset.baseTitle + `\n\u25B8 Net flow: ${sign}${rounded}/min`;
+  // "30s avg" is stated so the number is not read as an instant rate. It is
+  // averaged because a lumpy economy makes single-tick samples useless \u2014 see
+  // RATE_WINDOW in economy.js.
+  el.title = el.dataset.baseTitle + `\n\u25B8 Net flow: ${sign}${rounded}/min (30s avg)`;
 }
 
 function updateHUD(){

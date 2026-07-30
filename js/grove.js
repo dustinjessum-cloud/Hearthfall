@@ -815,6 +815,17 @@ function groveGatherMods(u){
 
 // ---- roster ----------------------------------------------------------
 function applyGroveFaction(){
+  // -- HUD: hide the two trackers this faction can never fill --
+  // farmYield is 'food', not 'wheat', so nothing here ever grows grain and
+  // nothing mills it into flour: both sat at 0 for the whole game beside live
+  // numbers. Gold and happiness deliberately STAY — houses pay a gold tithe
+  // scaled by happiness, so both are real for this faction even though the
+  // grain chain is not.
+  for(const id of ['resWheat','resFlour']){
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  }
+
   // Yields are per-tick and flow home along the roots; there is no gathering
   // building because there is no gathering.
   BUILD_DEFS.house       = { name:'Bower', cost:{wood:16}, hp:60, frame:'grove_bower', popCap:3 };

@@ -22,6 +22,17 @@
 // ---------------------------------------------------------------------
 
 function applyTribeFaction(){
+  // -- HUD: hide the two trackers this faction can never fill --
+  // farmYield is 'food', not 'wheat', so nothing here ever grows grain and
+  // nothing mills it into flour: both sat at 0 for the whole game beside live
+  // numbers. Gold and happiness deliberately STAY — houses pay a gold tithe
+  // scaled by happiness, so both are real for this faction even though the
+  // grain chain is not.
+  for(const id of ['resWheat','resFlour']){
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  }
+
   // -- roster: rename, re-cost and re-skin the types the tribe keeps --
   BUILD_DEFS.house       = { name:'Hide Hut', cost:{wood:18}, hp:55, frame:'tribe_hut', popCap:4 };
 

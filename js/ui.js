@@ -36,6 +36,8 @@ function updateHUD(){
   applyRateTooltip('resWood','wood');
   applyRateTooltip('resStone','stone');
   applyRateTooltip('resGold','gold');
+  applyRateTooltip('resBone','bone');
+  applyRateTooltip('resWildstone','wildstone');
   document.querySelector('#resFood span').textContent = `${Math.floor(state.resources.food)}/${storageCapFor('food')}`;
   const wheatEl = document.querySelector('#resWheat span');
   if(wheatEl) wheatEl.textContent = `${Math.floor(state.resources.wheat)}/${storageCapFor('wheat')}`;

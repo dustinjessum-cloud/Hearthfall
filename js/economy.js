@@ -485,7 +485,7 @@ function updateCorpses(delta){
     if(state.faction==='swarm'){
       // left to rot on the blight, the fallen dissolve into carrion —
       // the old instant-on-death income, now the "didn't bother raising" default
-      addResource('food', SWARM.corpseBiomass);
+      noteResourceFlow('food', addResource('food', SWARM.corpseBiomass));
       if(scene && scene.add) floatResourceText(c.gx, c.gy, '+'+SWARM.corpseBiomass+' carrion', '#b6c98a');
       updateHUD();
     }
@@ -1055,6 +1055,7 @@ function gatherCarryAmount(u, carry){
 function bankCarry(u, b){
   const wanted = u.carrying.amt;
   const gained = addResource(u.carrying.key, wanted);
+  noteResourceFlow(u.carrying.key, gained);   // hauls are flow — see noteResourceFlow
   if(scene && scene.add){
     floatResourceText(b.gx, b.gy, '+'+gained, RESOURCE_COLOR[u.carrying.key] || '#ffffff');
     if(gained < wanted) floatResourceText(b.gx, b.gy-1, 'storage full!', '#ff8a6b');
@@ -1598,7 +1599,10 @@ function floatResourceText(gx, gy, text, color){
 // Wood and stone income now happens entirely in updateGatherer (delivery on
 // arrival). economyTick handles the two things that are still clock-based:
 // farm harvests and food upkeep/famine.
-const RATE_KEYS = ['food','wheat','flour','wood','stone','gold'];
+// bone and wildstone were missing, so the two resources the UNDEAD HUD shows
+// beside carrion had no net flow at all, and wildstone — which funds the
+// permanent Barracks evolutions for everyone — never had one either.
+const RATE_KEYS = ['food','wheat','flour','wood','stone','gold','bone','wildstone'];
 
 // SUSTAINED flow only — production, hauls, taxes, upkeep and rations. The
 // snapshot is taken at the START of economyTick and diffed at the END, so
@@ -1610,6 +1614,24 @@ const RATE_KEYS = ['food','wheat','flour','wood','stone','gold'];
 // lurched around and told you nothing about whether your economy was
 // actually keeping up. Purchases all happen on click, outside economyTick,
 // so bracketing the tick excludes them for free — no need to itemise spends.
+// Income that arrives BETWEEN economy ticks and is genuinely ongoing flow.
+// The bracket below measures only what happens INSIDE economyTick, so two real
+// income streams were invisible to it: a hauler reaching home (bankCarry fires
+// per frame, whenever the walk finishes) and corpses rotting into carrion.
+// Measured on the undead: the tooltip read +0.6/min while carrion was actually
+// climbing at +1.3 — a player watching their stockpile grow was being told
+// they were breaking even.
+//
+// One-off windfalls deliberately do NOT come through here: salvage refunds,
+// trade and market buys are exactly the lurch the bracket was built to
+// exclude, and folding them in would put a -600/min spike on screen every
+// time you trained a villager.
+function noteResourceFlow(key, amt){
+  if(!amt) return;
+  if(!state._resFlow) state._resFlow = {};
+  state._resFlow[key] = (state._resFlow[key] || 0) + amt;
+}
+
 function snapshotResourceRates(){
   state._resSnap = {};
   for(const k of RATE_KEYS) state._resSnap[k] = state.resources[k];
@@ -1618,8 +1640,13 @@ function updateResourceRates(){
   if(!state._resSnap) return;
   state.resourceRates = {};
   for(const k of RATE_KEYS){
-    state.resourceRates[k] = (state.resources[k] - state._resSnap[k]) * 20; // 3s -> per min
+    // in-tick change, PLUS whatever was hauled home or rotted down since the
+    // last tick ended. The two windows abut exactly — the accumulator is reset
+    // right here — so nothing is counted twice and nothing falls between them.
+    const between = (state._resFlow && state._resFlow[k]) || 0;
+    state.resourceRates[k] = ((state.resources[k] - state._resSnap[k]) + between) * 20; // 3s -> per min
   }
+  state._resFlow = {};
 }
 
 function economyTick(){

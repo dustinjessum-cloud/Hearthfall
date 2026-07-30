@@ -174,8 +174,31 @@ const AI_BUILD_DEFS = {
 // separate problem and is left alone deliberately, since only one faction's
 // roster is ever needed in a page load. This table is about the SCATTERED
 // per-faction values, which is where the real bug surface was.
+// What thick undergrowth costs anyone crossing it. MUST be declared above
+// FACTION_DEFS: that table reads it for every faction's forestSpeedMult, and
+// a `const` declared further down is in the temporal dead zone when this
+// literal is evaluated — the game then fails to boot at all.
+const FOREST_SPEED = 0.5;
+
 const FACTION_DEFS = {
   human: {
+    // How fast this faction's units cross forest. FOREST_SPEED is the
+    // baseline; the tribe is the one exception and says so in its own entry.
+    // Read for BOTH sides via forestSpeedFor() — the enemy town's units play
+    // by the rules of whichever faction that town is, not by ours.
+    forestSpeedMult: FOREST_SPEED,
+    // How the ENEMY TOWN plays this faction. This used to be a second
+    // table of its own in ai.js, so every faction was described TWICE —
+    // once for the player and once for the enemy — with nothing keeping
+    // the halves honest. One entry per faction now; see aiRules().
+    ai: {
+      costMap: null,                       // pays in the resource each def names
+      gather: [ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
+      buildsOnBlight: false,
+      buildConsumesWorker: false,
+      foodComfort: null,                   // null = use AI_TUNING.foodComfort
+  
+    },
     label: 'human', adjective: 'human',
     coreName: 'Town Hall', coreFrame: 'town_hall',
     corpseRotMs: 60000,
@@ -220,6 +243,28 @@ const FACTION_DEFS = {
     enemyRace: 'undead',
   },
   swarm: {
+    forestSpeedMult: FOREST_SPEED,
+    // How the ENEMY TOWN plays this faction. This used to be a second
+    // table of its own in ai.js, so every faction was described TWICE —
+    // once for the player and once for the enemy — with nothing keeping
+    // the halves honest. One entry per faction now; see aiRules().
+    ai: {
+      // Carrion is the only undead resource: every cost collapses into food,
+      // which is also what their farms and their forest-harvesting both yield.
+      // Remapping here rather than editing AI_BUILD_DEFS keeps one roster and
+      // one set of relative prices across all four factions.
+      costMap: { wood:'food', stone:'food' },
+      // No timber, no masonry — ghouls render the forest itself into carrion,
+      // which is exactly what the player's Charnel Pit does.
+      gather: [ {tile:'forest', res:'food'} ],
+      buildsOnBlight: true,
+      buildConsumesWorker: true,
+      // There is no "comfortable" amount of carrion when carrion also buys
+      // every building and every unit. The human ceiling (180) would have them
+      // stop harvesting while they still could not afford a Grave Mound.
+      foodComfort: 600,
+  
+    },
     label: 'undead', adjective: 'undead',
     coreName: 'Necropolis', coreFrame: 'crypt',
     corpseRotMs: 45000,
@@ -253,6 +298,27 @@ const FACTION_DEFS = {
   // a town. Registered with explicit values like every other faction, so
   // nothing about it falls through to the human defaults.
   grove: {
+    forestSpeedMult: FOREST_SPEED,
+    // How the ENEMY TOWN plays this faction. This used to be a second
+    // table of its own in ai.js, so every faction was described TWICE —
+    // once for the player and once for the enemy — with nothing keeping
+    // the halves honest. One entry per faction now; see aiRules().
+    ai: {
+      // The Grove pays for everything in timber, as the player's does.
+      costMap: { stone:'wood' },
+      // Ents tend, and can chop badly — the same secondary trickle the player's
+      // Ents get. It is not where the income comes from.
+      gather: [ {tile:'forest', res:'wood'} ],
+      buildsOnBlight: false,
+      buildConsumesWorker: false,
+      foodComfort: null,
+      // The whole faction, in one flag: structures are inert until a root
+      // reaches them, and then pay out for being CONNECTED rather than staffed.
+      // Handled by the shared grove system in grove.js, which now runs for
+      // whichever side is playing Grove.
+      rootNetwork: true,
+  
+    },
     label: 'grove', adjective: 'forest',
     coreName: 'Heartwood', coreFrame: 'grove_heart',
     corpseRotMs: 120000,
@@ -293,6 +359,30 @@ const FACTION_DEFS = {
   // of listing it today is that every lookup below already has an answer for
   // it rather than silently falling through to the human branch.
   tribe: {
+    // THE TRIBE'S MOVEMENT IDENTITY: they live on the treeline — they hunt in
+    // it, and their timber and their dinner are the same finite thing — so
+    // undergrowth barely slows them. 0.9 against everyone else's 0.5.
+    forestSpeedMult: 0.9,
+    // How the ENEMY TOWN plays this faction. This used to be a second
+    // table of its own in ai.js, so every faction was described TWICE —
+    // once for the player and once for the enemy — with nothing keeping
+    // the halves honest. One entry per faction now; see aiRules().
+    ai: {
+      costMap: null,                       // timber and stone, as the tribe pays
+      gather: [ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
+      buildsOnBlight: false,
+      buildConsumesWorker: false,
+      foodComfort: null,
+      // Food is HUNTED, not farmed: a camp feeds nobody by itself, its hunter
+      // has to be out standing on live forest within HUNT.radius of it. Which
+      // makes their timber and their dinner the same finite resource — felling
+      // the woods for wood eats the ground their food stands on.
+      hunts: true,
+      // ...and the answer to that, which is the one supply in the game that does
+      // not run out. The player has the Forester; the enemy replants on a timer.
+      replants: true,
+  
+    },
     label: 'tribe', adjective: 'troll',
     coreName: 'Great Lodge', coreFrame: 'tribe_lodge',
     corpseRotMs: 60000,

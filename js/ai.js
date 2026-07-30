@@ -134,11 +134,11 @@ function spawnAiGarrison(){
   const hp = 34, dmg = 6;
   const out = [];
   for(const [dx,dy] of AI_TOWN_PLAN.garrison.melee){
-    const e = spawnEnemy(hp, dmg, 3, 'swordsman', {gx:c.gx+dx, gy:c.gy+dy}, {race});
+    const e = spawnEnemy(hp, dmg, 3, 'swordsman', {gx:c.gx+dx, gy:c.gy+dy}, {race, aiFaction:aiTownFaction()});
     if(e) out.push(e);
   }
   for(const [dx,dy] of AI_TOWN_PLAN.garrison.ranged){
-    const e = spawnEnemy(hp, dmg, 3, 'raider', {gx:c.gx+dx, gy:c.gy+dy}, {race, ranged:true});
+    const e = spawnEnemy(hp, dmg, 3, 'raider', {gx:c.gx+dx, gy:c.gy+dy}, {race, ranged:true, aiFaction:aiTownFaction()});
     if(e) out.push(e);
   }
   // Homebodies: they defend what is theirs and never walk to your town.
@@ -337,62 +337,14 @@ const AI_TUNING = {
 // steps 3 and 4, and stating that explicitly beats letting them fall through
 // a default and look finished.
 // ---------------------------------------------------------------------
-const AI_FACTION_RULES = {
-  human: {
-    costMap: null,                       // pays in the resource each def names
-    gather: [ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
-    buildsOnBlight: false,
-    buildConsumesWorker: false,
-    foodComfort: null,                   // null = use AI_TUNING.foodComfort
-  },
-  swarm: {
-    // Carrion is the only undead resource: every cost collapses into food,
-    // which is also what their farms and their forest-harvesting both yield.
-    // Remapping here rather than editing AI_BUILD_DEFS keeps one roster and
-    // one set of relative prices across all four factions.
-    costMap: { wood:'food', stone:'food' },
-    // No timber, no masonry — ghouls render the forest itself into carrion,
-    // which is exactly what the player's Charnel Pit does.
-    gather: [ {tile:'forest', res:'food'} ],
-    buildsOnBlight: true,
-    buildConsumesWorker: true,
-    // There is no "comfortable" amount of carrion when carrion also buys
-    // every building and every unit. The human ceiling (180) would have them
-    // stop harvesting while they still could not afford a Grave Mound.
-    foodComfort: 600,
-  },
-  tribe: {
-    costMap: null,                       // timber and stone, as the tribe pays
-    gather: [ {tile:'forest', res:'wood'}, {tile:'stone_deposit', res:'stone'} ],
-    buildsOnBlight: false,
-    buildConsumesWorker: false,
-    foodComfort: null,
-    // Food is HUNTED, not farmed: a camp feeds nobody by itself, its hunter
-    // has to be out standing on live forest within HUNT.radius of it. Which
-    // makes their timber and their dinner the same finite resource — felling
-    // the woods for wood eats the ground their food stands on.
-    hunts: true,
-    // ...and the answer to that, which is the one supply in the game that does
-    // not run out. The player has the Forester; the enemy replants on a timer.
-    replants: true,
-  },
-  grove: {
-    // The Grove pays for everything in timber, as the player's does.
-    costMap: { stone:'wood' },
-    // Ents tend, and can chop badly — the same secondary trickle the player's
-    // Ents get. It is not where the income comes from.
-    gather: [ {tile:'forest', res:'wood'} ],
-    buildsOnBlight: false,
-    buildConsumesWorker: false,
-    foodComfort: null,
-    // The whole faction, in one flag: structures are inert until a root
-    // reaches them, and then pay out for being CONNECTED rather than staffed.
-    // Handled by the shared grove system in grove.js, which now runs for
-    // whichever side is playing Grove.
-    rootNetwork: true,
-  },
-};
-function aiRules(){ return AI_FACTION_RULES[aiTownFaction()] || AI_FACTION_RULES.human; }
+// The enemy town's per-faction behaviour used to live HERE, in a table of its
+// own, which meant every faction was written down twice — once for the player
+// in FACTION_DEFS and once for the enemy — with nothing keeping the two halves
+// honest with each other. Four factions, eight descriptions.
+//
+// It now lives in FACTION_DEFS[faction].ai. One entry per faction, and the
+// enemy town plays from the same page the player does.
+function aiRules(){ return factionDef(aiTownFaction()).ai || factionDef('human').ai; }
 function aiFoodComfort(){ const r = aiRules(); return r.foodComfort || AI_TUNING.foodComfort; }
 
 function initAiEconomy(){
@@ -521,7 +473,12 @@ function assignAiJob(w){
 function aiStepToward(w, tx, ty, delta){
   const dx = tx - w.gx, dy = ty - w.gy;
   const dist = Math.hypot(dx, dy);
-  const step = AI_TUNING.workerSpeed * (delta/1000);
+  // The enemy town's workers used to cross every tile at the same flat speed:
+  // forest, road and bare ground alike, and undead workers were never slowed
+  // off their own blight. They walk on the same ground the player does, so
+  // they answer to the same rule — an AI tribe moves through woodland like a
+  // player tribe, and an AI undead drags off its creep like a player undead.
+  const step = AI_TUNING.workerSpeed * speedMultiplierAt(w.gx, w.gy, w) * (delta/1000);
   if(dist <= step){ w.gx = tx; w.gy = ty; return true; }
   w.gx += (dx/dist)*step;
   w.gy += (dy/dist)*step;
@@ -879,7 +836,7 @@ function aiTryTrain(delta){
       const spot = findFreeSpotNear(c.gx, c.gy, 4) || c;
       const ranged = Math.random() < 0.35;
       const e = spawnEnemy(34, 7, 4, ranged ? 'raider' : 'swordsman',
-                           {gx:spot.gx, gy:spot.gy}, {race, ranged});
+                           {gx:spot.gx, gy:spot.gy}, {race, ranged, aiFaction:aiTownFaction()});
       if(e){
         // The town keeps its garrison staffed FIRST; only the surplus musters
         // for an attack. Otherwise a fresh party leaves an undefended town and

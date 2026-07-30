@@ -143,6 +143,12 @@ function spawnEnemy(hp, dmg, wave, kind, at, opts){
     // flag isRaidActive() cannot tell them apart — and one stray skirmisher
     // wandering the map counted as "a raid is in progress" forever.
     fromWave: !!(opts && opts.fromWave),
+    // Which faction's town this belongs to, or null for a wave raider or a
+    // bandit patrol. Workers always carried this; soldiers did not, so the
+    // enemy town's own troops were indistinguishable from raiders and could
+    // not be given their faction's behaviour. Anything asking "whose rules
+    // does this unit play by?" reads it.
+    aiFaction: (opts && opts.aiFaction) || null,
     path: null, pathIdx: 0, lastMoveAt:0, lastAttackAt:0, target:null,
   };
   e.sprite = scene.add.image(gx*TILE+TILE/2, gy*TILE+TILE/2, 'tiles', FRAME[frame])
@@ -452,7 +458,12 @@ function updateEnemies(delta){
         e.target = blocker;
       } else {
         const webMult = (e.webSlowMs > 0) ? HERO.web.slowFactor : 1;
-        const speed = baseSpeed * (e.speedMult||1) * webMult * speedMultiplierAt(e.gx, e.gy);
+        // The enemy town's own units now play by their faction's rules, exactly
+        // as the player's do — an AI tribe crosses forest at its 0.9 like a
+        // player tribe. forestSpeedFor reads e.aiFaction, which the town's
+        // workers and soldiers both carry and wave raiders deliberately do not,
+        // so raiders and bandit patrols still take the plain baseline.
+        const speed = baseSpeed * (e.speedMult||1) * webMult * speedMultiplierAt(e.gx, e.gy, e);
         const dx = node.gx - e.gx, dy = node.gy - e.gy;
         const dist = Math.hypot(dx,dy);
         if(dist < 0.06){

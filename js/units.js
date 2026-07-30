@@ -764,13 +764,42 @@ function queueGroupMove(units, gx, gy){
 // Forest slows everyone down (thick undergrowth), stone deposits don't
 // come into it here since only miners are ever on one, and their gather
 // movement isn't routed through isTileFreeForUnit's speed math anyway.
-function speedMultiplierAt(gx, gy){
+// Whose faction's rules does this walker play by? THE one answer, used by all
+// three movers (ours in units.js, the enemy's in enemies.js, and the enemy
+// town's workers in ai.js).
+//
+//   - our units                -> state.faction
+//   - the enemy TOWN's units   -> the faction that town plays; every worker and
+//                                 every soldier carries it as `aiFaction`
+//   - wave raiders and bandits -> nobody's faction: they are not a town
+//
+// Baked per unit at spawn rather than read live off the town, so a unit keeps
+// its own rules even if the town is somehow re-drawn.
+function walkerFaction(w){
+  if(w && w.aiFaction) return w.aiFaction;
+  if(w && w.isEnemy) return null;       // raider or bandit patrol
+  return state.faction;                  // ours
+}
+
+// What the GROUND does to a walker. Takes the walker itself, not a pre-computed
+// number, because both rules here are faction rules and every call site was
+// getting them wrong in its own way: the enemy mover passed nothing and the
+// enemy town's workers never called this at all.
+//
+// Pass null to ask what the ground does to nobody in particular.
+function speedMultiplierAt(gx, gy, walker){
   const rx = Math.round(gx), ry = Math.round(gy);
+  const f = walkerFaction(walker);
+  const def = f ? factionDef(f) : null;
   let m;
   if(state.roads[ry] && state.roads[ry][rx]) m = ROAD_SPEED;
-  else m = tileAt(rx, ry)==='forest' ? 0.5 : 1;
-  // the dead drag off their own blight — see SWARM.offBlight
-  if(state.faction === 'swarm' && !isCreeped(rx, ry)) m *= SWARM.offBlight.speedMult;
+  else if(tileAt(rx, ry) === 'forest') m = def ? def.forestSpeedMult : FOREST_SPEED;
+  else m = 1;
+  // The dead drag off their own blight — see SWARM.offBlight. Keyed on the
+  // WALKER's faction, not state.faction: read off the player it slowed human
+  // raiders across the whole map whenever you happened to be playing undead,
+  // and it never slowed an undead enemy TOWN off its own creep at all.
+  if(f === 'swarm' && !isCreeped(rx, ry)) m *= SWARM.offBlight.speedMult;
   return m;
 }
 
@@ -1201,7 +1230,7 @@ function updateUnits(delta){
       const gm = (typeof groveGatherMods === 'function') ? groveGatherMods(u) : null;
       if(gm) typeSpeed *= gm.speedMult;
       if(u.carryingCorpse) typeSpeed *= RITUAL.dragSlow;   // a body is dead weight
-      const speed = typeSpeed * speedMultiplierAt(u.gx, u.gy) * (delta/1000);
+      const speed = typeSpeed * speedMultiplierAt(u.gx, u.gy, u) * (delta/1000);
       const dx = u.tx - u.gx, dy = u.ty - u.gy;
       const dist = Math.hypot(dx,dy);
       // arrive when close OR when this frame's step would overshoot —

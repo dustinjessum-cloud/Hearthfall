@@ -45,7 +45,10 @@ class MainScene extends Phaser.Scene {
     // MUST match COLS/ROWS in gen_sprites.py. The sheet and these indices are
     // two halves of one number: bump one without the other and every frame
     // past the old end silently reads garbage off the texture.
-    const cols=6, rows=18, size=32;
+    // rows MUST equal ROWS in gen_sprites.py — the sheet and the frame
+    // indices are two halves of one number. 18 -> 19 when the Necropolis
+    // gained its upgrade tiers.
+    const cols=6, rows=19, size=32;
     let idx=0;
     for(let r=0;r<rows;r++){
       for(let c=0;c<cols;c++){

@@ -222,6 +222,9 @@ function updateTumorSpread(delta){
   // next economy tick. This runs every frame; it is a loop over a handful of
   // structures that exits immediately for anything already lit.
   updateGloomMarkers();
+  // same per-frame reasoning: the pall turns on the moment the last
+  // upgrade lands, not three seconds later
+  updateNecropolisPall();
 }
 
 // Everything that anchors blight: the Necropolis and every Grave Mound.
@@ -588,4 +591,57 @@ function blightSpeedMult(u){
 }
 function blightDamageMult(u){
   return onFriendlyBlight(u) ? 1 : SWARM.offBlight.damageMult;
+}
+
+// ---- the Necropolis pall ---------------------------------------------
+// A haunting green fog pooled at the foot of a FULLY UPGRADED Necropolis.
+// Same three-stacked-ellipse technique as the mounds' purple gloom — flattened
+// and brightening toward the middle, standing in for a gradient Phaser
+// primitives do not offer — but grave-green, wider (the core is 2x2) and
+// slower, because this one broods rather than pulses.
+//
+// It is NOT a readiness signal like the gloom. It is what finishing the
+// upgrade ladder looks like, so once earned it stays.
+const PALL = {
+  haze:       0x3f7a3a,   // the outer wash
+  core:       0x9fe08a,   // grave-light at its heart
+  hazeAlpha:  0.18,
+  midAlpha:   0.24,
+  coreAlpha:  0.28,
+  widthMult:  0.92,
+  heightMult: 0.30,
+  pulseMs:    2600,
+};
+
+function updateNecropolisPall(){
+  if(!scene || !scene.add) return;
+  for(const b of state.buildings){
+    const lit = isMine(b) && b.isCore && b.hp > 0 && !underConstruction(b)
+             && (b.level || 1) >= TC_LEVELS.maxLevel;
+    if(!lit){
+      if(b.pall){
+        scene.tweens.killTweensOf(b.pall);   // a tween outliving its target throws
+        b.pall.destroy();
+        b.pall = null;
+      }
+      continue;
+    }
+    if(b.pall) continue;   // already wreathed — the tween keeps it breathing
+    const size = b.size || 1;
+    const w = size*TILE*PALL.widthMult, h = size*TILE*PALL.heightMult;
+    const haze = scene.add.ellipse(0, 0, w*1.40, h*1.60, PALL.haze, PALL.hazeAlpha);
+    const mid  = scene.add.ellipse(0, 0, w,      h,      PALL.haze, PALL.midAlpha);
+    const core = scene.add.ellipse(0, 0, w*0.50, h*0.55, PALL.core, PALL.coreAlpha);
+    const baseY = b.gy*TILE + size*TILE - 6;
+    b.pall = scene.add
+      .container(b.gx*TILE + size*TILE/2, baseY, [haze, mid, core])
+      .setDepth(7);
+    scene.tweens.add({
+      targets: b.pall,
+      alpha: { from: 0.60, to: 1 },
+      scale: { from: 0.95, to: 1.05 },
+      y:     { from: baseY, to: baseY - 2 },
+      duration: PALL.pulseMs, yoyo: true, repeat: -1, ease: 'Sine.easeInOut',
+    });
+  }
 }

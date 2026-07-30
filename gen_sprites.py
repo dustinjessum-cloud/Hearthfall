@@ -9,11 +9,16 @@ import base64, json, os
 
 TILE = 32
 COLS = 6
-ROWS = 18  # 6x18 = 108 slots (6x15 -> 6x17 for the Grove roster, -> 6x18 for
-           # the Heartwood's upgrade tiers and the Hollows). MUST move in
-           # lockstep with `rows` in setupFrames() in main.js — the sheet and
-           # the frame indices are two halves of one number, and changing one
-           # alone silently reads garbage off the end of the texture.
+ROWS = 19  # 6x19 = 114 slots (6x15 -> 6x17 for the Grove roster, -> 6x18 for
+           # the Heartwood's upgrade tiers and the Hollows, -> 6x19 for the
+           # Necropolis's own upgrade tiers). MUST move in lockstep with
+           # `rows` in setupFrames() in main.js — the sheet and the frame
+           # indices are two halves of one number, and changing one alone
+           # silently reads garbage off the end of the texture.
+           #
+           # Bumped here DELIBERATELY, with slots to spare, rather than at the
+           # moment something needed the 109th: the 106-of-108 ceiling had
+           # already started deciding designs on its own.
 
 frames = {}
 order = []
@@ -860,39 +865,30 @@ def draw_ghoul(d):
     rect(d, 18, 29, 21, 30, FLESH_D)
 
 def draw_bone_spire(d):
-    # the undead defensive tower (Bone Spire): a tall tapering column of
-    # stacked bone on a stone footing, a skull crown with a spiked bone tip,
-    # small barbs hugging the shaft, and a green soul-glow burning up its
-    # core (its attack). Baked colors -> the tower def carries no tint.
-    STF, STF_D = (120, 120, 126), (90, 90, 96)
+    # The undead defensive tower: a ribcage rising off a stone footing, ribs
+    # widest at the ground and closing toward the crown, a skull nested INSIDE
+    # the cage, and a soul-light burning above it (its attack).
+    #
+    # It replaces a tall tapering white column with a domed cap, a dark
+    # vertical slit and two symmetric barbs, which at 32px read unmistakably
+    # as a hooded figure in robes. Any replacement has to break that
+    # silhouette outright: no smooth vertical shaft, no rounded cap, and
+    # nothing dark where a face would be.
+    STF_D = (90, 90, 96)
     GLOW, GLOW_L = (118, 196, 108), (170, 245, 150)
     DARK = (22, 20, 18)
-    # stone footing
-    rect(d, 10, 26, 22, 31, STF)
-    rect(d, 10, 26, 22, 27, STF_D)
-    rect(d, 9, 30, 23, 31, STF_D)
-    # tapering stacked-bone shaft (base wide -> crown narrow)
-    for (x0, y0, x1, y1) in [(11,22,21,26), (12,18,20,22), (12,14,20,18), (13,10,19,14)]:
-        rect(d, x0, y0, x1, y1, BONE)
-        rect(d, x0, y0, x0, y1, BONE_L)     # left highlight
-        rect(d, x1, y0, x1, y1, BONE_D)     # right shadow
-        rect(d, x0, y1, x1, y1, BONE_D)     # stacking seam
-    # small bone barbs hugging the shaft (jut up-and-out, not long arms)
-    d.line([11, 22, 9, 20], fill=BONE, width=1)
-    d.line([21, 22, 23, 20], fill=BONE, width=1)
-    d.line([12, 18, 10, 16], fill=BONE, width=1)
-    d.line([20, 18, 22, 16], fill=BONE, width=1)
-    # green soul-glow burning up the core
-    rect(d, 15, 19, 16, 25, GLOW)
-    rect(d, 15, 21, 16, 23, GLOW_L)
-    rect(d, 15, 15, 16, 17, GLOW)
-    # skull at the crown
-    d.ellipse([13, 6, 19, 13], fill=BONE, outline=BONE_D)
-    rect(d, 14, 8, 15, 9, DARK); rect(d, 17, 8, 18, 9, DARK)
-    rect(d, 15, 11, 16, 12, BONE_D)
-    # spiked bone tip
-    d.polygon([(14, 6), (18, 6), (16, 0)], fill=BONE_L)
-    d.polygon([(15, 6), (17, 6), (16, 2)], fill=BONE)
+    d.ellipse([5, 25, 27, 31], fill=(10, 10, 12, 110))       # ground shadow
+    rect(d, 6, 27, 25, 30, STF_D)                            # stone footing
+    for (x0, x1, y0) in [(6, 25, 24), (8, 23, 19), (10, 21, 14), (12, 19, 10)]:
+        d.arc([x0, y0 - 4, x1, y0 + 5], 180, 360, fill=BONE, width=2)
+        d.arc([x0 + 1, y0 - 3, x1 - 1, y0 + 4], 180, 360, fill=BONE_D, width=1)
+    rect(d, 15, 10, 16, 27, BONE_D)                          # spine
+    d.ellipse([12, 17, 19, 24], fill=BONE, outline=BONE_D)   # skull in the cage
+    rect(d, 13, 19, 14, 20, DARK)
+    rect(d, 17, 19, 18, 20, DARK)
+    rect(d, 15, 22, 16, 23, BONE_D)
+    d.ellipse([13, 6, 18, 11], fill=GLOW)                    # soul-light crown
+    d.ellipse([14, 7, 17, 10], fill=GLOW_L)
 
 def draw_graveyard(d):
     # the undead's Mass Grave (where the dead are raised): a fenced plot of
@@ -2845,6 +2841,95 @@ def draw_grove_heartroot(d):
         rect(d, cx-1, cy-1, cx, cy, GV_LEAF_XL)
 
 
+
+def draw_crypt_2(d):
+    # Necropolis tier 2. The crypt has grown a second storey, buttresses
+    # capped with skull finials, a bone-barred gate with soul-light behind it,
+    # and braziers burning at the steps. One 32x32 frame shown at 2x2 in game,
+    # so it is read at 64px — the tiers have to differ in SILHOUETTE, not in
+    # detail, or an upgrade looks like nothing happened.
+    ST, ST_D, ST_L = (150, 150, 156), (112, 112, 120), (182, 182, 188)
+    DARK = (16, 14, 18)
+    SOUL, SOUL_L = (96, 152, 92), (150, 240, 150)
+    MOSS = (86, 104, 74)
+    rect(d, 1, 27, 30, 30, ST_D)
+    rect(d, 2, 27, 29, 27, ST)
+    rect(d, 3, 7, 29, 28, ST)
+    rect(d, 3, 7, 4, 28, ST_L)
+    rect(d, 28, 7, 29, 28, ST_D)
+    for y in (12, 17, 22, 26):
+        rect(d, 3, y, 29, y, ST_D)
+    for x in (2, 29):
+        rect(d, x - 1, 12, x + 1, 28, ST)
+        rect(d, x - 1, 12, x - 1, 28, ST_L)
+        d.ellipse([x - 2, 7, x + 2, 11], fill=BONE, outline=BONE_D)
+        rect(d, x - 1, 9, x - 1, 9, DARK)
+        rect(d, x + 1, 9, x + 1, 9, DARK)
+    d.polygon([(1, 8), (31, 8), (16, 0)], fill=ST_D)
+    d.polygon([(3, 8), (29, 8), (16, 2)], fill=ST)
+    rect(d, 15, 0, 17, 4, ST_L)
+    rect(d, 13, 1, 19, 2, ST_L)
+    rect(d, 11, 14, 21, 28, DARK)
+    rect(d, 12, 20, 20, 27, SOUL)
+    rect(d, 13, 22, 19, 26, SOUL_L)
+    for x in (13, 16, 19):
+        rect(d, x, 14, x, 28, BONE_D)
+    # braziers: a stand, a bowl and a TAPERING flame. Drawn as round blobs
+    # first, which at true size read as green plus-signs rather than fire.
+    for bx in (7, 24):
+        rect(d, bx, 23, bx + 2, 27, ST_D)
+        rect(d, bx - 1, 22, bx + 3, 23, ST)
+        d.polygon([(bx, 22), (bx + 1, 16), (bx + 2, 22)], fill=SOUL)
+        rect(d, bx + 1, 18, bx + 1, 21, SOUL_L)
+    rect(d, 5, 24, 7, 25, MOSS)
+    rect(d, 25, 15, 27, 16, MOSS)
+
+
+def draw_crypt_3(d):
+    # Necropolis tier 3, the last one: flanking towers with bone merlons and
+    # lit window slits, a steep gable crowned with a skull, and the great
+    # portal thrown wide. The green pall that pools at its foot is drawn in
+    # CODE (see the Necropolis pall in swarm.js), not baked in here — it has
+    # to breathe, and a baked glow cannot.
+    ST, ST_D, ST_L = (150, 150, 156), (112, 112, 120), (182, 182, 188)
+    DARK = (16, 14, 18)
+    SOUL, SOUL_L = (96, 152, 92), (150, 240, 150)
+    MOSS = (86, 104, 74)
+    rect(d, 0, 27, 31, 30, ST_D)
+    rect(d, 1, 27, 30, 27, ST)
+    for x0 in (0, 25):
+        rect(d, x0, 9, x0 + 6, 28, ST)
+        rect(d, x0, 9, x0, 28, ST_L)
+        rect(d, x0 + 6, 9, x0 + 6, 28, ST_D)
+        for y in (14, 20, 25):
+            rect(d, x0, y, x0 + 6, y, ST_D)
+        for mx in range(x0, x0 + 6, 3):
+            d.polygon([(mx, 9), (mx + 1, 5), (mx + 2, 9)], fill=BONE, outline=BONE_D)
+        rect(d, x0 + 2, 16, x0 + 4, 20, DARK)
+        rect(d, x0 + 3, 17, x0 + 3, 19, SOUL_L)
+    rect(d, 7, 6, 24, 28, ST)
+    rect(d, 7, 6, 8, 28, ST_L)
+    rect(d, 23, 6, 24, 28, ST_D)
+    for y in (11, 16, 21, 26):
+        rect(d, 7, y, 24, y, ST_D)
+    d.polygon([(6, 7), (25, 7), (16, 0)], fill=ST_D)
+    d.polygon([(8, 7), (23, 7), (16, 2)], fill=ST)
+    d.ellipse([13, 1, 19, 7], fill=BONE, outline=BONE_D)
+    rect(d, 14, 3, 15, 4, DARK)
+    rect(d, 17, 3, 18, 4, DARK)
+    rect(d, 15, 6, 17, 6, BONE_D)
+    rect(d, 11, 12, 21, 28, DARK)
+    rect(d, 12, 15, 20, 27, SOUL)
+    rect(d, 13, 17, 19, 26, SOUL_L)
+    for x in (14, 18):
+        rect(d, x, 12, x, 28, BONE_D)
+    for (wx, wy) in ((9, 13), (21, 13)):
+        rect(d, wx, wy, wx + 1, wy + 4, DARK)
+        rect(d, wx, wy + 1, wx + 1, wy + 3, SOUL_L)
+    rect(d, 2, 23, 4, 24, MOSS)
+    rect(d, 27, 13, 29, 14, MOSS)
+
+
 DRAWERS = [
     ("grass", draw_grass),
     ("forest", draw_forest),
@@ -2955,6 +3040,8 @@ DRAWERS = [
     ("grove_deep_hollow", draw_grove_deep_hollow),
     ("grove_seed", draw_grove_seed),
     ("grove_heartroot", draw_grove_heartroot),
+    ("crypt_2", draw_crypt_2),
+    ("crypt_3", draw_crypt_3),
 ]
 
 sheet = Image.new("RGBA", (TILE*COLS, TILE*ROWS), (0,0,0,0))

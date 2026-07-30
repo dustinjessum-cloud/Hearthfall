@@ -16,7 +16,7 @@ const SAVE_INTERVAL_MS = 20000;
 // scene). garrisonMarker (tower badge), queueMarkers (order-queue dots) and
 // gloom (the charged-blight pool) are all recreated from live state on
 // restore, so drop them here too.
-const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker', 'garrisonMarker', 'queueMarkers', 'gloom']);
+const SAVE_SKIP_KEYS = new Set(['sprite', 'hpBarBg', 'hpBarFg', 'marker', 'garrisonMarker', 'queueMarkers', 'gloom', 'pall']);
 
 // Bump when a change makes older saves unloadable rather than merely
 // out-of-date. Additive fields (a new building property, say) do NOT need a

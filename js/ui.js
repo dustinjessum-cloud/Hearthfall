@@ -1634,3 +1634,129 @@ function endGame(won){
   document.getElementById('restartBtn').addEventListener('click', ()=> location.reload());
 }
 
+
+// ---- the hero's action bar -------------------------------------------
+// Five slots — the two always-on abilities (J/K) and the three spells, on
+// I/O/P. Shown only while the hero is SELECTED; the hotkeys themselves fire
+// whenever the hero is alive, exactly as J and K always have.
+//
+// Typographic tiles rather than drawn icons, because the sprite sheet is at
+// 106 of 108 slots and twelve spell icons would mean expanding it (ROWS in
+// gen_sprites.py and rows in setupFrames(), together). Initials, a rank strip,
+// the power cost and a conic-gradient cooldown wipe carry the same
+// information with no art at all.
+//
+// Spells are CAST here and still LEARNED in the info panel: a bar slot is
+// pressed in a fight and a skill point is permanent, so putting both on the
+// same button would spend one by accident. An unlearned slot that a point
+// could buy shows a "+" pointing at the panel instead.
+const HERO_BAR_KEYS = ['I', 'O', 'P'];
+
+// 'War Cry' -> 'WC', 'Frenzy' -> 'FR'. Deterministic, so a slot never changes
+// its face between redraws.
+function heroSlotGlyph(name){
+  const w = String(name || '?').trim().split(/\s+/);
+  return (w.length > 1 ? w[0][0] + w[1][0] : String(name).slice(0, 2)).toUpperCase();
+}
+
+function heroBarSlots(){
+  const basics = (typeof factionDef === 'function' && factionDef().heroBasics) || [];
+  const book = (typeof heroSpellbook === 'function') ? heroSpellbook() : [];
+  return basics.map(b => ({ kind:'basic', key:b.key, name:b.name, cdKey:b.cdKey, maxKey:b.maxKey }))
+    .concat(book.slice(0, HERO_BAR_KEYS.length).map((sp, i) =>
+      ({ kind:'spell', key:HERO_BAR_KEYS[i], name:sp.name, sp })));
+}
+
+function refreshHeroBar(){
+  const bar = document.getElementById('heroBar');
+  if(!bar) return;
+  const hero = (typeof livingCaptain === 'function') ? livingCaptain() : null;
+  const sel = state.selected;
+  const shown = !!hero && !state.gameOver
+    && ((sel && sel.type === 'unit' && sel.ref === hero)
+        || (state.selectedGroup && state.selectedGroup.indexOf(hero) !== -1));
+  if(!shown){
+    if(bar.style.display !== 'none'){ bar.style.display = 'none'; bar._shape = null; }
+    return;
+  }
+  bar.style.display = 'flex';
+
+  const slots = heroBarSlots();
+  // Rebuilt only when the SHAPE changes — which spells are known, at what rank,
+  // the hero's level and whether a point is spare. Cooldowns and power update
+  // in place, so a slot is never replaced under the cursor mid-click. Same
+  // discipline as the info panel and the group chips.
+  const shape = state.faction + '|' + slots.map(s =>
+    s.kind === 'spell' ? s.sp.id + ':' + heroSpellRank(s.sp.id) : s.key).join(',')
+    + '@' + state.hero.level + '#' + state.hero.picks;
+  if(bar._shape !== shape){
+    bar._shape = shape;
+    bar.innerHTML = slots.map(s => {
+      const locked = s.kind === 'spell' && heroSpellRank(s.sp.id) <= 0;
+      const rank = s.kind === 'spell' ? heroSpellRank(s.sp.id) : 0;
+      const pips = s.kind === 'spell'
+        ? '•'.repeat(rank) + '·'.repeat(Math.max(0, s.sp.maxRank - rank)) : '';
+      const canLearn = s.kind === 'spell' && state.hero.picks > 0
+        && rank < s.sp.maxRank && state.hero.level >= s.sp.minLevel;
+      return `<button class="heroSlot${locked ? ' locked' : ''}" data-i="${slots.indexOf(s)}">
+        <span class="hsKey">${s.key}</span>
+        <span class="hsGlyph">${heroSlotGlyph(s.name)}</span>
+        ${pips ? `<span class="hsRank">${pips}</span>` : ''}
+        ${canLearn ? '<span class="hsPick">+</span>' : ''}
+        <span class="hsCost"></span>
+        <span class="hsSweep"></span>
+        <span class="hsCd"></span>
+      </button>`;
+    }).join('');
+    for(const btn of bar.querySelectorAll('.heroSlot')){
+      btn.addEventListener('click', ()=> heroBarActivate(+btn.dataset.i));
+    }
+  }
+
+  // live values every call: cooldown wipe, remaining seconds, power cost
+  for(const btn of bar.querySelectorAll('.heroSlot')){
+    const s = slots[+btn.dataset.i];
+    if(!s) continue;
+    let cd = 0, max = 1, cost = 0, locked = false, poor = false;
+    if(s.kind === 'basic'){
+      cd = hero[s.cdKey] || 0;
+      max = (HERO[s.maxKey] && HERO[s.maxKey].cooldownMs) || 1;
+      btn.title = `${s.name} — press ${s.key}`;
+    } else {
+      const rank = heroSpellRank(s.sp.id);
+      locked = rank <= 0;
+      cd = state.hero.cooldowns[s.sp.id] || 0;
+      max = s.sp.cooldown(Math.max(1, rank));
+      cost = s.sp.mana(Math.max(1, rank));
+      poor = !locked && state.hero.mana < cost;
+      btn.title = locked
+        ? `${s.name} — not learned (needs hero level ${s.sp.minLevel}). ${s.sp.desc}`
+        : `${s.name} (rank ${rank}/${s.sp.maxRank}) — press ${s.key}\n${s.sp.rankText(rank, s.sp)}\n${cost} power, ${(max/1000).toFixed(0)}s cooldown`;
+    }
+    const pct = cd > 0 ? Math.min(1, cd / max) : 0;
+    const sweep = btn.querySelector('.hsSweep');
+    if(sweep) sweep.style.background = pct > 0
+      ? `conic-gradient(rgba(0,0,0,.66) ${pct}turn, rgba(0,0,0,0) 0)` : 'none';
+    const cdEl = btn.querySelector('.hsCd');
+    if(cdEl) cdEl.textContent = cd > 0 ? Math.ceil(cd/1000) : '';
+    const costEl = btn.querySelector('.hsCost');
+    if(costEl) costEl.textContent = cost ? cost : '';
+    btn.classList.toggle('cooling', cd > 0);
+    btn.classList.toggle('noPower', poor);
+    btn.classList.toggle('ready', !locked && cd <= 0 && !poor);
+    btn.disabled = locked;
+  }
+}
+
+// One entry point for both the click and the hotkey, so a slot cannot behave
+// differently depending on how it was pressed.
+function heroBarActivate(i){
+  const slots = heroBarSlots();
+  const s = slots[i];
+  if(!s) return;
+  if(s.kind === 'basic'){
+    if(s.key === 'J') heroThrowJavelin(); else heroSlash();
+    return;
+  }
+  heroCastFromBar(s.sp.id);
+}

@@ -626,3 +626,28 @@ function updateSpellGhost(gx, gy){
   scene._spellArea.setFillStyle(col, 0.18);
   scene._spellArea.setStrokeStyle(2, col, 0.9);
 }
+
+// The action bar's cast path. beginSpellTargeting() silently ignores a spell
+// that is not ready, which is correct for a panel button that is already
+// disabled — but a HOTKEY has no disabled state, so pressing I on a cooling
+// spell did nothing at all and read as a dead key. Say why, then cast.
+function heroCastFromBar(id){
+  const s = heroSpellById(id);
+  if(!s) return false;
+  if(state.gameOver || state.paused) return false;
+  if(!livingCaptain()){ flashWaveBanner('No hero to command.'); return false; }
+  const rank = heroSpellRank(id);
+  if(rank <= 0){
+    flashWaveBanner(state.hero.level < s.minLevel
+      ? `${s.name} needs hero level ${s.minLevel}.`
+      : `${s.name} is not learned yet — spend a skill point on it.`);
+    return false;
+  }
+  const cd = state.hero.cooldowns[id] || 0;
+  if(cd > 0){ flashWaveBanner(`${s.name} is not ready (${Math.ceil(cd/1000)}s).`); return false; }
+  if(state.hero.mana < s.mana(rank)){
+    flashWaveBanner(`Not enough power for ${s.name} (${s.mana(rank)} needed).`); return false;
+  }
+  beginSpellTargeting(id);
+  return true;
+}

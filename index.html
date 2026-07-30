@@ -69,6 +69,50 @@
      contents jumped sideways whenever you selected something or a villager
      went idle. Reserving the space costs a little screen area and buys a
      layout that never moves. */
+
+  /* ---- the hero's action bar ----
+     Positioned OVER the game view, NOT inside #bottomBar. That bar keeps every
+     slot always-present and identical in width on purpose — anything that
+     appears and vanishes inside it reflows every other control, which is what
+     made the bar feel unstable. This shows only while the hero is selected, so
+     it has to live outside that flow entirely. */
+  #heroBar {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: 12px;
+    z-index: 6; display: none; gap: 6px; padding: 7px 9px;
+    background: rgba(20,14,8,.82); border: 2px solid #6b4a26; border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.55);
+  }
+  .heroSlot {
+    position: relative; width: 54px; height: 54px; padding: 0; overflow: hidden;
+    background: #33261a; border: 2px solid #7a5a34; border-radius: 8px;
+    color: #f0e6d2; cursor: pointer; font-family: inherit;
+  }
+  .heroSlot:hover:not(:disabled) { border-color: #ffd76b; }
+  .heroSlot .hsGlyph { position:absolute; left:0; right:0; top:14px; font-size:17px;
+                       font-weight:bold; letter-spacing:1px; }
+  .heroSlot .hsKey  { position:absolute; top:1px; left:4px; font-size:9px; color:#b8a888; }
+  .heroSlot .hsCost { position:absolute; bottom:1px; right:4px; font-size:9px; color:#9fc4ff; }
+  .heroSlot .hsRank { position:absolute; bottom:1px; left:4px; font-size:9px;
+                      letter-spacing:1px; color:#9fe08a; }
+  .heroSlot .hsPick { position:absolute; top:0px; right:4px; font-size:13px;
+                      font-weight:bold; color:#ffd76b; }
+  /* the radial cooldown wipe: a conic gradient, so it costs no art and no
+     sprite slots (the sheet is at 106 of 108) */
+  .heroSlot .hsSweep { position:absolute; inset:0; pointer-events:none; }
+  .heroSlot .hsCd { position:absolute; inset:0; display:flex; align-items:center;
+                    justify-content:center; font-size:15px; font-weight:bold;
+                    color:#fff; text-shadow:0 1px 2px #000; pointer-events:none; }
+  .heroSlot:disabled { cursor: default; }
+  /* the remaining seconds sit ON the tile, so the letters behind them fade
+     out of the way rather than tangling with the digit */
+  .heroSlot.cooling .hsGlyph { opacity: .22; }
+  .heroSlot.locked { opacity: .42; }
+  .heroSlot.locked .hsGlyph { color: #8a7a5c; }
+  .heroSlot.noPower { border-color: #8a4a4a; }
+  .heroSlot.noPower .hsCost { color: #ff8a6b; }
+  .heroSlot.ready { box-shadow: inset 0 0 10px rgba(255,215,107,.28); }
+  @media (prefers-reduced-motion: reduce){ .heroSlot.ready { box-shadow: none; } }
+
   #bottomBar {
     width: 100%; max-width: 960px; box-sizing: border-box;
     background: #241a10; border-top: 3px solid #6b4a26;
@@ -304,14 +348,15 @@
     <button id="raidBtn" title="Skip the wait and trigger the next raid immediately">Ready for Raid</button>
     <button id="recallBtn" title="Garrison every worker inside the Town Hall (they add capped defense damage). Press again to send them back to their previous tasks.">Recall Workers</button>
     <button id="ringBtn" title="Show or hide the attack-range circle on selected units and towers, and the Minotaur's banner radius (or press R)">Rings: On</button>
-    <button id="pauseBtn" title="Pause/resume the game (or press P)">Pause</button>
+    <button id="pauseBtn" title="Pause/resume the game (or press Space)">Pause</button>
     <button id="recBtn" class="devBtn" title="Session recording. Everything stays in this browser — nothing is sent anywhere. Click to pause or resume.">● REC 0</button>
     <button id="exportLogBtn" class="devBtn" title="Download this session as a JSON file you can share.">Export Log</button>
     <button id="sandboxBtn" class="devBtn" title="TESTING: keeps every resource topped to its cap, so building and training are effectively free. Build houses to raise your population cap as usual.">Sandbox: Off</button>
     <button id="skipBtn" class="devBtn" title="TESTING: jump straight to the endgame — marks the raids survived, clears any raiders still on the map, and opens the mountain pass.">Skip to Corridor</button>
   </div>
   <div id="gameWrap">
-    <div id="hint"><button id="hintClose" title="Dismiss">✕</button>Click a building below, then click the map to place it. Right-click or Esc cancels. Arrow keys/WASD to pan, wheel to zoom. Click a villager, then right-click a Farm/Lumber Camp/Quarry to put them to work there (or an empty tile to send them off, unassigning them). Click a Barracks to convert a villager into an Archer (ranged, fragile) or Swordsman (tough melee — auto-charges nearby raiders). Select the Town Hall, Barracks or Mason and right-click the map to set a RALLY POINT — new units march there automatically (right-click the building to clear it). P pauses the game. Damaged walls &amp; towers are fixed by REPAIRMEN (trained at the Mason, from a villager): right-click damage with one selected; they only work on your orders. Buildings take time to construct, and any building can be salvaged for 15% of its cost (3 gold fee). NEW: placing a building only reserves the site — a villager must physically walk over before construction actually starts (the game auto-sends an idle one; the faint "foundation" look means nobody's arrived yet). Walls (and Towers) now block your OWN units' movement too, just like they block raiders — build a GATE into a wall line to let your people through while still stopping the enemy. Water is impassable to everyone, no exceptions. Lumber camps &amp; quarries employ up to 3 villagers each. NEW: a few remote deposits of WILDSTONE dot the map (pinkish crystal) — once your Town Hall reaches level 3, build a REFINERY directly on one to start extracting it (same idea as a lumber camp, just built right on the vein). Not required for anything basic, but it funds permanent EVOLUTIONS at the Barracks — Veteran Training and Masterwork Bows upgrade every Swordsman/Archer you have, forever, once researched. Click the Town Hall to upgrade it: more HP, storage, population, faster settlers — and at level 3 it shoots back. NEW: upgrades (Town Hall and storage buildings alike) now take real time to complete once started, not just resources — the cost is paid up front, then a countdown runs before the bonus actually lands. Raids no longer pause your economy — workers keep toiling unless YOU act: Recall Workers garrisons every worker INSIDE the Town Hall (each adds defense damage, capped, at any TC level); press it again and they walk back to the exact jobs they left. Single villagers can also be garrisoned by right-clicking the TC. NEW: Farms grow wheat → staffed Mills grind flour → staffed Bakeries bake food (1.5x). Houses pay gold taxes; Wells &amp; Taverns raise happiness. Soldiers eat double rations and buildings sip wood upkeep — keep the woodpile stocked or things decay. Bandit camps on the frontier send PILLAGERS (orange) who ignore your walls' purpose — they hunt farms, camps, mills and markets directly; from wave 2 raids bring them too. Raze camps with soldiers for loot. Recruit a Minotaur hero at the Town Hall (gold) — nearby soldiers fight 25% harder, but HE fights only on your command: J hurls a javelin toward the mouse, K slashes adjacent foes. He levels up from kills near him and keeps his level through revival. NEW: the fallen leave CORPSES — right-click one with any of your living selected — villager, soldier, or hero — to BURY them; honoring the dead lifts the town's spirits for a while. Unburied corpses fade away on their own.</div>
+    <div id="heroBar" title="Hero abilities"></div>
+    <div id="hint"><button id="hintClose" title="Dismiss">✕</button>Click a building below, then click the map to place it. Right-click or Esc cancels. Arrow keys/WASD to pan, wheel to zoom. Click a villager, then right-click a Farm/Lumber Camp/Quarry to put them to work there (or an empty tile to send them off, unassigning them). Click a Barracks to convert a villager into an Archer (ranged, fragile) or Swordsman (tough melee — auto-charges nearby raiders). Select the Town Hall, Barracks or Mason and right-click the map to set a RALLY POINT — new units march there automatically (right-click the building to clear it). Space pauses the game. Damaged walls &amp; towers are fixed by REPAIRMEN (trained at the Mason, from a villager): right-click damage with one selected; they only work on your orders. Buildings take time to construct, and any building can be salvaged for 15% of its cost (3 gold fee). NEW: placing a building only reserves the site — a villager must physically walk over before construction actually starts (the game auto-sends an idle one; the faint "foundation" look means nobody's arrived yet). Walls (and Towers) now block your OWN units' movement too, just like they block raiders — build a GATE into a wall line to let your people through while still stopping the enemy. Water is impassable to everyone, no exceptions. Lumber camps &amp; quarries employ up to 3 villagers each. NEW: a few remote deposits of WILDSTONE dot the map (pinkish crystal) — once your Town Hall reaches level 3, build a REFINERY directly on one to start extracting it (same idea as a lumber camp, just built right on the vein). Not required for anything basic, but it funds permanent EVOLUTIONS at the Barracks — Veteran Training and Masterwork Bows upgrade every Swordsman/Archer you have, forever, once researched. Click the Town Hall to upgrade it: more HP, storage, population, faster settlers — and at level 3 it shoots back. NEW: upgrades (Town Hall and storage buildings alike) now take real time to complete once started, not just resources — the cost is paid up front, then a countdown runs before the bonus actually lands. Raids no longer pause your economy — workers keep toiling unless YOU act: Recall Workers garrisons every worker INSIDE the Town Hall (each adds defense damage, capped, at any TC level); press it again and they walk back to the exact jobs they left. Single villagers can also be garrisoned by right-clicking the TC. NEW: Farms grow wheat → staffed Mills grind flour → staffed Bakeries bake food (1.5x). Houses pay gold taxes; Wells &amp; Taverns raise happiness. Soldiers eat double rations and buildings sip wood upkeep — keep the woodpile stocked or things decay. Bandit camps on the frontier send PILLAGERS (orange) who ignore your walls' purpose — they hunt farms, camps, mills and markets directly; from wave 2 raids bring them too. Raze camps with soldiers for loot. Recruit a Minotaur hero at the Town Hall (gold) — nearby soldiers fight 25% harder, but HE fights only on your command: J hurls a javelin toward the mouse, K slashes adjacent foes. He levels up from kills near him and keeps his level through revival. NEW: the fallen leave CORPSES — right-click one with any of your living selected — villager, soldier, or hero — to BURY them; honoring the dead lifts the town's spirits for a while. Unburied corpses fade away on their own.</div>
     <div id="overlay">
       <div id="introBox">
         <h1>Hearthfall</h1>
@@ -380,8 +425,8 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.70.0/phaser.min.js"></script>
-<script src="js/content.js?v=5bb321af"></script>
-<script src="js/spells.js?v=6fbc6524"></script>
+<script src="js/content.js?v=c6cd84a2"></script>
+<script src="js/spells.js?v=41ed187c"></script>
 <script src="js/grove.js?v=3734b4e0"></script>
 <script src="js/tribe.js?v=7646811a"></script>
 <script src="js/swarm.js?v=55c0f7e1"></script>
@@ -391,9 +436,9 @@
 <script src="js/enemies.js?v=074a97da"></script>
 <script src="js/ai.js?v=da5c86d2"></script>
 <script src="js/save.js?v=2e0ab087"></script>
-<script src="js/ui.js?v=138339d2"></script>
+<script src="js/ui.js?v=d338157b"></script>
 <script src="js/groups.js?v=0af99b0f"></script>
 <script src="js/telemetry.js?v=6a331975"></script>
-<script src="js/main.js?v=5aa5d755"></script>
+<script src="js/main.js?v=4e1819e0"></script>
 </body>
 </html>

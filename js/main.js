@@ -162,7 +162,22 @@ class MainScene extends Phaser.Scene {
     // hero abilities: J = javelin (swarm: slowing web), K = slash (swarm: birth burst)
     this.input.keyboard.on('keydown-J', ()=> heroThrowJavelin());
     this.input.keyboard.on('keydown-K', ()=> heroSlash());
-    this.input.keyboard.on('keydown-P', ()=> togglePause());
+    // The hero's three spells, in bar order. P moved OFF pause to sit beside
+    // I and O — the bar wants three keys in a row. Routed through
+    // heroBarActivate so a hotkey and a click cannot drift apart; slots 0
+    // and 1 are the always-on J and K.
+    this.input.keyboard.on('keydown-I', ()=> heroBarActivate(2));
+    this.input.keyboard.on('keydown-O', ()=> heroBarActivate(3));
+    this.input.keyboard.on('keydown-P', ()=> heroBarActivate(4));
+    // Pause is the space bar now. Captured and preventDefault'd because the
+    // page is full of DOM buttons and the browser fires a click on whichever
+    // one has focus when space is pressed — which would re-trigger the last
+    // button touched instead of pausing.
+    this.input.keyboard.addCapture('SPACE');
+    this.input.keyboard.on('keydown-SPACE', (ev)=>{
+      if(ev && ev.preventDefault) ev.preventDefault();
+      togglePause();
+    });
     this.input.keyboard.on('keydown-R', ()=> toggleRangeRings());
     // Control groups. Bound on the raw keydown rather than nine Phaser key
     // objects: this way Ctrl/Shift state comes straight off the event, and
@@ -473,6 +488,11 @@ class MainScene extends Phaser.Scene {
 
   update(time, delta){
     if(!this.worldReady) return;
+    // Per frame, not on the 3s economy tick: cooldowns are TIMERS, and a
+    // bar that redrew every three seconds would show a spell as cooling
+    // long after it was ready. Cheap — it returns immediately unless the
+    // hero is actually selected.
+    if(typeof refreshHeroBar === 'function') refreshHeroBar();
     if(state.gameOver || state.paused) return;
 
     // camera pan

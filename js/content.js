@@ -190,6 +190,16 @@ const FACTION_DEFS = {
     words: { food:'food', worker:'villager', workers:'villagers' },
     campName: 'Bandit Camp',
     heroResKey: 'gold',
+    // The hero's two always-on abilities, in bar order. Named per faction
+    // because the Necromancer's J/K are a web shot and a birth burst, not a
+    // javelin and a slash — and because the action bar has to label them.
+    // cdKey is the field on the captain that holds the remaining cooldown;
+    // maxKey indexes HERO for the full duration (HERO is declared BELOW this
+    // table, so it can only be read later, never captured here).
+    heroBasics: [
+      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin' },
+      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash'   },
+    ],
     // How a building's sprite changes as it is UPGRADED (b.level), which is a
     // different axis from the Grove's growth stages (b.groveStage, scale only).
     //
@@ -224,6 +234,10 @@ const FACTION_DEFS = {
     words: { food:'carrion', worker:'ghoul', workers:'ghouls' },
     campName: 'Human Outpost',
     heroResKey: 'food',        // the Necromancer is raised from biomass
+    heroBasics: [
+      { key:'J', name:'Web Shot',   cdKey:'webCd',   maxKey:'web'   },
+      { key:'K', name:'Broodlings', cdKey:'slashCd', maxKey:'slash' },
+    ],
     // The Necropolis is the crypt at every level. Its Ossuary is the human
     // granary frame under a sickly tint, so it keeps the human ladder.
     evolutionFrames: {
@@ -258,6 +272,10 @@ const FACTION_DEFS = {
     farmYield: 'food',
     campName: 'Bandit Camp',
     heroResKey: 'wood',        // the Elder Bough is grown, not hired
+    heroBasics: [
+      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin' },
+      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash'   },
+    ],
     // Three ages of one tree. The Hollows do not re-skin on upgrade — a Grove
     // structure already shows its progress by SCALING with its growth stage,
     // so a second visual ladder on the same building would be noise.
@@ -289,6 +307,10 @@ const FACTION_DEFS = {
     words: { food:'food', worker:'hobgoblin', workers:'hobgoblins' },
     campName: 'Bandit Camp',
     heroResKey: 'gold',
+    heroBasics: [
+      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin' },
+      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash'   },
+    ],
     // The tribe has no upgrade art of its own yet, so every rung is its base
     // frame. Stating it explicitly is the point: the alternative is falling
     // through to the human ladder, which is what turned an upgraded Cache

@@ -400,7 +400,23 @@ class MainScene extends Phaser.Scene {
         const d = Math.hypot(uu.gx - (wp.x/TILE - 0.5), uu.gy - (wp.y/TILE - 0.5));
         if(d < bd){ bd = d; unit = uu; }
       }
-      if(unit){ selectEntity('unit', unit); return; }
+      if(unit){
+        // Double-click the same unit to grab every one of its kind on screen.
+        // Tracked here rather than with a Phaser double-click handler so it
+        // cannot fire on two DIFFERENT units clicked quickly in succession,
+        // which is a normal thing to do and must stay a plain re-select.
+        const now = performance.now();
+        const again = this._lastUnitClick && this._lastUnitClick.id === unit.id
+          && (now - this._lastUnitClick.t) <= TYPE_SELECT.doubleClickMs;
+        this._lastUnitClick = { id: unit.id, t: now };
+        if(again && typeof selectAllOfTypeOnScreen === 'function'){
+          clearGroupSelection();
+          selectAllOfTypeOnScreen(unit);
+          return;
+        }
+        selectEntity('unit', unit);
+        return;
+      }
       const b = occAt(gx, gy);
       if(b){ selectEntity('building', b); return; }
       // enemies are selectable too (for info only — you can't command them);

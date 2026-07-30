@@ -131,7 +131,7 @@ const HERO_SPELLS = {
         for(const u of state.units){
           if(u.hp <= 0 || u.hp >= u.maxHp) continue;
           if(Phaser.Math.Distance.Between(u.gx, u.gy, hero.gx, hero.gy) > rad) continue;
-          u.hp = Math.min(u.maxHp, u.hp + amt); mended++;
+          u.hp = Math.min(u.maxHp, u.hp + amt); refreshUnitHpBar(u); mended++;
         }
         // Walls and towers only: a general building heal would quietly make
         // the Repairman redundant, and this is meant to hold a line, not
@@ -351,7 +351,7 @@ const HERO_SPELLS = {
         for(const u of state.units){
           if(u.hp <= 0 || u.hp >= u.maxHp) continue;
           if(Phaser.Math.Distance.Between(u.gx, u.gy, hero.gx, hero.gy) > rad) continue;
-          u.hp = Math.min(u.maxHp, u.hp + amt);
+          u.hp = Math.min(u.maxHp, u.hp + amt); refreshUnitHpBar(u);
           mended++;
         }
         if(scene && scene.add){

@@ -220,8 +220,12 @@ const FACTION_DEFS = {
     // maxKey indexes HERO for the full duration (HERO is declared BELOW this
     // table, so it can only be read later, never captured here).
     heroBasics: [
-      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin' },
-      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash'   },
+      // `kind` is what the ability DOES. It exists so heroThrowJavelin and
+      // heroSlash dispatch on the faction table instead of on
+      // `state.faction === 'swarm'` checks, which is what they did when there
+      // were only two behaviours and would not survive a third.
+      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin', kind:'javelin' },
+      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash',   kind:'slash'   },
     ],
     // How a building's sprite changes as it is UPGRADED (b.level), which is a
     // different axis from the Grove's growth stages (b.groveStage, scale only).
@@ -280,8 +284,8 @@ const FACTION_DEFS = {
     campName: 'Human Outpost',
     heroResKey: 'food',        // the Necromancer is raised from biomass
     heroBasics: [
-      { key:'J', name:'Web Shot',   cdKey:'webCd',   maxKey:'web'   },
-      { key:'K', name:'Broodlings', cdKey:'slashCd', maxKey:'slash' },
+      { key:'J', name:'Web Shot',   cdKey:'webCd',   maxKey:'web',   kind:'web'   },
+      { key:'K', name:'Broodlings', cdKey:'slashCd', maxKey:'slash', kind:'brood' },
     ],
     // The Necropolis is the crypt at every level. Its Ossuary is the human
     // granary frame under a sickly tint, so it keeps the human ladder.
@@ -341,8 +345,8 @@ const FACTION_DEFS = {
     campName: 'Bandit Camp',
     heroResKey: 'wood',        // the Elder Bough is grown, not hired
     heroBasics: [
-      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin' },
-      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash'   },
+      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin', kind:'javelin' },
+      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash',   kind:'slash'   },
     ],
     // Three ages of one tree. The Hollows do not re-skin on upgrade — a Grove
     // structure already shows its progress by SCALING with its growth stage,
@@ -400,8 +404,10 @@ const FACTION_DEFS = {
     campName: 'Bandit Camp',
     heroResKey: 'gold',
     heroBasics: [
-      { key:'J', name:'Javelin', cdKey:'javCd',   maxKey:'javelin' },
-      { key:'K', name:'Slash',   cdKey:'slashCd', maxKey:'slash'   },
+      // THE WAR CHIEF FIGHTS WITH HIS OWN HANDS. He carried the Minotaur's
+      // javelin and slash because nothing else had been written for him.
+      { key:'J', name:'Throwing Axe', cdKey:'javCd',   maxKey:'axe',     kind:'axe'     },
+      { key:'K', name:'Warhorn',      cdKey:'slashCd', maxKey:'warhorn', kind:'warhorn' },
     ],
     // The tribe has no upgrade art of its own yet, so every rung is its base
     // frame. Stating it explicitly is the point: the alternative is falling
@@ -719,6 +725,20 @@ const HERO = {
   // side doesn't have at all.
   web: { baseDmg: 6, dmgPerLevel: 2, range: 6, speed: 11, hitRadius: 0.9, cooldownMs: 4000,
          slowFactor: 0.8, slowDurationMs: 3500 }, // 20% slower for 3.5s
+  // The War Chief's J — a thrown axe rather than the Minotaur's javelin. It is
+  // heavier, so it flies SHORTER but bites harder, and it CLEAVES: whatever it
+  // lands in takes the hit and everything pressed up against that takes most of
+  // it too. That is the whole point of giving it to him — the tribe's answer to
+  // a crowd is to throw something that catches more than one of them.
+  axe: { baseDmg: 12, dmgPerLevel: 3, range: 5.5, speed: 11, hitRadius: 0.9,
+         cooldownMs: 4200, cleaveRadius: 1.6, cleaveMult: 0.6 },
+  // ...and his K — a horn, not a blade. It deals NO damage: it staggers
+  // everything around him, holding a charge in place the way Ground Slam does.
+  // He is the only hero whose two always-on abilities are a ranged strike and
+  // pure control, which is what makes him play differently rather than just
+  // read differently. Longer cooldown than a slash because it is stronger than
+  // a slash, and it stacks with Frenzy and Stampede rather than duplicating.
+  warhorn: { radius: 3.2, holdMs: 1600, cooldownMs: 6000 },
 };
 const ARCHER_COST = { food:30, wood:25 };
 const ARCHER_TRAIN_MS = 60000;   // a soldier takes a full minute to equip & drill

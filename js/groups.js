@@ -146,3 +146,39 @@ function refreshGroupChips(){
     btn.classList.toggle('hurt', hurt);
   }
 }
+
+// ---- double-click: select every one of that kind on screen -------------
+// The RTS convention, and the fastest way to grab "all my archers" without
+// binding a control group first. Deliberately limited to what is ON SCREEN:
+// the map is 142 tiles wide, so selecting every villager everywhere would
+// hand you a selection spanning the whole world and quietly pull workers off
+// jobs at the far end when you next right-clicked.
+const TYPE_SELECT = {
+  doubleClickMs: 350,   // same window the control-group double-tap uses
+};
+
+function unitsOfTypeOnScreen(type){
+  const out = [];
+  const cam = scene && scene.cameras && scene.cameras.main;
+  const view = cam && cam.worldView;
+  for(const u of state.units){
+    if(u.hp <= 0 || u.type !== type) continue;
+    if(u.inTC || u.inTowerId) continue;          // hidden inside something
+    if(view){
+      const px = u.gx*TILE + TILE/2, py = u.gy*TILE + TILE/2;
+      if(px < view.x || px > view.x + view.width) continue;
+      if(py < view.y || py > view.y + view.height) continue;
+    }
+    out.push(u);
+  }
+  return out;
+}
+
+function selectAllOfTypeOnScreen(proto){
+  if(!proto) return;
+  const matches = unitsOfTypeOnScreen(proto.type);
+  if(matches.length <= 1){ selectEntity('unit', proto); return; }
+  setGroupSelection(matches);
+  const name = (typeof unitDisplayName === 'function') ? unitDisplayName(proto.type) : 'unit';
+  flashWaveBanner(`Selected ${matches.length} ${name}${matches.length === 1 ? '' : 's'} on screen.`);
+}

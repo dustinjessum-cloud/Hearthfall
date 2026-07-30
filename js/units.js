@@ -1,6 +1,17 @@
 function heroJavelinDmg(){ return HERO.javelin.baseDmg + (state.hero.level-1)*HERO.javelin.dmgPerLevel; }
 function heroSlashDmg(){ return HERO.slash.baseDmg + (state.hero.level-1)*HERO.slash.dmgPerLevel; }
 function heroWebDmg(){ return HERO.web.baseDmg + (state.hero.level-1)*HERO.web.dmgPerLevel; }
+function heroAxeDmg(){ return HERO.axe.baseDmg + (state.hero.level-1)*HERO.axe.dmgPerLevel; }
+
+// Which always-on ability this faction's hero has on J or K. Everything about
+// the two below is driven from here rather than from `state.faction === 'x'`,
+// which is what the old two-way swarm check would have become the moment a
+// third behaviour existed.
+function heroBasicFor(key){
+  const list = (factionDef().heroBasics) || [];
+  for(const b of list) if(b.key === key) return b;
+  return null;
+}
 function heroMaxHp(){ return HERO.baseHp + (state.hero.level-1)*HERO.hpPerLevel; }
 
 function grantHeroXp(amount){
@@ -10,7 +21,7 @@ function grantHeroXp(amount){
   while(state.hero.level < HERO.maxLevel && state.hero.xp >= HERO.xpToNext(state.hero.level)){
     state.hero.xp -= HERO.xpToNext(state.hero.level);
     state.hero.level++;
-    if(cap){ cap.maxHp = heroMaxHp(); cap.hp = Math.min(cap.maxHp, cap.hp + HERO.hpPerLevel); }
+    if(cap){ cap.maxHp = heroMaxHp(); cap.hp = Math.min(cap.maxHp, cap.hp + HERO.hpPerLevel); refreshUnitHpBar(cap); }
     // every level grants a pick: learn a new spell, or rank one up
     if(state.hero.picks !== undefined) state.hero.picks++;
     if(state.hero.mana !== undefined && typeof heroMaxMana === 'function'){
@@ -20,12 +31,16 @@ function grantHeroXp(amount){
   }
 }
 
+const HERO_SHOT_TINT = { javelin: 0xffd76b, web: 0xbfe89a, axe: 0xd8a06b };
+
 function heroThrowJavelin(){
   const cap = livingCaptain();
   if(!cap || state.gameOver || !scene) return;
-  const swarm = state.faction === 'swarm';
-  if((cap.webCd||0) > 0 && swarm) return;
-  if(!swarm && (cap.javCd||0) > 0) return;
+  const def = heroBasicFor('J');
+  if(!def) return;
+  const spec = HERO[def.maxKey];
+  if(!spec) return;
+  if((cap[def.cdKey] || 0) > 0) return;
   const ptr = scene.input.activePointer;
   const wp = scene.cameras.main.getWorldPoint(ptr.x, ptr.y);
   const txf = wp.x/TILE - 0.5, tyf = wp.y/TILE - 0.5;
@@ -34,26 +49,53 @@ function heroThrowJavelin(){
   if(dist < 0.2) return; // no target direction
   // the mouse sets the DIRECTION only — the shot always flies its full
   // range (stopping early only if it finds an enemy to hit)
-  const flight = swarm ? HERO.web.range : HERO.javelin.range;
   dx /= dist; dy /= dist;
-  const j = { x: cap.gx, y: cap.gy, dx, dy, left: flight, kind: swarm ? 'web' : 'javelin' };
+  const j = { x: cap.gx, y: cap.gy, dx, dy, left: spec.range, kind: def.kind };
   j.sprite = scene.add.image(cap.gx*TILE+TILE/2, cap.gy*TILE+TILE/2, 'tiles', FRAME.arrow)
-    .setDepth(8).setTint(swarm ? 0xbfe89a : 0xffd76b).setScale(1.3) // hex reads sickly green, javelin gold
+    .setDepth(8).setTint(HERO_SHOT_TINT[def.kind] || 0xffd76b).setScale(1.3)
     .setRotation(Math.atan2(dy, dx) + Math.PI/4);
   state.heroProjectiles.push(j);
-  if(swarm) cap.webCd = HERO.web.cooldownMs;
-  else cap.javCd = HERO.javelin.cooldownMs;
+  cap[def.cdKey] = spec.cooldownMs;
 }
 
 function heroSlash(){
   const cap = livingCaptain();
   if(!cap || state.gameOver) return;
-  if((cap.slashCd||0) > 0) return;
-  cap.slashCd = HERO.slash.cooldownMs;
+  const def = heroBasicFor('K');
+  if(!def) return;
+  const spec = HERO[def.maxKey];
+  if(!spec) return;
+  if((cap[def.cdKey]||0) > 0) return;
+  cap[def.cdKey] = spec.cooldownMs;
+
+  // The War Chief: K is a HORN, not a blade. No damage at all — it staggers
+  // everything around him, holding a charge where it stands. He is the only
+  // hero whose two always-on abilities are a ranged strike and pure control,
+  // which is what makes him play differently rather than merely read
+  // differently. Reuses rootedMs, the same hold Ground Slam applies, so
+  // enemies.js already knows to stop for it.
+  if(def.kind === 'warhorn'){
+    let held = 0;
+    for(const e of state.enemies){
+      if(e.hp <= 0 || e.kind === 'camp') continue;
+      if(Phaser.Math.Distance.Between(cap.gx, cap.gy, e.gx, e.gy) > spec.radius) continue;
+      e.rootedMs = Math.max(e.rootedMs || 0, spec.holdMs);
+      held++;
+    }
+    if(scene && scene.add){
+      floatResourceText(cap.gx, cap.gy, held ? held + ' held' : 'the horn sounds', '#e8c07a');
+      const ring = scene.add.ellipse(cap.gx*TILE+TILE/2, cap.gy*TILE+TILE/2, 20, 20, 0xe8c07a, 0.22)
+        .setStrokeStyle(2, 0xe8c07a, 0.9).setDepth(9);
+      scene.tweens.add({ targets: ring, scaleX: spec.radius*2.2, scaleY: spec.radius*2.2,
+                         alpha: 0, duration: 340, onComplete: ()=> ring.destroy() });
+    }
+    return;
+  }
+
   // Broodmother: K is a BIRTH BURST — she spawns short-lived broodlings
   // around herself instead of slashing. They fight (and benefit from her
   // aura), then dissolve back into the creep after their brief lives.
-  if(state.faction === 'swarm'){
+  if(def.kind === 'brood'){
     const cgx = Math.round(cap.gx), cgy = Math.round(cap.gy);
     let born = 0;
     for(let i=0; i<SWARM.broodmother.burstCount; i++){
@@ -101,19 +143,32 @@ function updateHeroCombat(delta){
   }
   // hero projectiles in flight: hit the first enemy along the path
   for(const j of state.heroProjectiles){
-    const isWeb = j.kind === 'web';
-    const step = (isWeb ? HERO.web.speed : HERO.javelin.speed) * (delta/1000);
+    const spec = HERO[j.kind] || HERO.javelin;   // kind IS the HERO key
+    const step = spec.speed * (delta/1000);
     const move = Math.min(step, j.left);
     j.x += j.dx*move; j.y += j.dy*move; j.left -= move;
     if(j.sprite) j.sprite.setPosition(j.x*TILE+TILE/2, j.y*TILE+TILE/2);
-    const hitRadius = isWeb ? HERO.web.hitRadius : HERO.javelin.hitRadius;
+    const hitRadius = spec.hitRadius;
     for(const e of state.enemies){
       if(e.hp<=0) continue;
       if(Phaser.Math.Distance.Between(j.x, j.y, e.gx, e.gy) <= hitRadius){
-        if(isWeb){
+        if(j.kind === 'web'){
           e.hp -= heroWebDmg();
           if(!(e.webSlowMs > 0) && e.sprite && e.sprite.setTint) e.sprite.setTint(0xbfe89a); // sickly hex-rot tint
           e.webSlowMs = HERO.web.slowDurationMs;
+        } else if(j.kind === 'axe'){
+          // A thrown axe does not stop at one body. Whatever it lands in takes
+          // the hit, and anything pressed up against that takes most of it —
+          // this is the War Chief's answer to a crowd.
+          const full = heroAxeDmg(), splash = Math.max(1, Math.round(full * spec.cleaveMult));
+          e.hp -= full;
+          let cleaved = 0;
+          for(const o of state.enemies){
+            if(o === e || o.hp <= 0 || o.kind === 'camp') continue;
+            if(Phaser.Math.Distance.Between(o.gx, o.gy, e.gx, e.gy) > spec.cleaveRadius) continue;
+            o.hp -= splash; o.lastHitBy = 'hero'; cleaved++;
+          }
+          if(cleaved && scene && scene.add) floatResourceText(e.gx, e.gy, 'cleave x'+(cleaved+1), '#d8a06b');
         } else {
           e.hp -= heroJavelinDmg();
         }
@@ -366,13 +421,32 @@ function syncPopulationCount(){
   state.population.current = state.units.filter(u => u.hp > 0 && u.type !== 'captain').length;
 }
 
+// THE one place a unit's health bar is drawn. It used to live inside
+// damageUnit, which meant the bar only ever moved when something HIT the unit:
+// heal the Necromancer with Knit Bone and her bar sat at the old value until
+// she took a hit, at which point it jumped. Every heal, every level-up and
+// every regen tick now goes through here, and updateUnits calls it once a
+// frame as a backstop so no future caller can forget.
+//
+// Cheap by construction: it returns immediately unless the health actually
+// changed since the last draw.
+function refreshUnitHpBar(u){
+  if(!u || !u.hpBarFg || !u.hpBarBg) return;
+  if(u._hpShown === u.hp && u._hpMaxShown === u.maxHp) return;
+  u._hpShown = u.hp; u._hpMaxShown = u.maxHp;
+  const pct = Math.max(0, Math.min(1, u.hp / u.maxHp));
+  u.hpBarFg.width = (TILE-10) * pct;
+  u.hpBarFg.fillColor = pct > 0.5 ? 0x6bbf59 : (pct > 0.25 ? 0xd8b23a : 0xd85a3a);
+  // Shown only while hurt, and never for someone tucked inside a tower or the
+  // Town Hall — those are hidden units and a floating bar would give them away.
+  const show = u.hp > 0 && u.hp < u.maxHp && !u.inTC && !u.inTowerId;
+  u.hpBarBg.setVisible(show); u.hpBarFg.setVisible(show);
+}
+
 function damageUnit(u, dmg){
   if(typeof noteGroupDamage === 'function') noteGroupDamage(u);
   u.hp -= dmg;
-  u.hpBarBg.setVisible(true); u.hpBarFg.setVisible(true);
-  const pct = Math.max(0, u.hp/u.maxHp);
-  u.hpBarFg.width = (TILE-10)*pct;
-  u.hpBarFg.fillColor = pct>0.5 ? 0x6bbf59 : (pct>0.25?0xd8b23a:0xd85a3a);
+  refreshUnitHpBar(u);
   if(u.hp<=0) removeUnit(u);
 }
 
@@ -981,6 +1055,7 @@ function updateUnits(delta){
   const baseSpeed = 2.2; // tiles/sec
   for(const u of [...state.units]){
     if(u.hp<=0) continue;
+    refreshUnitHpBar(u);   // catches healing from anywhere — see the helper
     // burst-born broodlings live fast and dissolve back into the creep
     if(u.expireMs !== undefined){
       u.expireMs -= delta;

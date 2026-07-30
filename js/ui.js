@@ -1346,9 +1346,25 @@ function updatePanelLive(type, ref){
     if(xpFill) xpFill.style.width = (state.hero.level >= HERO.maxLevel ? 100 : Math.min(100, state.hero.xp/need*100)) + '%';
     const cdEl = document.getElementById('heroCds');
     if(cdEl){
-      const jav = (ref.javCd||0) > 0 ? (ref.javCd/1000).toFixed(1)+'s' : 'READY (J)';
-      const sl  = (ref.slashCd||0) > 0 ? (ref.slashCd/1000).toFixed(1)+'s' : 'READY (K)';
-      cdEl.textContent = `Javelin ${heroJavelinDmg()}dmg: ${jav} — Slash ${heroSlashDmg()}dmg: ${sl}`;
+      // Read from FACTION_DEFS.heroBasics rather than naming the Minotaur's
+      // two moves. This line said "Javelin ... Slash" for every faction, so the
+      // Necromancer's panel has always mislabelled her web shot and her birth
+      // burst — and the War Chief would now have contradicted his own bar.
+      const jb = heroBasicFor('J'), kb = heroBasicFor('K');
+      const dmgOf = (kind)=>{
+        if(kind === 'javelin') return ` ${heroJavelinDmg()}dmg`;
+        if(kind === 'web')     return ` ${heroWebDmg()}dmg`;
+        if(kind === 'axe')     return ` ${heroAxeDmg()}dmg`;
+        if(kind === 'slash')   return ` ${heroSlashDmg()}dmg`;
+        return '';                       // the horn and the brood burst deal none
+      };
+      const cdTxt = (b, key)=>{
+        const ms = (b && ref[b.cdKey]) || 0;
+        return ms > 0 ? (ms/1000).toFixed(1)+'s' : `READY (${key})`;
+      };
+      cdEl.textContent = jb && kb
+        ? `${jb.name}${dmgOf(jb.kind)}: ${cdTxt(jb,'J')} — ${kb.name}${dmgOf(kb.kind)}: ${cdTxt(kb,'K')}`
+        : '';
     }
   }
   if(type==='enemy'){
@@ -1718,11 +1734,21 @@ function refreshHeroBar(){
   const shown = !!hero && !state.gameOver
     && ((sel && sel.type === 'unit' && sel.ref === hero)
         || (state.selectedGroup && state.selectedGroup.indexOf(hero) !== -1));
+  // The label hides with the bar: it lives in the bottom bar now, so an empty
+  // captioned box would sit there for every faction between hero deaths.
+  const label = document.getElementById('heroSlotLabel');
   if(!shown){
-    if(bar.style.display !== 'none'){ bar.style.display = 'none'; bar._shape = null; }
+    if(bar.style.display !== 'none'){
+      bar.style.display = 'none';
+      if(label) label.style.display = 'none';
+      bar._shape = null;
+    }
     return;
   }
   bar.style.display = 'flex';
+  // A concrete value, NOT '': clearing the inline style falls back to the
+  // stylesheet, which hides it by default, so the label never appeared.
+  if(label) label.style.display = 'block';
 
   const slots = heroBarSlots();
   // Rebuilt only when the SHAPE changes — which spells are known, at what rank,
